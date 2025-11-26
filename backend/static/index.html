@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solver#42 MVP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b; 
+        }
+
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .chat-bubble {
+            max-width: 85%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            line-height: 1.6;
+            animation: fadeIn 0.3s ease-out;
+            font-size: 0.95rem;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .teacher { 
+            background: linear-gradient(135deg, #2563eb, #1d4ed8); 
+            color: white;
+            align-self: flex-end; 
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.2);
+            border-bottom-right-radius: 2px;
+        }
+        
+        .ai { 
+            background: #334155; 
+            color: #e2e8f0;
+            align-self: flex-start; 
+            border: 1px solid #475569;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-bottom-left-radius: 2px;
+        }
+
+        /* Markdown Styles inside bubbles */
+        .chat-bubble pre {
+            background: #0f172a !important;
+            padding: 10px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin-top: 8px;
+            margin-bottom: 8px;
+        }
+        .chat-bubble code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85em;
+        }
+        .chat-bubble p {
+            margin-bottom: 0.5em;
+        }
+        .chat-bubble p:last-child {
+            margin-bottom: 0;
+        }
+        .chat-bubble h1, .chat-bubble h2, .chat-bubble h3 {
+            font-weight: 700;
+            margin-top: 10px;
+            margin-bottom: 5px;
+        }
+        .chat-bubble ul, .chat-bubble ol {
+            margin-left: 20px;
+            list-style-type: disc;
+        }
+
+        .glow-text {
+            text-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        }
+        
+        /* Modal */
+        .modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-200 h-screen flex flex-col overflow-hidden selection:bg-blue-500 selection:text-white">
+    
+    <!-- Navbar -->
+    <header class="glass sticky top-0 z-50 h-16 flex justify-between items-center px-6 shadow-2xl">
+        <div class="flex flex-col justify-center">
+            <h1 class="text-2xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300 glow-text">
+                Solver#42
+            </h1>
+            <span class="text-[10px] font-mono text-slate-400 tracking-widest uppercase opacity-80">
+                your private study nomenclator
+            </span>
+        </div>
+        <div class="flex items-center gap-3">
+            <button onclick="showNewCourseModal()" class="text-xs border border-slate-600 hover:bg-slate-800 px-3 py-1 rounded-md transition">
+                + New Course
+            </button>
+            <div class="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
+            <div id="user-info" class="text-xs font-mono text-slate-400 border border-slate-700 px-3 py-1 rounded-full bg-slate-800">
+                Guest
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 flex overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="w-72 bg-slate-950 border-r border-slate-800 flex flex-col z-10 hidden md:flex transition-all duration-300">
+            <div class="p-4 border-b border-slate-800 flex justify-between items-center">
+                <div>
+                    <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Current Course</h2>
+                    <div id="current-course-name" class="text-sm font-semibold text-slate-200">Loading...</div>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-3 space-y-1" id="assignment-list">
+                <div class="p-4 text-center text-slate-600 text-sm animate-pulse hidden" id="assignments-loading">Loading assignments...</div>
+            </div>
+            
+            <div class="p-3">
+                <button onclick="showNewAssignmentModal()" class="w-full py-2 border border-dashed border-slate-700 text-slate-500 hover:text-slate-300 hover:border-slate-500 text-xs rounded-lg transition-colors">
+                    + Create Assignment
+                </button>
+            </div>
+
+            <div class="p-4 border-t border-slate-800 bg-slate-950/50">
+                <div class="text-xs text-slate-600 text-center">
+                    System v0.6.0 <span class="text-blue-500">●</span> Local Mode
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <section class="flex-1 flex flex-col relative bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDQwIDQwIj4gPGcmaWxsLXJ1bGU9ImV2ZW5vZGQiPiA8ZyBmaWxsPSIjMWUyOTNiIiBmaWxsLW9wYWNpdHk9IjAuNCI+IDxwYXRoIGQ9Ik0wIDBoNDB2NDBIMHoiLz4gPHBhdGggZD0iTTAgMGg0MHYxSDB6IiBmaWxsPSIjMzM0MTU1IiBmaWxsLW9wYWNpdHk9IjAuMSIvPiA8L2c+IDwvZz4gPC9zdmc+')]">
+            
+            <!-- Login/Register Overlay -->
+            <div id="login-screen" class="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/90 backdrop-blur-sm transition-opacity duration-500">
+                <div class="bg-slate-800 p-8 rounded-2xl shadow-2xl border border-slate-700 w-full max-w-md relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-600"></div>
+                    
+                    <div class="flex justify-center gap-4 mb-6 border-b border-slate-700 pb-2">
+                        <button onclick="switchAuthMode('login')" id="tab-login" class="text-white font-bold border-b-2 border-blue-500 pb-2 px-2 transition-colors">Login</button>
+                        <button onclick="switchAuthMode('register')" id="tab-register" class="text-slate-500 hover:text-slate-300 pb-2 px-2 transition-colors">Register</button>
+                    </div>
+
+                    <!-- Login Form -->
+                    <div id="form-login" class="space-y-4">
+                        <h2 class="text-2xl font-bold mb-2 text-white text-center">Welcome Back</h2>
+                        <p class="text-slate-400 text-center mb-4 text-sm">Please authenticate to access Solver#42.</p>
+                        <input type="email" id="email-input" value="teacher@cuhk.edu.hk" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-slate-200 outline-none focus:border-blue-500" placeholder="user@domain.edu.hk">
+                        <input type="password" id="password-input" value="Aa12345678" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-slate-200 outline-none focus:border-blue-500" placeholder="Password">
+                        <button onclick="login()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg transition-all mt-2">Initialize Session</button>
+                        <p id="login-msg" class="text-xs text-center h-4 text-red-400"></p>
+                    </div>
+
+                    <!-- Register Form -->
+                    <div id="form-register" class="space-y-4 hidden">
+                        <h2 class="text-2xl font-bold mb-2 text-white text-center">New Identity</h2>
+                        <p class="text-slate-400 text-center mb-4 text-sm">Create a new profile in the database.</p>
+                        <input type="email" id="reg-email" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-slate-200 outline-none focus:border-blue-500" placeholder="Email (@cuhk.edu.hk)">
+                        <input type="password" id="reg-pass" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-slate-200 outline-none focus:border-blue-500" placeholder="Password">
+                        <input type="password" id="reg-confirm" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-slate-200 outline-none focus:border-blue-500" placeholder="Confirm Password">
+                        <button onclick="register()" class="w-full bg-green-600 hover:bg-green-500 text-white font-semibold py-3 rounded-lg transition-all mt-2">Create Account</button>
+                        <p id="reg-msg" class="text-xs text-center h-4"></p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- New Course Modal -->
+            <div id="new-course-modal" class="hidden absolute inset-0 z-40 flex items-center justify-center modal-backdrop">
+                <div class="bg-slate-800 p-6 rounded-xl shadow-2xl border border-slate-600 w-96">
+                    <h3 class="text-lg font-bold text-white mb-4">Create New Course</h3>
+                    <input id="course-title" class="w-full bg-slate-900 p-2 rounded border border-slate-700 mb-3 text-sm text-white" placeholder="Course Title (e.g. Deep Learning)">
+                    <input id="course-term" class="w-full bg-slate-900 p-2 rounded border border-slate-700 mb-4 text-sm text-white" placeholder="Term (e.g. 2025-Spring)">
+                    <div class="flex justify-end gap-2">
+                        <button onclick="document.getElementById('new-course-modal').classList.add('hidden')" class="text-sm text-slate-400 hover:text-white px-3 py-2">Cancel</button>
+                        <button onclick="createCourse()" class="text-sm bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded">Create</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- New Assignment Modal -->
+            <div id="new-assign-modal" class="hidden absolute inset-0 z-40 flex items-center justify-center modal-backdrop">
+                <div class="bg-slate-800 p-6 rounded-xl shadow-2xl border border-slate-600 w-[500px]">
+                    <h3 class="text-lg font-bold text-white mb-4">Create Assignment</h3>
+                    <input id="assign-title" class="w-full bg-slate-900 p-2 rounded border border-slate-700 mb-3 text-sm text-white" placeholder="Assignment Title">
+                    <textarea id="assign-instr" class="w-full bg-slate-900 p-2 rounded border border-slate-700 mb-4 text-sm text-white h-32" placeholder="Detailed Instructions..."></textarea>
+                    <div class="flex justify-end gap-2">
+                        <button onclick="document.getElementById('new-assign-modal').classList.add('hidden')" class="text-sm text-slate-400 hover:text-white px-3 py-2">Cancel</button>
+                        <button onclick="createAssignment()" class="text-sm bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded">Create</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Area -->
+            <div id="workspace" class="hidden flex-col h-full">
+                <div id="chat-history" class="flex-1 overflow-y-auto p-6 space-y-6 flex flex-col pb-4 scroll-smooth">
+                    <!-- Messages will appear here -->
+                </div>
+                
+                <!-- Input Control Panel -->
+                <div class="p-6 pt-2">
+                    <div class="glass rounded-2xl p-4 shadow-2xl border border-slate-700/50">
+                        <div class="flex gap-4 mb-3">
+                            <div class="flex-1">
+                                 <label class="block text-xs font-mono text-cyan-400 mb-2 flex items-center gap-2">
+                                    INSTRUCTION_OVERRIDE_PROTOCOL
+                                 </label>
+                                 <textarea id="custom-question" 
+                                    class="w-full bg-slate-900/50 border border-slate-700 rounded-xl p-3 text-sm text-slate-200 focus:ring-1 focus:ring-cyan-500 outline-none resize-none placeholder-slate-600" 
+                                    rows="2" 
+                                    placeholder="Add specific context, constraints, or questions..."></textarea>
+                            </div>
+                            <div class="w-48">
+                                <label class="block text-xs font-mono text-cyan-400 mb-2 flex items-center gap-2">
+                                    REFERENCE_UPLOAD
+                                </label>
+                                <div class="relative border border-dashed border-slate-600 rounded-xl h-[86px] flex flex-col items-center justify-center cursor-pointer hover:bg-slate-800/50 transition" onclick="document.getElementById('file-upload').click()">
+                                    <input type="file" id="file-upload" class="hidden" onchange="handleFileSelect(this)">
+                                    <svg class="w-6 h-6 text-slate-500 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                                    <span id="file-label" class="text-[10px] text-slate-400 text-center px-2 truncate w-full">Click to attach</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex gap-3 items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <select id="output-format" class="bg-slate-800 text-slate-200 border border-slate-600 text-sm rounded-lg p-2.5 outline-none">
+                                    <option value="md">Markdown Report</option>
+                                    <option value="pdf">LaTeX PDF Source</option>
+                                    <option value="py">Python Script</option>
+                                    <option value="ipynb">Jupyter Notebook</option>
+                                </select>
+                            </div>
+                            
+                            <button onclick="generateAnswer()" class="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white px-6 py-2.5 rounded-xl font-medium shadow-lg transition-all">
+                                Execute Generation
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const API_URL = "http://localhost:14242"; // Changed default port
+        let currentUser = null;
+        let currentCourse = null; 
+        let currentAssignmentId = null;
+
+        function switchAuthMode(mode) {
+            const formLogin = document.getElementById('form-login');
+            const formReg = document.getElementById('form-register');
+            const tabLogin = document.getElementById('tab-login');
+            const tabReg = document.getElementById('tab-register');
+            
+            if (mode === 'login') {
+                formLogin.classList.remove('hidden');
+                formReg.classList.add('hidden');
+                tabLogin.classList.add('text-white', 'border-b-2', 'border-blue-500', 'font-bold');
+                tabLogin.classList.remove('text-slate-500');
+                tabReg.classList.remove('text-white', 'border-b-2', 'border-blue-500', 'font-bold');
+                tabReg.classList.add('text-slate-500');
+            } else {
+                formLogin.classList.add('hidden');
+                formReg.classList.remove('hidden');
+                tabReg.classList.add('text-white', 'border-b-2', 'border-blue-500', 'font-bold');
+                tabReg.classList.remove('text-slate-500');
+                tabLogin.classList.remove('text-white', 'border-b-2', 'border-blue-500', 'font-bold');
+                tabLogin.classList.add('text-slate-500');
+            }
+        }
+
+        async function register() {
+            const email = document.getElementById('reg-email').value;
+            const pass = document.getElementById('reg-pass').value;
+            const confirm = document.getElementById('reg-confirm').value;
+            const msg = document.getElementById('reg-msg');
+            
+            if (!email || !pass) {
+                msg.innerText = "All fields required";
+                msg.classList.add('text-red-400');
+                return;
+            }
+            
+            try {
+                const res = await fetch(`${API_URL}/auth/register`, {
+                    method: 'POST',
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, password: pass, confirm_password: confirm })
+                });
+                
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail);
+                
+                msg.innerText = "Success! Switching to login...";
+                msg.classList.remove('text-red-400');
+                msg.classList.add('text-green-400');
+                
+                setTimeout(() => {
+                    document.getElementById('email-input').value = email;
+                    switchAuthMode('login');
+                }, 1500);
+                
+            } catch (e) {
+                msg.innerText = e.message;
+                msg.classList.add('text-red-400');
+            }
+        }
+
+        async function login() {
+            const email = document.getElementById('email-input').value;
+            const password = document.getElementById('password-input').value;
+            const msg = document.getElementById('login-msg');
+            
+            if(!email || !password) {
+                msg.innerText = "Please enter email and password";
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail);
+                
+                // Success
+                currentUser = { 
+                    email: data.email, 
+                    role: data.role, 
+                    token: data.token 
+                };
+                
+                document.getElementById('user-info').innerText = email;
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('workspace').classList.remove('hidden');
+                document.getElementById('workspace').classList.add('flex');
+                loadCourses(); 
+                
+            } catch (e) {
+                msg.innerText = e.message || "Login failed";
+            }
+        }
+
+        async function loadCourses() {
+            document.getElementById('assignments-loading').classList.remove('hidden');
+            const res = await fetch(`${API_URL}/courses`, { 
+                headers: { 
+                    "X-User-Email": currentUser.email,
+                    "X-User-Token": currentUser.token
+                } 
+            });
+            const courses = await res.json();
+            if (courses.length > 0) {
+                currentCourse = courses[0];
+                updateCourseUI();
+                loadAssignments();
+            } else {
+                document.getElementById('current-course-name').innerText = "No Courses";
+                document.getElementById('assignment-list').innerHTML = `<div class="p-4 text-center text-slate-600 text-xs">No courses found. Create one!</div>`;
+            }
+            document.getElementById('assignments-loading').classList.add('hidden');
+        }
+
+        function updateCourseUI() {
+            document.getElementById('current-course-name').innerText = currentCourse.title;
+        }
+
+        async function createCourse() {
+            const title = document.getElementById('course-title').value;
+            const term = document.getElementById('course-term').value;
+            if(!title) return;
+            
+            const res = await fetch(`${API_URL}/courses`, {
+                method: 'POST',
+                headers: { 
+                    "Content-Type": "application/json", 
+                    "X-User-Email": currentUser.email,
+                    "X-User-Token": currentUser.token 
+                },
+                body: JSON.stringify({ title, term })
+            });
+            const newCourse = await res.json();
+            currentCourse = newCourse;
+            updateCourseUI();
+            document.getElementById('new-course-modal').classList.add('hidden');
+            loadAssignments(); // Refresh list (empty)
+        }
+
+        async function loadAssignments() {
+            if (!currentCourse) return;
+            const res = await fetch(`${API_URL}/assignments`, { 
+                headers: { 
+                    "X-User-Email": currentUser.email,
+                    "X-User-Token": currentUser.token 
+                } 
+            });
+            const allAssignments = await res.json();
+            // Client-side filter for demo simplicity (ideally backend filters)
+            const assignments = allAssignments.filter(a => a.course_id === currentCourse.id);
+            
+            const list = document.getElementById('assignment-list');
+            list.innerHTML = "";
+            
+            if (assignments.length === 0) {
+                list.innerHTML = `<div class="p-4 text-center text-slate-600 text-xs">No assignments yet.</div>`;
+                return;
+            }
+
+            assignments.forEach((a, index) => {
+                const div = document.createElement('div');
+                div.className = "group flex items-center gap-3 p-3 rounded-lg hover:bg-slate-800 cursor-pointer transition-all border border-transparent hover:border-slate-700 mb-1";
+                div.innerHTML = `
+                    <div class="h-8 w-8 rounded-lg bg-slate-800 group-hover:bg-blue-900/30 text-slate-400 group-hover:text-blue-400 flex items-center justify-center font-mono text-xs transition-colors">#${index + 1}</div>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-medium text-slate-300 group-hover:text-white truncate">${a.title}</div>
+                    </div>
+                `;
+                div.onclick = () => {
+                    document.querySelectorAll('#assignment-list > div').forEach(d => d.classList.remove('bg-slate-800', 'border-slate-700'));
+                    div.classList.add('bg-slate-800', 'border-slate-700');
+                    selectAssignment(a);
+                };
+                list.appendChild(div);
+            });
+        }
+
+        async function createAssignment() {
+            if (!currentCourse) return alert("Please create a course first.");
+            const title = document.getElementById('assign-title').value;
+            const instr = document.getElementById('assign-instr').value;
+            
+            const res = await fetch(`${API_URL}/assignments`, {
+                method: 'POST',
+                headers: { 
+                    "Content-Type": "application/json", 
+                    "X-User-Email": currentUser.email,
+                    "X-User-Token": currentUser.token
+                },
+                body: JSON.stringify({ course_id: currentCourse.id, title, instructions: instr })
+            });
+            
+            document.getElementById('new-assign-modal').classList.add('hidden');
+            loadAssignments();
+        }
+        
+        function showNewCourseModal() {
+            document.getElementById('new-course-modal').classList.remove('hidden');
+        }
+        
+        function showNewAssignmentModal() {
+            document.getElementById('new-assign-modal').classList.remove('hidden');
+        }
+
+        function selectAssignment(assignment) {
+            currentAssignmentId = assignment.id;
+            const history = document.getElementById('chat-history');
+            history.innerHTML = ''; 
+            
+            // Add Initial Assignment Info
+            addMessage('ai', `
+                <div class="flex flex-col gap-2">
+                    <div class="text-xs font-mono text-cyan-400 uppercase tracking-wide">New Context Loaded</div>
+                    <div class="text-lg font-bold text-white">${assignment.title}</div>
+                    <div class="bg-slate-800/50 p-3 rounded-lg border-l-2 border-cyan-500 text-slate-300 text-sm">
+                        ${assignment.instructions}
+                    </div>
+                </div>
+            `);
+            
+            // Fetch & Render History
+            fetchAssignmentHistory(assignment.id);
+        }
+        
+        async function fetchAssignmentHistory(assignmentId) {
+            try {
+                const res = await fetch(`${API_URL}/assignments/${assignmentId}/history`, {
+                    headers: { 
+                        "X-User-Email": currentUser.email,
+                        "X-User-Token": currentUser.token
+                    }
+                });
+                const history = await res.json();
+                
+                if (history && history.length > 0) {
+                    // Render a divider
+                    const div = document.createElement('div');
+                    div.className = "flex items-center gap-4 py-4 opacity-50";
+                    div.innerHTML = `<div class="h-px bg-slate-700 flex-1"></div><span class="text-xs text-slate-500 font-mono">HISTORY</span><div class="h-px bg-slate-700 flex-1"></div>`;
+                    document.getElementById('chat-history').appendChild(div);
+                    
+                    history.forEach(item => {
+                        // Reconstruct message bubble from artifact
+                        // Note: In this simple model we only store the ANSWER (AI). 
+                        // If we stored the Question too we'd render that first. 
+                        // For now, we just show the AI's previous output.
+                        addMessage('ai', item.content + `<br><br><span class="text-[10px] text-slate-500">Restored from ${new Date(item.timestamp).toLocaleString()}</span>`);
+                    });
+                }
+            } catch (e) {
+                console.error("Failed to load history", e);
+            }
+        }
+
+        function handleFileSelect(input) {
+            const label = document.getElementById('file-label');
+            if (input.files && input.files[0]) {
+                label.innerText = input.files[0].name;
+                label.classList.add('text-cyan-400');
+            } else {
+                label.innerText = "Click to attach";
+                label.classList.remove('text-cyan-400');
+            }
+        }
+
+        function addMessage(role, content) {
+            const history = document.getElementById('chat-history');
+            const div = document.createElement('div');
+            div.className = `chat-bubble ${role} shadow-lg`;
+            if (role === 'ai') {
+                content = `<div class="flex items-center gap-2 mb-2 border-b border-slate-600/50 pb-1"><div class="h-2 w-2 rounded-full bg-green-400 animate-pulse"></div><span class="text-[10px] font-mono text-slate-400 uppercase">Solver#42 Core</span></div>` + content;
+            }
+            div.innerHTML = marked.parse(content);
+            history.appendChild(div);
+            history.scrollTop = history.scrollHeight;
+        }
+
+        async function generateAnswer() {
+            if (!currentAssignmentId) return;
+            const format = document.getElementById('output-format').value;
+            const customContext = document.getElementById('custom-question').value;
+            const fileInput = document.getElementById('file-upload');
+            
+            let msg = `Requesting standard answer generation in **${format.toUpperCase()}** format.`;
+            if (customContext) msg += `\n\n> **Constraints**: ${customContext}`;
+            if (fileInput.files.length > 0) msg += `\n\n> **Attachment**: ${fileInput.files[0].name}`;
+            addMessage('teacher', msg);
+            
+            // Build FormData
+            const formData = new FormData();
+            formData.append('assignment_id', currentAssignmentId);
+            formData.append('output_format', format);
+            if (customContext) formData.append('custom_context', customContext);
+            if (fileInput.files.length > 0) formData.append('file', fileInput.files[0]);
+
+            try {
+                const res = await fetch(`${API_URL}/generate-answer`, {
+                    method: 'POST',
+                    headers: { 
+                        "X-User-Email": currentUser.email,
+                        "X-User-Token": currentUser.token
+                    }, 
+                    body: formData
+                });
+                
+                const data = await res.json();
+                if (data.job_id) {
+                    addMessage('ai', `<span class="text-cyan-400 font-mono text-xs animate-pulse">► Job ${data.job_id} queued...</span>`);
+                    pollJob(data.job_id);
+                }
+            } catch (e) {
+                addMessage('ai', `<span class="text-red-400">System Error: ${e.message}</span>`);
+            }
+        }
+
+        async function pollJob(jobId) {
+            const interval = setInterval(async () => {
+                try {
+                    const res = await fetch(`${API_URL}/jobs/${jobId}`, { 
+                        headers: { 
+                            "X-User-Email": currentUser.email,
+                            "X-User-Token": currentUser.token
+                        } 
+                    });
+                    const data = await res.json();
+                    
+                    if (data.status === 'succeeded') {
+                        clearInterval(interval);
+                        addMessage('ai', data.output);
+                        addMessage('ai', `<span class="text-xs text-slate-400">✅ File saved locally to workspace.</span>`);
+                    } else if (data.status === 'failed') {
+                        clearInterval(interval);
+                        addMessage('ai', `<span class="text-red-400">Generation failed.</span>`);
+                    }
+                } catch (e) {
+                    clearInterval(interval);
+                }
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
