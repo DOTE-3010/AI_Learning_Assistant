@@ -121,7 +121,7 @@
                 your private study nomenclator
             </span>
         </div>
-        <div class="flex items-center gap-3">
+        <div id="nav-controls" class="hidden items-center gap-3">
             <button onclick="showNewCourseModal()" class="text-xs border border-slate-600 hover:bg-slate-800 px-3 py-1 rounded-md transition">
                 + New Course
             </button>
@@ -134,7 +134,7 @@
 
     <main class="flex-1 flex overflow-hidden">
         <!-- Sidebar -->
-        <aside class="w-72 bg-slate-950 border-r border-slate-800 flex flex-col z-10 hidden md:flex transition-all duration-300">
+        <aside id="app-sidebar" class="w-72 bg-slate-950 border-r border-slate-800 flex-col z-10 hidden transition-all duration-300">
             <div class="p-4 border-b border-slate-800 flex justify-between items-center">
                 <div>
                     <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Current Course</h2>
@@ -367,8 +367,21 @@
                 
                 document.getElementById('user-info').innerText = email;
                 document.getElementById('login-screen').classList.add('hidden');
+                
+                // Show Workspace Elements
                 document.getElementById('workspace').classList.remove('hidden');
                 document.getElementById('workspace').classList.add('flex');
+                
+                // Show Navbar Controls
+                const navControls = document.getElementById('nav-controls');
+                navControls.classList.remove('hidden');
+                navControls.classList.add('flex');
+
+                // Show Sidebar (restore responsiveness)
+                const sidebar = document.getElementById('app-sidebar');
+                // Ensure it matches "hidden md:flex" pattern for responsive display
+                sidebar.classList.add('hidden', 'md:flex'); 
+                
                 loadCourses(); 
                 
             } catch (e) {
