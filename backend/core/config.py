@@ -10,7 +10,7 @@ BIANXIE_ENDPOINT = os.getenv("BIANXIE_ENDPOINT", "https://api.bianxie.ai/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "gemini-3-pro-preview")
 
 # Update default to match Docker Compose credentials
-POSTGRES_URL = os.getenv("POSTGRES_URL", "postgresql://postgres:postgres@localhost:5432/solver42")
+POSTGRES_URL = os.getenv("POSTGRES_URL", "postgresql://postgres:postgres@localhost:15432/solver42")
 MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
 
 def validate_config():

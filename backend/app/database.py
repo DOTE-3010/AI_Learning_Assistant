@@ -7,6 +7,7 @@ from backend.app.utils import sanitize_filename
 from datetime import datetime
 from bson.objectid import ObjectId
 import os
+from backend.app.latex_renderer import compile_latex
 
 # Postgres
 engine = create_engine(POSTGRES_URL)
@@ -92,13 +93,22 @@ def save_local_file(course_title: str, assignment_title: str, content: str, fmt:
     
     # Filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    ext_map = {"md": "md", "pdf": "tex", "py": "py", "ipynb": "ipynb"} # PDF saves as tex source in this demo
+    ext_map = {"md": "md", "pdf": "tex", "py": "py", "ipynb": "ipynb"} 
     ext = ext_map.get(fmt, "txt")
-    filename = f"solution_{timestamp}.{ext}"
+    filename_base = f"solution_{timestamp}"
+    filename = f"{filename_base}.{ext}"
     file_path = os.path.join(base_dir, filename)
     
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(content)
+    
+    # If PDF format, attempt to compile
+    if fmt == "pdf":
+        try:
+            pdf_path = compile_latex(content, base_dir, filename_base)
+            print(f"Compiled PDF at: {pdf_path}")
+        except Exception as e:
+            print(f"PDF Compilation failed: {e}")
         
     return file_path
 

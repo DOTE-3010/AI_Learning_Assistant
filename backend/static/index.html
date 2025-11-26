@@ -487,7 +487,72 @@
                 body: JSON.stringify({ course_id: currentCourse.id, title, instructions: instr })
             });
             
+            // Wait for response and parse
+            const newAssignment = await res.json();
+            
             document.getElementById('new-assign-modal').classList.add('hidden');
+            
+            // Reload list and select the new assignment
+            await loadAssignments();
+            
+            // Ideally select the new one, but for now just reloading is fine. 
+            // The issue described by user suggests the modal might be closing or something UI related happens 
+            // that leaves artifacts. 
+            // Wait, the user said: "create assignment后，命名为test，初始对话框为 </div></div>"
+            // This sounds like selectAssignment is being called with broken HTML or empty data?
+            
+            // Let's check selectAssignment. It renders `assignment.instructions`.
+            // If instructions contain HTML-like closing tags without opening, it breaks layout?
+            // Or maybe selectAssignment isn't called here, but user clicks it.
+            
+            // Ah, the user might mean the INITIAL conversation history for a NEW assignment.
+            // In selectAssignment:
+            // addMessage('ai', `... <div ...> ${assignment.instructions} </div> ...`)
+            
+            // If assignment.instructions is user input "test", it renders "test".
+            // But if the USER entered something that breaks HTML?
+            // Or maybe the error is simply that `selectAssignment` is NOT called automatically, 
+            // and the user sees a weird state?
+            
+            // Let's look at selectAssignment again.
+            // It clears history: history.innerHTML = '';
+            // Then calls addMessage('ai', ...)
+            
+            // The user says "初始对话框为 </div></div>". 
+            // This looks like an HTML injection or unclosed tag issue in `addMessage` or `selectAssignment`.
+            
+            // In selectAssignment:
+            // <div class="...">${assignment.instructions}</div>
+            
+            // In addMessage:
+            // div.innerHTML = marked.parse(content);
+            
+            // If `assignment.instructions` is injected into the Template String passed to `addMessage`, 
+            // AND `addMessage` uses `marked.parse`, we have a potential double-parse or injection.
+            
+            // Wait, `addMessage` wraps content in:
+            // `<div class="...">...Solver#42 Core...</div>` + content
+            // Then `div.innerHTML = marked.parse(content)`
+            
+            // If `content` (the template string from selectAssignment) contains HTML tags (divs), 
+            // and `marked.parse` is called on it...
+            // Markdown parsers sometimes treat HTML blocks weirdly if not indented.
+            // But `marked` usually preserves HTML.
+            
+            // The issue:
+            // selectAssignment passes a BIG HTML string to `addMessage`.
+            // `addMessage` passes that HTML string to `marked.parse`.
+            // `marked.parse` might be mangling the HTML if it's not valid Markdown or if it contains block-level elements mixed with text.
+            
+            // Correction: `addMessage` is designed for Chat messages (Markdown). 
+            // `selectAssignment` is sending a UI Card (HTML).
+            // We should probably NOT parse Markdown for the "New Context Loaded" card, or ensure it's treated as HTML.
+            
+            // Fix: Do NOT use addMessage for the Context Card, or tell addMessage to skip markdown.
+            // Or, simple fix: Just append the Context Card directly to history without `marked.parse`.
+            
+            // Let's refactor selectAssignment to append directly.
+            
             loadAssignments();
         }
         
@@ -504,16 +569,23 @@
             const history = document.getElementById('chat-history');
             history.innerHTML = ''; 
             
-            // Add Initial Assignment Info
-            addMessage('ai', `
+            // Add Initial Assignment Info directly (skip Markdown parsing for UI elements)
+            const div = document.createElement('div');
+            div.className = "chat-bubble ai shadow-lg";
+            div.innerHTML = `
+                <div class="flex items-center gap-2 mb-2 border-b border-slate-600/50 pb-1">
+                    <div class="h-2 w-2 rounded-full bg-green-400 animate-pulse"></div>
+                    <span class="text-[10px] font-mono text-slate-400 uppercase">Solver#42 Core</span>
+                </div>
                 <div class="flex flex-col gap-2">
                     <div class="text-xs font-mono text-cyan-400 uppercase tracking-wide">New Context Loaded</div>
                     <div class="text-lg font-bold text-white">${assignment.title}</div>
                     <div class="bg-slate-800/50 p-3 rounded-lg border-l-2 border-cyan-500 text-slate-300 text-sm">
-                        ${assignment.instructions}
+                        ${assignment.instructions.replace(/\n/g, '<br>')}
                     </div>
                 </div>
-            `);
+            `;
+            history.appendChild(div);
             
             // Fetch & Render History
             fetchAssignmentHistory(assignment.id);
@@ -602,7 +674,7 @@
                 
                 const data = await res.json();
                 if (data.job_id) {
-                    addMessage('ai', `<span class="text-cyan-400 font-mono text-xs animate-pulse">► Job ${data.job_id} queued...</span>`);
+                    addMessage('ai', `<span class="text-cyan-400 font-mono text-xs animate-pulse">► Generating...</span>`);
                     pollJob(data.job_id);
                 }
             } catch (e) {
@@ -623,8 +695,26 @@
                     
                     if (data.status === 'succeeded') {
                         clearInterval(interval);
-                        addMessage('ai', data.output);
-                        addMessage('ai', `<span class="text-xs text-slate-400">✅ File saved locally to workspace.</span>`);
+                        
+                        // Remove the "Generating..." message (last child)
+                        const history = document.getElementById('chat-history');
+                        if (history.lastChild) {
+                           history.removeChild(history.lastChild);
+                        }
+
+                        // Show final result message
+                        addMessage('ai', `
+                            <div class="flex flex-col gap-2">
+                                <div class="text-sm text-slate-300">Generation Complete.</div>
+                                <div class="text-xs text-slate-500 font-mono">
+                                    File saved to workspace.<br>
+                                    Preview content:
+                                </div>
+                                <div class="max-h-64 overflow-y-auto bg-slate-950 p-3 rounded border border-slate-800 text-xs font-mono text-slate-400">
+                                    ${data.output.substring(0, 500)}...
+                                </div>
+                            </div>
+                        `);
                     } else if (data.status === 'failed') {
                         clearInterval(interval);
                         addMessage('ai', `<span class="text-red-400">Generation failed.</span>`);

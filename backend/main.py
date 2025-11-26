@@ -118,7 +118,7 @@ def process_generation_job(job_id: int, assignment, output_format: str, custom_c
             full_context += f"\n\n[Attached Reference Content]:\n{file_content}\n"
 
         # Real Call
-        content = generate_answer_logic(assignment.title, assignment.instructions, custom_context=full_context, use_search=True)
+        content = generate_answer_logic(assignment.title, assignment.instructions, custom_context=full_context, use_search=True, output_format=output_format)
         
         # Format
         formatted_content = convert_to_format(content, output_format)
@@ -215,7 +215,7 @@ async def get_assignment_history(assignment_id: int, request: Request, db: Sessi
         GenerationJob.assignment_id == assignment_id,
         GenerationJob.requested_by_email == email,
         GenerationJob.status == "succeeded"
-    ).order_by(GenerationJob.created_at.asc()).all() # Oldest first
+    ).order_by(GenerationJob.started_at.asc()).all() # Oldest first
     
     history = []
     for job in jobs:
