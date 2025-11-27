@@ -1,5 +1,13 @@
+<<<<<<< HEAD
+# Solver#42: Standard Answer Generator
+
+> **Project Code**: Solver#42  
+> **Status**: MVP (Phase 5 - Dockerized)  
+> **Target**: CUHK Business School  
+=======
 # Solver#42: Your Personal Nomenclator
 
+>>>>>>> main
 
 **Solver#42** is a locally deployable, privacy-focused solution designed to assist teachers in generating standard answers (Python code, Jupyter Notebooks) and detailed explanations (Markdown, PDF) for coding assignments. It leverages private LLM APIs to ensure data security while providing a modern, chat-based workflow.
 
@@ -107,4 +115,8 @@ Solver42/
 ---
 
 ## 📝 License
+<<<<<<< HEAD
+Proprietary - CUHK Business School Internal Use Only.
+=======
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+>>>>>>> main

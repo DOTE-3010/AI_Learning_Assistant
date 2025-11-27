@@ -39,5 +39,8 @@ coverage.xml
 # Local Development Scripts
 start_mvp.command
 
+<<<<<<< HEAD
+=======
 # Distribution Artifacts (Do not commit 1GB images to git!)
 Solver42_Dist/
+>>>>>>> main
