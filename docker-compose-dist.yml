@@ -2,9 +2,7 @@ version: '3.8'
 
 services:
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: solver42:latest  # 直接使用离线镜像
     container_name: solver42-backend
     ports:
       - "14242:8000"
@@ -18,6 +16,7 @@ services:
       - MONGODB_URL=mongodb://mongo:27017
     volumes:
       - ./workspace:/app/workspace
+      # 生产环境不挂载代码目录，确保使用的是镜像内的稳定代码
 
   postgres:
     image: postgres:15-alpine
@@ -42,3 +41,4 @@ services:
 volumes:
   postgres_data:
   mongo_data:
+

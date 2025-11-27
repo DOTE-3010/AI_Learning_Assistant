@@ -44,9 +44,26 @@ def root():
 @app.on_event("startup")
 async def startup_event():
     validate_config()
-    # Ensure DB tables exist on startup (useful for distribution if init_db skipped)
+    # Ensure DB tables exist on startup
     from backend.app.database import engine, Base
-    Base.metadata.create_all(bind=engine)
+    
+    # Retry logic for DB connection
+    max_retries = 10
+    retry_interval = 2
+    
+    for i in range(max_retries):
+        try:
+            # Try to create tables (which connects to DB)
+            print(f"🔄 Attempting to connect to database ({i+1}/{max_retries})...")
+            Base.metadata.create_all(bind=engine)
+            print("✅ Database connection successful.")
+            break
+        except Exception as e:
+            if i == max_retries - 1:
+                print(f"❌ Failed to connect to database after {max_retries} attempts.")
+                raise e
+            print(f"⚠️ Database not ready yet. Retrying in {retry_interval}s...")
+            time.sleep(retry_interval)
 
 @app.get("/health")
 def health_check():

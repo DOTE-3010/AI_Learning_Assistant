@@ -57,13 +57,11 @@
 
 ---
 
-## 🔮 Phase 5: Containerization & Deployment (Future)
+## ✅ Phase 5: Containerization & Deployment (Completed)
 
 **Objective**: Fully containerize the application for server deployment.
 
-> *Deferred: The current focus is the Local MVP (Phase 4).*
-
-**Planned Tasks**:
-- [ ] Dockerize Backend (Python/FastAPI).
-- [ ] Dockerize Frontend (Nginx serving static files).
-- [ ] Orchestration via `docker-compose` (All-in-One).
+**Deliverables**:
+- [x] Dockerize Backend (Python/FastAPI).
+- [x] Orchestration via `docker-compose` (All-in-One).
+- [x] Distribution Scripts (`start_mvp_mac.command`, `start_mvp_win.bat`).
