@@ -1,0 +1,235 @@
+\documentclass[12pt, a4paper]{article}
+
+% Required Packages
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{titlesec}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{tcolorbox}
+\usepackage{graphicx}
+
+% Page Layout
+\geometry{margin=1in}
+\setlength{\parskip}{1em}
+\setlength{\parindent}{0pt}
+
+% Remove section numbering globally
+\setcounter{secnumdepth}{-1}
+
+% Colors for code blocks
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+% Code listing style
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegray},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstset{style=mystyle}
+
+% Title Data
+\title{\textbf{Orchestrating Agentic Coding AIs: \\ A Roadmap-Driven Protocol}}
+\author{DOTE 3010}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+    This document establishes a formal protocol for utilizing "Roadmap-Driven Development" (RDD) to guide Agentic AIs (such as Cursor/Composer) in building complex software systems. We analyze the interaction between human intent (the Roadmap) and machine execution (the Agent), specifically focusing on the epistemological boundaries of the AI—what it can perceive, modify, and influence versus the external system states that remain opaque to it. Using the \textit{Solver\#42} project as a case study, we demonstrate how to prevent "context drift" and manage the "Agentic Gap" between code generation and environmental execution.
+\end{abstract}
+
+\newpage
+\tableofcontents
+\newpage
+
+\section{Introduction: The Agentic Coding Paradigm}
+
+The emergence of Agentic AI in software development represents a fundamental shift from "autocomplete" to "autonomous execution." However, the efficiency of an AI Agent is not solely determined by the underlying model's intelligence (e.g., GPT-4o or Claude 3.5 Sonnet), but rather by the structure of the constraints provided by the human operator.
+
+In a traditional workflow, a developer holds the architectural map in their mind. In an Agentic workflow, this map must be externalized into a persistent, machine-readable format. This document argues that a static Markdown file, specifically a \texttt{roadmap.md}, serves as the most effective "Context Anchor" for maintaining long-term project coherence.
+
+We will explore two critical dimensions of this workflow:
+\begin{enumerate}
+    \item \textbf{Teleological Guidance:} How to force the AI to adhere to a linear progression of tasks using a roadmap.
+    \item \textbf{Ontological Boundaries:} Defining strictly what the AI Agent interacts with (The IDE Context) versus the reality it cannot touch (The System Context).
+\end{enumerate}
+
+\section{Part I: Roadmap-Driven Development (RDD)}
+
+\subsection{The Roadmap as a Mutable State Machine}
+
+Most developers treat roadmaps as documentation for humans. In Agentic Coding, the \texttt{roadmap.md} is a control plane. It acts as a shared memory state between the human and the AI.
+
+A roadmap for an AI must not be vague. It must be structured as a dependency graph. As seen in the \textit{Solver\#42} project, the roadmap was divided into five distinct phases:
+\begin{itemize}
+    \item Phase 1: Core Engine (Pure Python)
+    \item Phase 2: Data Layer (Docker/SQL)
+    \item Phase 3: API Service (FastAPI)
+    \item Phase 4: Frontend (UI/UX)
+    \item Phase 5: Packaging (Local Deployment)
+\end{itemize}
+
+This "Inside-Out" approach is critical. If an Agent is asked to build the UI before the database, it will hallucinate mock data structures that inevitably fail to match the final backend implementation.
+
+\subsection{Step-by-Step Guidance Protocol}
+
+To successfully guide the AI, the operator must enforce a strict "Read-Execute-Update" loop.
+
+\subsubsection{Context Loading}
+Before asking for a single line of code, the Agent must ingest the roadmap. The user must explicitly explicitly prompt:
+\begin{quote}
+    \textit{"Read @roadmap.md. We are currently at the beginning of Phase 1. Do not attempt Phase 2. Acknowledge the goals of Phase 1."}
+\end{quote}
+This constrains the AI's search space. It prevents the model from optimizing for future problems (like Docker containerization) that confuse the immediate task (writing a Python class).
+
+\subsubsection{The Implementation Cycle}
+When implementing a specific feature (e.g., `StandardAnswerGenerator`), the Agent should be instructed to check the roadmap item.
+\begin{lstlisting}[language=bash]
+# User Prompt:
+"Implement the StandardAnswerGenerator class as defined in Phase 1 of @roadmap.md. 
+Only use local Python libraries for now. Do not add database imports yet."
+\end{lstlisting}
+
+\subsubsection{The Verification and Update Step}
+This is the most crucial step often missed. Once the code is written and tests pass, the Agent must be instructed to \textbf{update the roadmap itself}.
+\begin{itemize}
+    \item \textbf{Why?} When the AI modifies `roadmap.md` to mark a checkbox as `[x] Completed`, it reinforces its own training context. The "memory" of the completion becomes part of the file history.
+    \item \textbf{Prompt:} \textit{"We have finished the CLI tool. Update @roadmap.md to mark Phase 1 as complete. Then, explain what Phase 2 entails based on the file."}
+\end{itemize}
+
+\subsection{Handling Hallucinations and Corrections}
+
+The AI is fallible. It may claim a task is done when the code is buggy. 
+\textbf{Rule of Thumb:} Never let the AI proceed to the next item on the roadmap until the current item is verified by the human via a terminal run. 
+
+If the AI fails, the roadmap serves as a reset point. You can say:
+\textit{"Revert the last change. Re-read Phase 2 of @roadmap.md. You missed the requirement for PostgreSQL."}
+
+\section{Part II: The Epistemological Boundaries of the Agent}
+
+A common failure mode in Agentic coding is assuming the Agent "knows" the state of your computer. It does not. The Agent operates within a strictly defined sandbox. We must distinguish between the \textbf{Visible World} (IDE Context) and the \textbf{Invisible World} (System Context).
+
+\subsection{The Visible World: What the Agent Can See and Modify}
+
+The Agent (Cursor/Composer) has access to a specific set of interfaces. It is "omnipotent" only within these boundaries.
+
+\subsubsection{The File System (Textual Representation)}
+The Agent sees files as strings of text. 
+\begin{itemize}
+    \item \textbf{Capability:} It can read `@main.py`, analyze the syntax, and rewrite the entire file.
+    \item \textbf{Limitation:} It cannot see the "file icon" or the folder color. It relies on file paths (e.g., `/backend/app/main.py`). If a file is not added to its context, it does not exist for the Agent.
+\end{itemize}
+
+\subsubsection{The Terminal (Standard Output/Error)}
+The terminal is the Agent's only sensory organ for "Runtime Reality."
+\begin{itemize}
+    \item \textbf{Capability:} If the Agent runs `python main.py` and the terminal outputs `Traceback (most recent call last)...`, the Agent "sees" the error and can fix it.
+    \item \textbf{Critical Workflow:} The user must allow the Agent to run terminal commands to "ground" its hallucinations. If the Agent writes code but never runs it, the code is likely broken.
+\end{itemize}
+
+\subsubsection{Linter and Language Server Protocol (LSP)}
+The Agent receives signals from the IDE's linter (red squiggly lines).
+\begin{itemize}
+    \item \textbf{Capability:} It can see that `import numpy` is underlined because the package is missing.
+    \item \textbf{Action:} It can propose `pip install numpy`.
+\end{itemize}
+
+\subsection{The Invisible World: What the Agent Cannot See or Touch}
+
+The Agent is blind to anything outside the text editor's window and the terminal's text stream. This is where the human MUST intervene.
+
+\subsubsection{GUI Applications and Daemons}
+\textbf{Scenario:} The Agent tries to start a database using `docker-compose up`.
+\begin{itemize}
+    \item \textbf{Agent's View:} It sends the command to the terminal.
+    \item \textbf{Terminal Output:} `Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?`
+    \item \textbf{The Gap:} The Agent \textbf{cannot} see the Docker Desktop icon in the macOS menu bar. It cannot click the Docker icon to start the application.
+    \item \textbf{Human Role:} The human must physically open Docker Desktop. The Agent can only wait.
+\end{itemize}
+
+\subsubsection{Root Permissions and OS Security}
+\textbf{Scenario:} The Agent tries to listen on port 80.
+\begin{itemize}
+    \item \textbf{Agent's View:} `Permission denied`.
+    \item \textbf{The Gap:} The Agent cannot enter the user's `sudo` password blindly (security risk), nor can it interact with macOS "Allow Network Connection" pop-ups.
+    \item \textbf{Human Role:} The human must type the password or click "Allow".
+\end{itemize}
+
+\subsubsection{Browser Visuals (rendered HTML/CSS)}
+\textbf{Scenario:} The Agent writes HTML for the \textit{Solver\#42} frontend.
+\begin{itemize}
+    \item \textbf{Agent's View:} It sees `<div class="glass-panel">`. It "thinks" this looks like glassmorphism because it knows the CSS properties.
+    \item \textbf{The Gap:} It cannot see if the div is misaligned by 5 pixels or if the text color contrasts poorly with the background.
+    \item \textbf{Human Role:} The user must open the browser, look at the page, and describe the visual bug back to the Agent (e.g., \textit{"The button is overlapping the text box"}).
+\end{itemize}
+
+\subsubsection{System Resource State}
+The Agent does not know if your battery is low, if your CPU is overheating, or if your WiFi is disconnected (unless a specific command fails with a network error).
+
+\section{Case Study: The Solver\#42 Execution Strategy}
+
+In the development of \textit{Solver\#42}, we utilized this separation of concerns to maximize efficiency.
+
+\subsection{Phase 1: The Blind Logic}
+We asked the Agent to write `standard_answer_generator.py`.
+\begin{itemize}
+    \item \textbf{Agent Action:} Wrote Python code.
+    \item \textbf{Validation:} We asked the Agent to write a `test_script.py` and run it in the terminal.
+    \item \textbf{Result:} The Agent saw the text output of the generated answer. Success was verified purely through text.
+\end{itemize}
+
+\subsection{Phase 2: The Docker Barrier}
+We asked the Agent to set up PostgreSQL.
+\begin{itemize}
+    \item \textbf{Agent Action:} Wrote `docker-compose.yml`.
+    \item \textbf{Failure:} The Agent tried to run it, but Docker wasn't started.
+    \item \textbf{Human Intervention:} User started Docker Desktop.
+    \item \textbf{Agent Recovery:} User told Agent "Docker is now running. Retry." Agent ran the command again, successfully.
+\end{itemize}
+
+\subsection{Phase 5: The Packaging Illusion}
+We asked the Agent to create a "One-Click Launcher" (`start_mvp.command`).
+\begin{itemize}
+    \item \textbf{Agent Action:} Wrote a shell script.
+    \item \textbf{Blind Spot:} The Agent cannot double-click the script to test if the macOS Terminal window opens correctly.
+    \item \textbf{Human Role:} The user had to manually run the script and report back: "It opened, but the Python virtual environment didn't activate."
+    \item \textbf{Correction:} The Agent modified the script to use absolute paths based on the user's feedback.
+\end{itemize}
+
+\section{Conclusion: The Human as the Runtime Environment}
+
+The most effective mental model for "Agentic Coding" is that the AI is the \textbf{Architect and the Typist}, but the Human is the \textbf{Runtime Environment and the Senses}.
+
+The AI drafts the roadmap. The AI writes the code. The AI attempts to run the code.
+But the Human must:
+\begin{enumerate}
+    \item \textbf{Validate} that the roadmap aligns with business goals.
+    \item \textbf{Provide} the sensory input (visual checks, OS status) that the Agent lacks.
+    \item \textbf{Unlock} the doors (permissions, external apps) that the Agent cannot open.
+\end{enumerate}
+
+By strictly adhering to a file-based roadmap (`roadmap.md`) and understanding these epistemological boundaries, developers can push Agentic AI to build complex, robust applications like \textit{Solver\#42} with minimal friction.
+
+\end{document}
+
