@@ -43,6 +43,10 @@ def root():
 
 @app.on_event("startup")
 async def startup_event():
+    # Check if we are in testing mode
+    if os.getenv("TESTING"):
+        return
+
     validate_config()
     # Ensure DB tables exist on startup
     from backend.app.database import engine, Base

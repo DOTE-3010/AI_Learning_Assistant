@@ -9,7 +9,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True)
     role = Column(String)
-    course_ids = Column(ARRAY(Integer))
+    course_ids = Column(JSON) # Changed from ARRAY(Integer) to JSON for SQLite compatibility
     created_at = Column(DateTime, default=datetime.utcnow)
     password_hash = Column(String, nullable=True) # Added for real auth demo
 
@@ -29,7 +29,7 @@ class Assignment(Base):
     instructions = Column(String)
     due_at = Column(DateTime)
     guidance_policy = Column(JSON)
-    output_formats = Column(ARRAY(String))
+    output_formats = Column(JSON) # Changed from ARRAY(String) to JSON for SQLite compatibility
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class GenerationJob(Base):
