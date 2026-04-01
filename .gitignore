@@ -41,3 +41,6 @@ start_mvp.command
 
 # Distribution Artifacts (Do not commit 1GB images to git!)
 Solver42_Dist/
+
+# User-generated data
+workspace/
