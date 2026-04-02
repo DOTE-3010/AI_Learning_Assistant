@@ -12,11 +12,76 @@ import time
 import shutil
 import os
 import base64
+import io
+import json
 
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
+from pypdf import PdfReader
 
 app = FastAPI(title="Solver#42 MVP Backend")
+MAX_REFERENCE_CHARS = 20000
+
+
+def _truncate_reference_text(text: str, max_chars: int = MAX_REFERENCE_CHARS) -> str:
+    if len(text) <= max_chars:
+        return text
+    return f"{text[:max_chars]}\n\n[Truncated to {max_chars} characters.]"
+
+
+def _parse_ipynb_reference(content_bytes: bytes) -> str:
+    decoded = content_bytes.decode("utf-8", errors="replace")
+    data = json.loads(decoded)
+    cells = data.get("cells", [])
+    extracted_chunks = []
+
+    for idx, cell in enumerate(cells, 1):
+        cell_type = cell.get("cell_type", "unknown")
+        if cell_type not in ("markdown", "code"):
+            continue
+        source = cell.get("source", "")
+        if isinstance(source, list):
+            source = "".join(source)
+        source = str(source).strip()
+        if not source:
+            continue
+        label = "Markdown" if cell_type == "markdown" else "Code"
+        extracted_chunks.append(f"[{label} Cell {idx}]\n{source}")
+
+    if not extracted_chunks:
+        return "[Notebook uploaded, but no markdown/code cell content was found.]"
+
+    return "\n\n".join(extracted_chunks)
+
+
+def _parse_pdf_reference(content_bytes: bytes) -> str:
+    reader = PdfReader(io.BytesIO(content_bytes))
+    pages = []
+    for page_index, page in enumerate(reader.pages, 1):
+        page_text = (page.extract_text() or "").strip()
+        if page_text:
+            pages.append(f"[Page {page_index}]\n{page_text}")
+
+    if not pages:
+        return "[PDF uploaded, but no extractable text was found.]"
+
+    return "\n\n".join(pages)
+
+
+def _extract_reference_text(file: UploadFile, content_bytes: bytes) -> str:
+    filename = (file.filename or "").lower()
+    _, ext = os.path.splitext(filename)
+
+    if ext == ".ipynb":
+        return _truncate_reference_text(_parse_ipynb_reference(content_bytes))
+
+    if ext == ".pdf":
+        return _truncate_reference_text(_parse_pdf_reference(content_bytes))
+
+    try:
+        return _truncate_reference_text(content_bytes.decode("utf-8"))
+    except UnicodeDecodeError:
+        return f"[Binary file uploaded: {file.filename}. Parsing not supported in this MVP version.]"
 
 # CORS
 app.add_middleware(
@@ -179,15 +244,10 @@ async def generate_answer(
     file_text = None
     if file:
         try:
-            # Simple text/md reading. For PDF we'd need pypdf, keeping it simple for now or assuming text-based.
-            # MVP: Read as text. If binary, this might fail or look garbage.
             content_bytes = await file.read()
-            try:
-                file_text = content_bytes.decode('utf-8')
-            except UnicodeDecodeError:
-                file_text = f"[Binary file uploaded: {file.filename}. Parsing not supported in this MVP version.]"
+            file_text = _extract_reference_text(file, content_bytes)
         except Exception as e:
-            print(f"File upload error: {e}")
+            print(f"File upload parsing error: {e}")
     
     job = create_job(db, assignment_id, email, role)
     

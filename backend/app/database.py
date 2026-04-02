@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from pymongo import MongoClient
 from backend.core.config import POSTGRES_URL, MONGODB_URL
@@ -7,7 +7,9 @@ from backend.app.utils import sanitize_filename
 from datetime import datetime
 from bson.objectid import ObjectId
 import os
+import json
 from backend.app.latex_renderer import compile_latex
+from sqlalchemy.exc import DataError
 
 # Postgres
 engine = create_engine(POSTGRES_URL)
@@ -54,7 +56,39 @@ def create_assignment(db, course_id, title, instructions, teacher_email, due_at=
         created_at=datetime.utcnow()
     )
     db.add(assignment)
-    db.commit()
+    try:
+        db.commit()
+    except DataError as exc:
+        # Backward-compatible fallback: some existing Postgres schemas still use text[].
+        db.rollback()
+        if "output_formats" not in str(exc):
+            raise
+        now = datetime.utcnow()
+        insert_sql = text("""
+            INSERT INTO assignments (
+                course_id, title, instructions, due_at, guidance_policy, output_formats, created_at
+            )
+            VALUES (
+                :course_id, :title, :instructions, :due_at, CAST(:guidance_policy AS jsonb), :output_formats, :created_at
+            )
+            RETURNING id
+        """)
+        result = db.execute(
+            insert_sql,
+            {
+                "course_id": course_id,
+                "title": title,
+                "instructions": instructions,
+                "due_at": due_at or now,
+                "guidance_policy": json.dumps({"mask_code": True}),
+                "output_formats": ["md", "py", "ipynb", "pdf"],
+                "created_at": now,
+            }
+        )
+        db.commit()
+        assignment_id = result.scalar_one()
+        assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
+
     db.refresh(assignment)
     return assignment
 
@@ -81,6 +115,22 @@ def update_job_status(db, job_id, status, cost=None):
             job.completed_at = datetime.utcnow()
         db.commit()
 
+def _resolve_available_filename_base(base_dir: str, preferred_base: str, extensions: list[str]) -> str:
+    """
+    Return a non-conflicting filename base using common suffix style: name, name(1), name(2)...
+    """
+    candidate = preferred_base
+    index = 1
+
+    def has_conflict(name_base: str) -> bool:
+        return any(os.path.exists(os.path.join(base_dir, f"{name_base}.{ext}")) for ext in extensions)
+
+    while has_conflict(candidate):
+        candidate = f"{preferred_base}({index})"
+        index += 1
+
+    return candidate
+
 def save_local_file(course_title: str, assignment_title: str, content: str, fmt: str) -> str:
     """Save generated content to local filesystem under course/assignment directory"""
     # Sanitize names
@@ -91,11 +141,11 @@ def save_local_file(course_title: str, assignment_title: str, content: str, fmt:
     base_dir = os.path.join(os.getcwd(), "workspace", safe_course, safe_assign)
     os.makedirs(base_dir, exist_ok=True)
     
-    # Filename
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Filename: assignment title first, append (1), (2)... when conflict exists.
     ext_map = {"md": "md", "pdf": "tex", "py": "py", "ipynb": "ipynb"} 
     ext = ext_map.get(fmt, "txt")
-    filename_base = f"solution_{timestamp}"
+    check_exts = ["tex", "pdf"] if fmt == "pdf" else [ext]
+    filename_base = _resolve_available_filename_base(base_dir, safe_assign or "assignment", check_exts)
     filename = f"{filename_base}.{ext}"
     file_path = os.path.join(base_dir, filename)
     

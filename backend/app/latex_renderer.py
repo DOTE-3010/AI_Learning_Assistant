@@ -5,6 +5,30 @@ from jinja2 import Template
 
 logger = logging.getLogger(__name__)
 
+def _cleanup_latex_intermediate_files(output_dir: str, filename_base: str) -> None:
+    """
+    Remove LaTeX intermediate artifacts and keep only final outputs.
+    """
+    removable_suffixes = (
+        ".aux",
+        ".log",
+        ".out",
+        ".toc",
+        ".nav",
+        ".snm",
+        ".fls",
+        ".fdb_latexmk",
+        ".synctex.gz",
+    )
+
+    for suffix in removable_suffixes:
+        candidate = os.path.join(output_dir, f"{filename_base}{suffix}")
+        if os.path.exists(candidate):
+            try:
+                os.remove(candidate)
+            except OSError as exc:
+                logger.warning("Failed to remove intermediate file %s: %s", candidate, exc)
+
 def escape_latex(text: str) -> str:
     """
     Escapes special characters for LaTeX.
@@ -67,7 +91,9 @@ def compile_latex(tex_source: str, output_dir: str, filename_base: str = "slides
             # Even if it fails, sometimes a PDF is produced. If not, return tex path.
             if not os.path.exists(pdf_path):
                 raise RuntimeError(f"LaTeX compilation failed. Check log at {output_dir}/{filename_base}.log")
-        
+
+        # Keep only .tex and .pdf in the output directory for this artifact.
+        _cleanup_latex_intermediate_files(output_dir, filename_base)
         return pdf_path
         
     except subprocess.TimeoutExpired:
