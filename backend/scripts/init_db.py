@@ -46,7 +46,7 @@ This tutorial assignment helps you understand how to use the system.
 
 **How to Generate:**
 1. Click "Execute Generation" below to see a sample response.
-2. Try adding specific instructions in the "Instruction Override Protocol" box (e.g., "Summarize in 3 bullet points").
+2. Try adding specific instructions in the "Ask your question here" box (e.g., "Summarize in 3 bullet points").
 3. Upload a text file to see how reference materials are handled.
 
 **How to Create Content:**

@@ -138,7 +138,9 @@
             <div class="p-4 border-b border-slate-800 flex justify-between items-center">
                 <div>
                     <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Current Course</h2>
-                    <div id="current-course-name" class="text-sm font-semibold text-slate-200">Loading...</div>
+                    <select id="course-selector" onchange="onCourseChange(this.value)" class="text-sm font-semibold text-slate-200 bg-slate-900 border border-slate-700 rounded px-2 py-1 min-w-[220px] outline-none focus:border-blue-500">
+                        <option value="">Loading...</option>
+                    </select>
                 </div>
             </div>
             
@@ -233,12 +235,12 @@
                         <div class="flex gap-4 mb-3">
                             <div class="flex-1">
                                  <label class="block text-xs font-mono text-cyan-400 mb-2 flex items-center gap-2">
-                                    INSTRUCTION_OVERRIDE_PROTOCOL
+                                    Ask your question here
                                  </label>
                                  <textarea id="custom-question" 
                                     class="w-full bg-slate-900/50 border border-slate-700 rounded-xl p-3 text-sm text-slate-200 focus:ring-1 focus:ring-cyan-500 outline-none resize-none placeholder-slate-600" 
                                     rows="2" 
-                                    placeholder="Add specific context, constraints, or questions..."></textarea>
+                                    placeholder="Ask your question here..."></textarea>
                             </div>
                             <div class="w-48">
                                 <label class="block text-xs font-mono text-cyan-400 mb-2 flex items-center gap-2">
@@ -276,6 +278,7 @@
         const API_URL = "http://localhost:14242"; // Changed default port
         let currentUser = null;
         let currentCourse = null; 
+        let allCourses = [];
         let currentAssignmentId = null;
 
         function switchAuthMode(mode) {
@@ -307,8 +310,14 @@
             const confirm = document.getElementById('reg-confirm').value;
             const msg = document.getElementById('reg-msg');
             
-            if (!email || !pass) {
+            if (!email || !pass || !confirm) {
                 msg.innerText = "All fields required";
+                msg.classList.add('text-red-400');
+                return;
+            }
+
+            if (pass !== confirm) {
+                msg.innerText = "Passwords do not match";
                 msg.classList.add('text-red-400');
                 return;
             }
@@ -329,6 +338,7 @@
                 
                 setTimeout(() => {
                     document.getElementById('email-input').value = email;
+                    document.getElementById('password-input').value = pass;
                     switchAuthMode('login');
                 }, 1500);
                 
@@ -389,7 +399,7 @@
             }
         }
 
-        async function loadCourses() {
+        async function loadCourses(preferredCourseId = null) {
             document.getElementById('assignments-loading').classList.remove('hidden');
             const res = await fetch(`${API_URL}/courses`, { 
                 headers: { 
@@ -398,25 +408,75 @@
                 } 
             });
             const courses = await res.json();
-            if (courses.length > 0) {
-                currentCourse = courses[0];
+            allCourses = courses;
+
+            if (allCourses.length > 0) {
+                renderCourseOptions();
+
+                const selectedByPreference = preferredCourseId
+                    ? allCourses.find(c => c.id === Number(preferredCourseId))
+                    : null;
+                const selectedByCurrent = currentCourse
+                    ? allCourses.find(c => c.id === Number(currentCourse.id))
+                    : null;
+
+                currentCourse = selectedByPreference || selectedByCurrent || allCourses[0];
                 updateCourseUI();
-                loadAssignments();
+                await loadAssignments();
             } else {
-                document.getElementById('current-course-name').innerText = "No Courses";
+                currentCourse = null;
+                renderCourseOptions();
                 document.getElementById('assignment-list').innerHTML = `<div class="p-4 text-center text-slate-600 text-xs">No courses found. Create one!</div>`;
             }
             document.getElementById('assignments-loading').classList.add('hidden');
         }
 
+        function renderCourseOptions() {
+            const selector = document.getElementById('course-selector');
+            selector.innerHTML = "";
+
+            if (!allCourses || allCourses.length === 0) {
+                const option = document.createElement('option');
+                option.value = "";
+                option.innerText = "No Courses";
+                selector.appendChild(option);
+                selector.disabled = true;
+                return;
+            }
+
+            allCourses.forEach(course => {
+                const option = document.createElement('option');
+                option.value = String(course.id);
+                option.innerText = `${course.title} (${course.term || 'N/A'})`;
+                selector.appendChild(option);
+            });
+
+            selector.disabled = false;
+        }
+
+        function onCourseChange(courseId) {
+            if (!courseId) return;
+            const selected = allCourses.find(c => c.id === Number(courseId));
+            if (!selected) return;
+
+            currentCourse = selected;
+            updateCourseUI();
+            loadAssignments();
+        }
+
         function updateCourseUI() {
-            document.getElementById('current-course-name').innerText = currentCourse.title;
+            const selector = document.getElementById('course-selector');
+            if (!currentCourse || !selector) return;
+            selector.value = String(currentCourse.id);
         }
 
         async function createCourse() {
             const title = document.getElementById('course-title').value;
             const term = document.getElementById('course-term').value;
-            if(!title) return;
+            if(!title || !term) {
+                alert("Course title and term are required.");
+                return;
+            }
             
             const res = await fetch(`${API_URL}/courses`, {
                 method: 'POST',
@@ -427,11 +487,17 @@
                 },
                 body: JSON.stringify({ title, term })
             });
+
             const newCourse = await res.json();
-            currentCourse = newCourse;
-            updateCourseUI();
+            if (!res.ok) {
+                alert(newCourse.detail || newCourse.error || "Failed to create course.");
+                return;
+            }
+
             document.getElementById('new-course-modal').classList.add('hidden');
-            loadAssignments(); // Refresh list (empty)
+            document.getElementById('course-title').value = "";
+            document.getElementById('course-term').value = "";
+            await loadCourses(newCourse.id);
         }
 
         async function loadAssignments() {
@@ -476,6 +542,10 @@
             if (!currentCourse) return alert("Please create a course first.");
             const title = document.getElementById('assign-title').value;
             const instr = document.getElementById('assign-instr').value;
+            if (!title || !instr) {
+                alert("Assignment title and instructions are required.");
+                return;
+            }
             
             const res = await fetch(`${API_URL}/assignments`, {
                 method: 'POST',
@@ -486,9 +556,17 @@
                 },
                 body: JSON.stringify({ course_id: currentCourse.id, title, instructions: instr })
             });
-            
+
+            const created = await res.json();
+            if (!res.ok) {
+                alert(created.detail || created.error || "Failed to create assignment.");
+                return;
+            }
+
             document.getElementById('new-assign-modal').classList.add('hidden');
-            loadAssignments();
+            document.getElementById('assign-title').value = "";
+            document.getElementById('assign-instr').value = "";
+            await loadAssignments();
         }
         
         function showNewCourseModal() {
