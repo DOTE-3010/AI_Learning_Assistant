@@ -142,6 +142,9 @@
                         <option value="">Loading...</option>
                     </select>
                 </div>
+                <button onclick="deleteCurrentCourse()" class="text-xs border border-red-700/60 text-red-400 hover:bg-red-900/20 h-6 w-6 rounded transition-colors flex items-center justify-center font-bold" title="Delete">
+                    X
+                </button>
             </div>
             
             <div class="flex-1 overflow-y-auto p-3 space-y-1" id="assignment-list">
@@ -280,6 +283,28 @@
         let currentCourse = null; 
         let allCourses = [];
         let currentAssignmentId = null;
+        let activeJobInterval = null;
+        let activeJobId = null;
+        const HIDDEN_COURSE_KEY_PREFIX = "hidden_courses_";
+        const HIDDEN_ASSIGNMENT_KEY_PREFIX = "hidden_assignments_";
+
+        function getStorageKey(prefix) {
+            return `${prefix}${currentUser?.email || 'guest'}`;
+        }
+
+        function getHiddenIds(prefix) {
+            const raw = localStorage.getItem(getStorageKey(prefix));
+            if (!raw) return new Set();
+            try {
+                return new Set(JSON.parse(raw).map(Number));
+            } catch {
+                return new Set();
+            }
+        }
+
+        function saveHiddenIds(prefix, ids) {
+            localStorage.setItem(getStorageKey(prefix), JSON.stringify([...ids]));
+        }
 
         function switchAuthMode(mode) {
             const formLogin = document.getElementById('form-login');
@@ -401,14 +426,16 @@
 
         async function loadCourses(preferredCourseId = null) {
             document.getElementById('assignments-loading').classList.remove('hidden');
-            const res = await fetch(`${API_URL}/courses`, { 
+            const res = await fetch(`${API_URL}/courses?ts=${Date.now()}`, {
+                cache: 'no-store',
                 headers: { 
                     "X-User-Email": currentUser.email,
                     "X-User-Token": currentUser.token
                 } 
             });
             const courses = await res.json();
-            allCourses = courses;
+            const hiddenCourseIds = getHiddenIds(HIDDEN_COURSE_KEY_PREFIX);
+            allCourses = (Array.isArray(courses) ? courses : []).filter(c => !hiddenCourseIds.has(Number(c.id)));
 
             if (allCourses.length > 0) {
                 renderCourseOptions();
@@ -425,6 +452,7 @@
                 await loadAssignments();
             } else {
                 currentCourse = null;
+                currentAssignmentId = null;
                 renderCourseOptions();
                 document.getElementById('assignment-list').innerHTML = `<div class="p-4 text-center text-slate-600 text-xs">No courses found. Create one!</div>`;
             }
@@ -460,8 +488,36 @@
             if (!selected) return;
 
             currentCourse = selected;
+            currentAssignmentId = null;
             updateCourseUI();
             loadAssignments();
+        }
+
+        function deleteCurrentCourse() {
+            if (!currentCourse) {
+                alert("No course selected.");
+                return;
+            }
+
+            if (!confirm("Do you really want to delete this?")) return;
+
+            const hiddenCourseIds = getHiddenIds(HIDDEN_COURSE_KEY_PREFIX);
+            hiddenCourseIds.add(Number(currentCourse.id));
+            saveHiddenIds(HIDDEN_COURSE_KEY_PREFIX, hiddenCourseIds);
+
+            allCourses = allCourses.filter(c => Number(c.id) !== Number(currentCourse.id));
+            currentAssignmentId = null;
+
+            if (allCourses.length > 0) {
+                currentCourse = allCourses[0];
+                renderCourseOptions();
+                updateCourseUI();
+                loadAssignments();
+            } else {
+                currentCourse = null;
+                renderCourseOptions();
+                document.getElementById('assignment-list').innerHTML = `<div class="p-4 text-center text-slate-600 text-xs">No courses found. Create one!</div>`;
+            }
         }
 
         function updateCourseUI() {
@@ -494,10 +550,26 @@
                 return;
             }
 
+            // Update UI immediately so user can switch/use the new course without refresh.
+            const normalizedCourse = {
+                id: newCourse.id,
+                title: newCourse.title || title,
+                term: newCourse.term || term
+            };
+            allCourses = [
+                ...allCourses.filter(c => Number(c.id) !== Number(normalizedCourse.id)),
+                normalizedCourse
+            ];
+            currentCourse = normalizedCourse;
+            renderCourseOptions();
+            updateCourseUI();
+
             document.getElementById('new-course-modal').classList.add('hidden');
             document.getElementById('course-title').value = "";
             document.getElementById('course-term').value = "";
-            await loadCourses(newCourse.id);
+            await loadAssignments();
+            // Sync back with server truth in background (no UI flicker).
+            loadCourses(normalizedCourse.id);
         }
 
         async function loadAssignments() {
@@ -509,8 +581,11 @@
                 } 
             });
             const allAssignments = await res.json();
+            const hiddenAssignmentIds = getHiddenIds(HIDDEN_ASSIGNMENT_KEY_PREFIX);
             // Client-side filter for demo simplicity (ideally backend filters)
-            const assignments = allAssignments.filter(a => a.course_id === currentCourse.id);
+            const assignments = allAssignments.filter(a =>
+                a.course_id === currentCourse.id && !hiddenAssignmentIds.has(Number(a.id))
+            );
             
             const list = document.getElementById('assignment-list');
             list.innerHTML = "";
@@ -528,14 +603,34 @@
                     <div class="flex-1 min-w-0">
                         <div class="text-sm font-medium text-slate-300 group-hover:text-white truncate">${a.title}</div>
                     </div>
+                    <button class="assignment-delete-btn text-xs text-red-400 border border-red-700/50 rounded h-5 w-5 hover:bg-red-900/20 flex items-center justify-center font-bold" title="Delete">X</button>
                 `;
                 div.onclick = () => {
                     document.querySelectorAll('#assignment-list > div').forEach(d => d.classList.remove('bg-slate-800', 'border-slate-700'));
                     div.classList.add('bg-slate-800', 'border-slate-700');
                     selectAssignment(a);
                 };
+                const delBtn = div.querySelector('.assignment-delete-btn');
+                delBtn.onclick = (event) => {
+                    event.stopPropagation();
+                    deleteAssignmentLocally(a);
+                };
                 list.appendChild(div);
             });
+        }
+
+        function deleteAssignmentLocally(assignment) {
+            if (!confirm("Do you really want to delete this?")) return;
+
+            const hiddenAssignmentIds = getHiddenIds(HIDDEN_ASSIGNMENT_KEY_PREFIX);
+            hiddenAssignmentIds.add(Number(assignment.id));
+            saveHiddenIds(HIDDEN_ASSIGNMENT_KEY_PREFIX, hiddenAssignmentIds);
+
+            if (Number(currentAssignmentId) === Number(assignment.id)) {
+                currentAssignmentId = null;
+                document.getElementById('chat-history').innerHTML = "";
+            }
+            loadAssignments();
         }
 
         async function createAssignment() {
@@ -608,19 +703,9 @@
                 const history = await res.json();
                 
                 if (history && history.length > 0) {
-                    // Render a divider
-                    const div = document.createElement('div');
-                    div.className = "flex items-center gap-4 py-4 opacity-50";
-                    div.innerHTML = `<div class="h-px bg-slate-700 flex-1"></div><span class="text-xs text-slate-500 font-mono">HISTORY</span><div class="h-px bg-slate-700 flex-1"></div>`;
-                    document.getElementById('chat-history').appendChild(div);
-                    
-                    history.forEach(item => {
-                        // Reconstruct message bubble from artifact
-                        // Note: In this simple model we only store the ANSWER (AI). 
-                        // If we stored the Question too we'd render that first. 
-                        // For now, we just show the AI's previous output.
-                        addMessage('ai', item.content + `<br><br><span class="text-[10px] text-slate-500">Restored from ${new Date(item.timestamp).toLocaleString()}</span>`);
-                    });
+                    // Keep only the latest output to avoid repeated historical render.
+                    const latest = history[history.length - 1];
+                    renderLatestOutput(latest.content + `<br><br><span class="text-[10px] text-slate-500">Restored from ${new Date(latest.timestamp).toLocaleString()}</span>`);
                 }
             } catch (e) {
                 console.error("Failed to load history", e);
@@ -648,6 +733,14 @@
             div.innerHTML = marked.parse(content);
             history.appendChild(div);
             history.scrollTop = history.scrollHeight;
+            return div;
+        }
+
+        function renderLatestOutput(content) {
+            document.querySelectorAll('[data-generated-output="true"]').forEach(node => node.remove());
+            const bubble = addMessage('ai', content);
+            bubble.setAttribute('data-generated-output', 'true');
+            return bubble;
         }
 
         async function generateAnswer() {
@@ -680,7 +773,12 @@
                 
                 const data = await res.json();
                 if (data.job_id) {
-                    addMessage('ai', `<span class="text-cyan-400 font-mono text-xs animate-pulse">► Job ${data.job_id} queued...</span>`);
+                    if (activeJobInterval) {
+                        clearInterval(activeJobInterval);
+                        activeJobInterval = null;
+                    }
+                    activeJobId = data.job_id;
+                    addMessage('ai', `<span id="job-status-${data.job_id}" class="text-cyan-400 font-mono text-xs animate-pulse">Generating...</span>`);
                     pollJob(data.job_id);
                 }
             } catch (e) {
@@ -689,7 +787,7 @@
         }
 
         async function pollJob(jobId) {
-            const interval = setInterval(async () => {
+            activeJobInterval = setInterval(async () => {
                 try {
                     const res = await fetch(`${API_URL}/jobs/${jobId}`, { 
                         headers: { 
@@ -700,18 +798,43 @@
                     const data = await res.json();
                     
                     if (data.status === 'succeeded') {
-                        clearInterval(interval);
-                        addMessage('ai', data.output);
-                        addMessage('ai', `<span class="text-xs text-slate-400">✅ File saved locally to workspace.</span>`);
+                        clearInterval(activeJobInterval);
+                        activeJobInterval = null;
+                        const statusNode = document.getElementById(`job-status-${jobId}`);
+                        if (statusNode) {
+                            statusNode.classList.remove('animate-pulse');
+                            statusNode.classList.remove('text-cyan-400');
+                            statusNode.classList.add('text-green-400');
+                            statusNode.innerText = "Finished";
+                        }
+                        if (activeJobId === jobId && data.output) {
+                            renderLatestOutput(data.output);
+                        }
                     } else if (data.status === 'failed') {
-                        clearInterval(interval);
+                        clearInterval(activeJobInterval);
+                        activeJobInterval = null;
                         addMessage('ai', `<span class="text-red-400">Generation failed.</span>`);
                     }
                 } catch (e) {
-                    clearInterval(interval);
+                    clearInterval(activeJobInterval);
+                    activeJobInterval = null;
                 }
             }, 2000);
         }
+
+        function setupInputShortcuts() {
+            const customQuestion = document.getElementById('custom-question');
+            if (!customQuestion) return;
+
+            customQuestion.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+                    event.preventDefault();
+                    generateAnswer();
+                }
+            });
+        }
+
+        setupInputShortcuts();
     </script>
 </body>
 </html>
