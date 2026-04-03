@@ -67,5 +67,3 @@ When you generate an answer, the system:
 
 ---
 
-**Status**: Phase 4 Complete
-**Last Updated**: April 2026
