@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  backend:
+    image: solver42:latest  # 直接使用离线镜像
+    container_name: solver42-backend
+    ports:
+      - "14242:8000"
+    depends_on:
+      - postgres
+      - mongo
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_URL=postgresql://postgres:postgres@postgres:5432/solver42
+      - MONGODB_URL=mongodb://mongo:27017
+    volumes:
+      - ./workspace:/app/workspace
+      # 生产环境不挂载代码目录，确保使用的是镜像内的稳定代码
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: solver42-postgres
+    ports:
+      - "15432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=solver42
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  mongo:
+    image: mongo:7.0
+    container_name: solver42-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  postgres_data:
+  mongo_data:
+

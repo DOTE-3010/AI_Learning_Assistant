@@ -29,6 +29,9 @@ coverage.xml
 # MacOS
 .DS_Store
 
+# Distribution bundle - Docker image tarballs are large binaries, exclude from git
+Solver42_Dist/images/
+
 # IDEs
 .idea/
 .vscode/
