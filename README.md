@@ -73,7 +73,7 @@
 | 📎 Reference Upload | Attach text/markdown files as context for answer generation |
 | 💾 Local Storage | Generated answers automatically saved to `workspace/` |
 | 🕓 History Playback | View past generation results in the assignment chat |
-| ⚙️ Model Config | Configurable LLM backend (default: `gemini-2.5-pro-preview`) |
+| ⚙️ Model Config | Configurable LLM backend (default: `gpt-5-mini`) |
 
 ---
 
