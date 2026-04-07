@@ -26,4 +26,4 @@ Output formats: <e.g. md, pdf>
 Primary action button: <e.g. Run Review>
 Input placeholder: <e.g. Paste additional context here...>
 
-If I haven't mention something, follow the best practice of industry by default.
+If I haven't mention something, follow the best practice in industry by default.
