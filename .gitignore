@@ -39,3 +39,6 @@ Solver42_Dist/images/
 *.swo
 .cursor/
 
+# Node.js
+node_modules/
+

@@ -1,4 +1,4 @@
-.PHONY: install demo-start demo-stop demo-reset clean
+.PHONY: install frontend-install frontend-build demo-start demo-stop demo-reset clean
 
 VENV_DIR = venv
 PYTHON = $(VENV_DIR)/bin/python
@@ -11,8 +11,14 @@ install:
 	$(PIP) install -r backend/requirements.txt
 	@echo "✅ Environment set up! Run 'make demo-start' to launch."
 
+frontend-install:
+	npm --prefix frontend install
+
+frontend-build:
+	npm --prefix frontend run build
+
 # 2. 启动演示 (会自动使用 venv 中的 python)
-demo-start:
+demo-start: frontend-build
 	$(PYTHON) demo_launcher.py start
 
 # 3. 重置数据

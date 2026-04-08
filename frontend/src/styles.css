@@ -1,0 +1,100 @@
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b; 
+        }
+
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .chat-bubble {
+            max-width: 85%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            line-height: 1.6;
+            animation: fadeIn 0.3s ease-out;
+            font-size: 0.95rem;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .teacher { 
+            background: linear-gradient(135deg, #2563eb, #1d4ed8); 
+            color: white;
+            align-self: flex-end; 
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.2);
+            border-bottom-right-radius: 2px;
+        }
+        
+        .ai { 
+            background: #334155; 
+            color: #e2e8f0;
+            align-self: flex-start; 
+            border: 1px solid #475569;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-bottom-left-radius: 2px;
+        }
+
+        /* Markdown Styles inside bubbles */
+        .chat-bubble pre {
+            background: #0f172a !important;
+            padding: 10px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin-top: 8px;
+            margin-bottom: 8px;
+        }
+        .chat-bubble code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85em;
+        }
+        .chat-bubble p {
+            margin-bottom: 0.5em;
+        }
+        .chat-bubble p:last-child {
+            margin-bottom: 0;
+        }
+        .chat-bubble h1, .chat-bubble h2, .chat-bubble h3 {
+            font-weight: 700;
+            margin-top: 10px;
+            margin-bottom: 5px;
+        }
+        .chat-bubble ul, .chat-bubble ol {
+            margin-left: 20px;
+            list-style-type: disc;
+        }
+
+        .glow-text {
+            text-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        }
+        
+        /* Modal */
+        .modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+        }
