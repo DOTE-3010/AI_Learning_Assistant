@@ -1,3 +1,12 @@
+# Frontend build stage
+FROM node:20-slim AS frontend-builder
+
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend /app/frontend
+RUN npm run build
+
 # Use Python 3.11 slim image for efficiency
 FROM python:3.11-slim
 
@@ -28,6 +37,7 @@ RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua
 
 # Copy application code
 COPY backend /app/backend
+COPY --from=frontend-builder /app/backend/static /app/backend/static
 
 # Create workspace directory for outputs
 RUN mkdir -p /app/workspace

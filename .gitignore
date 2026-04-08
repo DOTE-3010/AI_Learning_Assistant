@@ -44,3 +44,7 @@ Solver42_Dist/
 
 # User-generated data
 workspace/
+
+# Frontend build dependencies
+frontend/node_modules/
+npm-debug.log*
