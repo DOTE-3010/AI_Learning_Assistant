@@ -149,8 +149,8 @@
                 </div>
             </div>
             
+            <div class="p-4 text-center text-slate-600 text-sm animate-pulse hidden" id="assignments-loading">Loading assignments...</div>
             <div class="flex-1 overflow-y-auto p-3 space-y-1" id="assignment-list">
-                <div class="p-4 text-center text-slate-600 text-sm animate-pulse hidden" id="assignments-loading">Loading assignments...</div>
             </div>
             
             <div class="p-3">
@@ -273,6 +273,38 @@
                                 Execute Generation
                             </button>
                         </div>
+
+                    </div>
+                </div>
+            </div>
+
+            <!-- Floating Context Window Monitor -->
+            <div id="context-window-panel" class="hidden md:block absolute top-4 right-4 z-30 w-80 pointer-events-none">
+                <div class="glass border border-slate-700 rounded-xl p-3 shadow-2xl">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="text-[11px] font-mono uppercase tracking-wide text-cyan-400">Context Window</div>
+                        <div class="flex items-center gap-2">
+                            <div id="cw-source" class="text-[10px] font-mono text-slate-500">LOCAL</div>
+                            <div id="cw-warning-level" class="text-[10px] font-mono text-slate-400">-</div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="bg-slate-950/70 rounded p-2 border border-slate-800">
+                            <div class="text-slate-500">Estimated Input</div>
+                            <div id="cw-input" class="text-slate-200 font-mono">-</div>
+                        </div>
+                        <div class="bg-slate-950/70 rounded p-2 border border-slate-800">
+                            <div class="text-slate-500">Estimated Total</div>
+                            <div id="cw-total" class="text-slate-200 font-mono">-</div>
+                        </div>
+                        <div class="bg-slate-950/70 rounded p-2 border border-slate-800">
+                            <div class="text-slate-500">Context Limit</div>
+                            <div id="cw-limit" class="text-slate-200 font-mono">-</div>
+                        </div>
+                        <div class="bg-slate-950/70 rounded p-2 border border-slate-800">
+                            <div class="text-slate-500">Utilization</div>
+                            <div id="cw-ratio" class="text-slate-200 font-mono">-</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -284,9 +316,12 @@
         let currentUser = null;
         let currentCourseId = null;
         let currentAssignmentId = null;
+        let currentAssignmentSnapshot = null;
         let coursesCache = [];
         let activePollIntervalId = null;
         let currentStatusBubble = null;
+        const LOCAL_CONTEXT_WINDOW_LIMIT = 128000;
+        const LOCAL_TARGET_OUTPUT_TOKENS = 1200;
 
         function switchAuthMode(mode) {
             const formLogin = document.getElementById('form-login');
@@ -367,6 +402,87 @@
             }
         }
 
+        function formatInt(value) {
+            if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+            return Number(value).toLocaleString();
+        }
+
+        function resetContextWindowPanel() {
+            const panel = document.getElementById('context-window-panel');
+            panel?.classList.remove('hidden');
+            document.getElementById('cw-source').textContent = 'LOCAL';
+            document.getElementById('cw-warning-level').textContent = '-';
+            document.getElementById('cw-warning-level').className = 'text-[10px] font-mono text-slate-400';
+            document.getElementById('cw-input').textContent = '-';
+            document.getElementById('cw-total').textContent = '-';
+            document.getElementById('cw-limit').textContent = '-';
+            document.getElementById('cw-ratio').textContent = '-';
+        }
+
+        function estimateTokensFromText(text) {
+            const normalized = String(text || '');
+            return Math.max(1, Math.floor(normalized.length / 4));
+        }
+
+        function buildLocalContextEstimate() {
+            const format = document.getElementById('output-format')?.value || 'md';
+            const customQuestion = document.getElementById('custom-question')?.value || '';
+            const file = document.getElementById('file-upload')?.files?.[0];
+
+            const assignmentTitle = currentAssignmentSnapshot?.title || '';
+            const assignmentInstructions = currentAssignmentSnapshot?.instructions || '';
+            const formatHint = format === 'pdf' ? 'latex beamer output' : `${format} output`;
+            const fileApproxChars = file ? Math.min(Number(file.size || 0), 20000) : 0;
+
+            const estimatedInputTokens =
+                estimateTokensFromText(assignmentTitle) +
+                estimateTokensFromText(assignmentInstructions) +
+                estimateTokensFromText(customQuestion) +
+                estimateTokensFromText(formatHint) +
+                Math.floor(fileApproxChars / 4);
+
+            const estimatedTotalTokens = estimatedInputTokens + LOCAL_TARGET_OUTPUT_TOKENS;
+            const utilizationRatio = estimatedTotalTokens / LOCAL_CONTEXT_WINDOW_LIMIT;
+            let warningLevel = 'ok';
+            if (utilizationRatio > 0.85) warningLevel = 'critical';
+            else if (utilizationRatio >= 0.70) warningLevel = 'warning';
+
+            return {
+                estimated_input_tokens: estimatedInputTokens,
+                estimated_total_tokens: estimatedTotalTokens,
+                context_window_limit: LOCAL_CONTEXT_WINDOW_LIMIT,
+                utilization_ratio: utilizationRatio,
+                warning_level: warningLevel,
+                source: 'LOCAL',
+            };
+        }
+
+        function updateContextWindowPanel(estimate) {
+            const panel = document.getElementById('context-window-panel');
+            panel?.classList.remove('hidden');
+            if (!estimate) return;
+
+            const source = String(estimate.source || 'BACKEND').toUpperCase();
+            document.getElementById('cw-source').textContent = source;
+            const warning = String(estimate.warning_level || 'ok').toLowerCase();
+            const warningEl = document.getElementById('cw-warning-level');
+            warningEl.textContent = warning.toUpperCase();
+            warningEl.className = 'text-[10px] font-mono';
+            if (warning === 'critical') warningEl.classList.add('text-red-400');
+            else if (warning === 'warning') warningEl.classList.add('text-yellow-400');
+            else warningEl.classList.add('text-green-400');
+
+            document.getElementById('cw-input').textContent = formatInt(estimate.estimated_input_tokens);
+            document.getElementById('cw-total').textContent = formatInt(estimate.estimated_total_tokens);
+            document.getElementById('cw-limit').textContent = formatInt(estimate.context_window_limit);
+            const ratio = Number(estimate.utilization_ratio || 0);
+            document.getElementById('cw-ratio').textContent = `${(ratio * 100).toFixed(1)}%`;
+        }
+
+        function refreshPersistentContextEstimate() {
+            updateContextWindowPanel(buildLocalContextEstimate());
+        }
+
         function clearChatContextPanel(message = "Select an assignment to start.") {
             const history = document.getElementById('chat-history');
             history.innerHTML = `
@@ -386,6 +502,7 @@
             if (visibleCourses.length === 0) {
                 currentCourseId = null;
                 currentAssignmentId = null;
+                currentAssignmentSnapshot = null;
                 deleteBtn.disabled = true;
                 deleteBtn.classList.add('opacity-40', 'cursor-not-allowed');
                 select.disabled = true;
@@ -491,7 +608,8 @@
                 navControls.classList.add('flex');
 
                 const sidebar = document.getElementById('app-sidebar');
-                sidebar.classList.add('hidden', 'md:flex');
+                sidebar.classList.remove('hidden');
+                sidebar.classList.add('flex');
 
                 await loadCourses();
 
@@ -501,7 +619,7 @@
         }
 
         async function loadCourses(preferredCourseId = null) {
-            document.getElementById('assignments-loading').classList.remove('hidden');
+            document.getElementById('assignments-loading')?.classList.remove('hidden');
             try {
                 const res = await fetch(`${API_URL}/courses`, {
                     headers: {
@@ -519,7 +637,7 @@
                 renderCourseSelector();
                 await loadAssignments();
             } finally {
-                document.getElementById('assignments-loading').classList.add('hidden');
+                document.getElementById('assignments-loading')?.classList.add('hidden');
             }
         }
 
@@ -541,17 +659,13 @@
                 const newCourse = await res.json();
                 if (!res.ok) throw new Error(newCourse.detail || "Failed to create course");
 
-                coursesCache = coursesCache.filter(course => String(course.id) !== String(newCourse.id));
-                coursesCache.push(newCourse);
-                currentCourseId = newCourse.id;
-                currentAssignmentId = null;
-
-                renderCourseSelector();
-                await loadAssignments();
-
                 document.getElementById('course-title').value = '';
                 document.getElementById('course-term').value = '';
                 document.getElementById('new-course-modal').classList.add('hidden');
+
+                currentAssignmentId = null;
+                clearChatContextPanel("Course created! Add an assignment to get started.");
+                await loadCourses(newCourse.id);
             } catch (e) {
                 alert(e.message || "Failed to create course");
             }
@@ -579,7 +693,9 @@
 
             if (currentAssignmentId && !assignments.some(a => String(a.id) === String(currentAssignmentId))) {
                 currentAssignmentId = null;
+                currentAssignmentSnapshot = null;
                 clearChatContextPanel("Select an assignment to start.");
+                refreshPersistentContextEstimate();
             }
 
             list.innerHTML = "";
@@ -639,7 +755,7 @@
             document.getElementById('new-assign-modal').classList.add('hidden');
             document.getElementById('assign-title').value = '';
             document.getElementById('assign-instr').value = '';
-            await loadAssignments();
+            selectAssignment(data);
         }
 
         function showNewCourseModal() {
@@ -793,6 +909,7 @@
                 return;
             }
             currentAssignmentId = assignment.id;
+            currentAssignmentSnapshot = assignment;
             clearActivePollLoop();
 
             const history = document.getElementById('chat-history');
@@ -801,6 +918,7 @@
             appendAssignmentContextBubble(assignment);
             loadAssignments();
             fetchAssignmentHistory(assignment.id);
+            refreshPersistentContextEstimate();
         }
 
         async function fetchAssignmentHistory(assignmentId) {
@@ -831,6 +949,7 @@
                 label.innerText = "Click to attach";
                 label.classList.remove('text-cyan-400');
             }
+            refreshPersistentContextEstimate();
         }
 
         async function generateAnswer() {
@@ -846,6 +965,7 @@
             addMessage('teacher', msg);
 
             clearActivePollLoop();
+            refreshPersistentContextEstimate();
             setStatusBubbleState("Generating...", true, "text-cyan-400");
 
             const formData = new FormData();
@@ -892,6 +1012,14 @@
                         }
                     });
                     const data = await res.json();
+                    if (data.context_window_estimate) {
+                        updateContextWindowPanel({
+                            ...data.context_window_estimate,
+                            source: 'BACKEND'
+                        });
+                    } else {
+                        refreshPersistentContextEstimate();
+                    }
 
                     if (data.status === 'succeeded') {
                         clearActivePollLoop();
@@ -940,8 +1068,12 @@
                 event.preventDefault();
                 generateAnswer();
             });
+            questionBox.addEventListener('input', refreshPersistentContextEstimate);
         }
 
+        document.getElementById('output-format')?.addEventListener('change', refreshPersistentContextEstimate);
+        resetContextWindowPanel();
+        refreshPersistentContextEstimate();
         setupCourseSelectorEvents();
         setupQuestionKeyboardSubmit();
     </script>
