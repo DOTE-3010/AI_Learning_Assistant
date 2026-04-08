@@ -298,7 +298,7 @@ async def create_new_assignment(req: CreateAssignmentRequest, request: Request, 
     if request.state.role != "teacher":
         raise HTTPException(status_code=403, detail="Teachers only")
     assignment = create_assignment(db, req.course_id, req.title, req.instructions, email, req.due_at)
-    return {"id": assignment.id, "title": assignment.title}
+    return {"id": assignment.id, "title": assignment.title, "course_id": assignment.course_id, "instructions": assignment.instructions}
 
 @app.get("/jobs/{job_id}")
 async def get_job_status(job_id: int, db: Session = Depends(get_db)):
