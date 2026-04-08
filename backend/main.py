@@ -21,6 +21,7 @@ from pypdf import PdfReader
 
 app = FastAPI(title="Solver#42 MVP Backend")
 MAX_REFERENCE_CHARS = 20000
+JOB_CONTEXT_ESTIMATES = {}
 
 
 def _truncate_reference_text(text: str, max_chars: int = MAX_REFERENCE_CHARS) -> str:
@@ -192,11 +193,19 @@ async def login_user(req: UserLoginRequest, db: Session = Depends(get_db)):
 
 # ... (Existing Generation Logic) ...
 
-def process_generation_job(job_id: int, assignment, output_format: str, custom_context: str = None, file_content: str = None):
+def process_generation_job(
+    job_id: int,
+    assignment,
+    output_format: str,
+    custom_context: str = None,
+    file_content: str = None,
+    iteration_turns: int = 3,
+):
     # Background task
     db = next(get_db()) # Manual session for background task
     try:
         update_job_status(db, job_id, "running")
+        JOB_CONTEXT_ESTIMATES[job_id] = None
         
         # Append file content to context if exists
         full_context = custom_context or ""
@@ -204,7 +213,17 @@ def process_generation_job(job_id: int, assignment, output_format: str, custom_c
             full_context += f"\n\n[Attached Reference Content]:\n{file_content}\n"
 
         # Real Call
-        content = generate_answer_logic(assignment.title, assignment.instructions, custom_context=full_context, use_search=True, output_format=output_format)
+        generation_result = generate_answer_logic(
+            assignment.title,
+            assignment.instructions,
+            custom_context=full_context,
+            use_search=True,
+            output_format=output_format,
+            turns=iteration_turns,
+            return_details=True,
+        )
+        content = generation_result.get("final_output", "")
+        JOB_CONTEXT_ESTIMATES[job_id] = generation_result.get("context_window_estimate")
         
         # Format
         formatted_content = convert_to_format(content, output_format)
@@ -216,6 +235,7 @@ def process_generation_job(job_id: int, assignment, output_format: str, custom_c
         
     except Exception as e:
         print(f"Job failed: {e}")
+        JOB_CONTEXT_ESTIMATES[job_id] = None
         update_job_status(db, job_id, "failed")
     finally:
         db.close()
@@ -227,6 +247,7 @@ async def generate_answer(
     assignment_id: int = Form(...),
     output_format: str = Form(...),
     custom_context: str = Form(None),
+    iteration_turns: int = Form(3),
     file: UploadFile = File(None),
     db: Session = Depends(get_db)
 ):
@@ -251,7 +272,15 @@ async def generate_answer(
     
     job = create_job(db, assignment_id, email, role)
     
-    background_tasks.add_task(process_generation_job, job.id, assignment, output_format, custom_context, file_text)
+    background_tasks.add_task(
+        process_generation_job,
+        job.id,
+        assignment,
+        output_format,
+        custom_context,
+        file_text,
+        iteration_turns,
+    )
     
     return {"job_id": job.id, "status": "queued"}
 
@@ -284,7 +313,12 @@ async def get_job_status(job_id: int, db: Session = Depends(get_db)):
         if artifact:
             output = artifact["content"]
             
-    return {"status": job.status, "cost": job.cost_estimate, "output": output}
+    return {
+        "status": job.status,
+        "cost": job.cost_estimate,
+        "output": output,
+        "context_window_estimate": JOB_CONTEXT_ESTIMATES.get(job_id),
+    }
 
 @app.get("/assignments/{assignment_id}/history")
 async def get_assignment_history(assignment_id: int, request: Request, db: Session = Depends(get_db)):
