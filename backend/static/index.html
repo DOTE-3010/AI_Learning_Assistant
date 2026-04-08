@@ -752,10 +752,23 @@
                 return;
             }
 
+            // If this ID was previously soft-hidden in localStorage (e.g. DB reset reused IDs),
+            // unhide it so the newly created assignment is visible immediately.
+            const hiddenAssignments = loadHiddenSet('assignments');
+            if (hiddenAssignments.delete(String(data.id))) {
+                saveHiddenSet('assignments', hiddenAssignments);
+            }
+
             document.getElementById('new-assign-modal').classList.add('hidden');
             document.getElementById('assign-title').value = '';
             document.getElementById('assign-instr').value = '';
-            selectAssignment(data);
+            await loadAssignments();
+            selectAssignment({
+                id: data.id,
+                title: data.title || title,
+                instructions: instr,
+                course_id: currentCourse.id
+            });
         }
 
         function showNewCourseModal() {
