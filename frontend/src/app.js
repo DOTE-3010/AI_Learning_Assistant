@@ -450,7 +450,7 @@ import './styles.css';
             const div = document.createElement('div');
             div.className = `chat-bubble ${role} shadow-lg`;
             if (role === 'ai') {
-                content = `<div class="flex items-center gap-2 mb-2 border-b border-slate-600/50 pb-1"><div class="h-2 w-2 rounded-full bg-green-400 animate-pulse"></div><span class="text-[10px] font-mono text-slate-400 uppercase">Solver#42 Core</span></div>` + content;
+                content = `<div class="flex items-center gap-2 mb-2 border-b border-slate-600/50 pb-1"><div class="h-2 w-2 rounded-full bg-green-400 animate-pulse"></div><span class="text-[10px] font-mono text-slate-400 uppercase">AI Learning Assistant Core</span></div>` + content;
             }
             div.innerHTML = marked.parse(content);
             history.appendChild(div);

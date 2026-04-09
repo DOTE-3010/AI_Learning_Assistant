@@ -16,7 +16,7 @@ import base64
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 
-app = FastAPI(title="Solver#42 MVP Backend")
+app = FastAPI(title="AI Learning Assistant MVP Backend")
 
 # CORS
 app.add_middleware(

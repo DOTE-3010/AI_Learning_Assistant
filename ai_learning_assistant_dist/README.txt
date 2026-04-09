@@ -1,7 +1,7 @@
-Solver#42 - Local Offline Edition
+AI Learning Assistant - Local Offline Edition
 =================================
 
-Thank you for using Solver#42! This package allows you to run the system locally on your machine without complex setup.
+Thank you for using AI Learning Assistant! This package allows you to run the system locally on your machine without complex setup.
 
 ------------------------------------------------------------------------
 📋 1. PRE-REQUISITES (MUST READ)
@@ -51,7 +51,7 @@ Q: The browser shows "This site can't be reached"?
 A: The system might still be starting up. Wait 10 seconds and refresh the page.
 
 Q: How do I stop it?
-A: Open Docker Desktop, go to "Containers", and click the Stop (square) button on the "solver42" group.
+A: Open Docker Desktop, go to "Containers", and click the Stop (square) button on the "ai_learning_assistant" group.
 
 =================================
-Solver#42 Team
+AI Learning Assistant Team

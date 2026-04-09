@@ -60,6 +60,7 @@ Before filling, extract the following from the PRD and map them to placeholders:
 ├── start_mvp.command
 ├── Makefile
 ├── docker-compose.yml
+├── .env
 └── backend/requirements.txt
 ```
 
@@ -376,6 +377,12 @@ PYTHONPATH=. python -c "from backend.app.database import engine, Base; Base.meta
 
 ---
 
+### Output Exposure Rule — Fixed
+
+- The UI/API must expose **final answer only**.
+- If the generation strategy uses multi-round refinement (draft/self-critique/rewrite), all intermediate rounds are internal-only.
+- Never return intermediate rounds in chat bubbles, `/jobs/{job_id}` output, MongoDB artifact content, or `workspace/` files.
+
 ### `backend/app/web_search.py` — Fixed
 
 ```python
@@ -412,7 +419,7 @@ def {{GENERATION_FUNCTION_NAME}}(
     #    System: "{{LLM_SYSTEM_PROMPT}}"
     #    User:   "{{LLM_USER_PROMPT_TEMPLATE}}"
     # 4. Call client.chat.completions.create(model=MODEL_NAME, messages=[...])
-    # 5. Return completion.choices[0].message.content
+    # 5. Return final-answer text only (no explicit round/iteration traces)
     # On exception: return "Error: {str(e)}"
 ```
 
@@ -522,7 +529,7 @@ POST /{{ROLE_1_GENERATE_ENDPOINT}} (multipart):
   → guard role == "{{ROLE_1}}" → create_job() → BackgroundTasks → {"job_id","status":"queued"}
 
 GET /jobs/{job_id}:
-  → get_artifact_by_job() if succeeded → {"status","cost","output"}
+  → get_artifact_by_job() if succeeded → {"status","cost","output"}  # output must be final answer only
 ```
 
 **Fixed background task function** (keep verbatim, only change function/variable names):
@@ -588,7 +595,8 @@ Copy verbatim from reference. Replace app name in banner strings only.
 # Browser opens at http://localhost:14242/ui
 # Login with {{DEMO_EMAIL_ROLE_1}} / {{DEMO_PASSWORD}}
 # Create a {{PRIMARY_ENTITY_LOWER}} → create a {{SECONDARY_ENTITY_LOWER}} → submit generation
-# Expected: job reaches "succeeded", output in chat, file in workspace/
+# Expected: job reaches "succeeded", chat shows final answer only, file in workspace/
+# Intermediate iteration text (e.g. "Round 1/2/3", "Draft v1") must not appear
 ```
 
 ---
@@ -617,6 +625,7 @@ Phase 6 (Launch Scripts)   →  gate: start_mvp.command → full E2E flow succee
 - [ ] `{{DEMO_EMAIL_ROLE_1}}` can log in with `{{DEMO_PASSWORD}}`.
 - [ ] `{{ROLE_1}}` can create a `{{PRIMARY_ENTITY_LOWER}}` and a `{{SECONDARY_ENTITY_LOWER}}`.
 - [ ] `{{ROLE_1}}` can submit a generation job and receive output within 60 seconds.
+- [ ] Chat/API/file outputs contain final answer only; no explicit intermediate iteration rounds.
 - [ ] `{{ROLE_2}}` domain receives 403 on the generation endpoint.
 - [ ] Each successful job produces three artifacts:
   - PostgreSQL `generation_jobs` row with `status="succeeded"`.

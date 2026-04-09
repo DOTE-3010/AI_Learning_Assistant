@@ -13,7 +13,7 @@ Output in Markdown with these sections only: Product Overview, Core Design Decis
 You are a senior Tech Lead and Delivery Manager. Your task is to convert a PRD into an execution-ready roadmap that maximizes reproducibility for a local MVP demo.
 
 ## Inputs
-- PRD document: @PRD Solver#42
+- PRD document: @AI_Learning_Assistant
 - Project goal: Local runnable MVP (demo-grade), prioritize reproducibility over perfection
 - Constraints:
   1. Keep only minimal necessary complexity (no over-engineering)

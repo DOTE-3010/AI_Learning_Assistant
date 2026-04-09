@@ -4,7 +4,7 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$DIR"
 
-echo "🚀 Starting Solver#42 (Offline Edition)..."
+echo "🚀 Starting AI Learning Assistant (Offline Edition)..."
 
 # 1. 检查 Docker 是否运行
 if ! docker info > /dev/null 2>&1; then
@@ -37,7 +37,7 @@ load_image_if_missing() {
 }
 
 # 按需加载三个核心镜像
-load_image_if_missing "solver42:latest" "images/backend.tar"
+load_image_if_missing "ai_learning_assistant:latest" "images/backend.tar"
 load_image_if_missing "postgres:15-alpine" "images/postgres.tar"
 load_image_if_missing "mongo:7.0" "images/mongo.tar"
 
@@ -60,6 +60,9 @@ clean_conflict() {
         docker rm -f "$name" > /dev/null 2>&1
     fi
 }
+clean_conflict "ai_learning_assistant-backend"
+clean_conflict "ai_learning_assistant-postgres"
+clean_conflict "ai_learning_assistant-mongo"
 clean_conflict "solver42-backend"
 clean_conflict "solver42-postgres"
 clean_conflict "solver42-mongo"

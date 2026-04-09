@@ -4,7 +4,7 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$DIR"
 
-echo "🚀 Starting Solver#42 MVP Environment..."
+echo "🚀 Starting AI Learning Assistant MVP Environment..."
 
 # 检查 make 是否存在
 if ! command -v make &> /dev/null; then

@@ -23,7 +23,7 @@ def run_command(cmd, cwd=None, env=None):
         sys.exit(1)
 
 def main():
-    print("🚀 Starting Solver#42 Local MVP...")
+    print("🚀 Starting AI Learning Assistant Local MVP...")
     
     # 1. Check Docker
     print("Checking Docker...")
@@ -63,7 +63,7 @@ def main():
     env = os.environ.copy()
     env["PYTHONPATH"] = os.getcwd()
     # Pass custom DB URL to script via env var to override default config
-    env["POSTGRES_URL"] = f"postgresql://postgres:postgres@localhost:{DB_PORT_PG}/solver42"
+    env["POSTGRES_URL"] = f"postgresql://postgres:postgres@localhost:{DB_PORT_PG}/ai_learning_assistant"
     
     run_command(f"{sys.executable} -m backend.scripts.init_db", env=env)
 
@@ -89,7 +89,7 @@ def main():
     
     try:
         # Pass DB config to backend process
-        env["POSTGRES_URL"] = f"postgresql://postgres:postgres@localhost:{DB_PORT_PG}/solver42"
+        env["POSTGRES_URL"] = f"postgresql://postgres:postgres@localhost:{DB_PORT_PG}/ai_learning_assistant"
         subprocess.call(f"{sys.executable} -m uvicorn backend.main:app --reload --host 0.0.0.0 --port {APP_PORT}", shell=True, env=env)
     except KeyboardInterrupt:
         print("\n🛑 Stopping...")

@@ -770,7 +770,7 @@ POST /generate-answer  (multipart/form-data)
   Returns: {"job_id": int, "status": "queued"}
 
 GET /jobs/{job_id}
-  If succeeded: fetch artifact via get_artifact_by_job(job_id), return artifact["content"] as output
+  If succeeded: fetch artifact via get_artifact_by_job(job_id), return artifact["content"] as output (final answer only)
   Returns: {"status": str, "cost": float|null, "output": str|null}
 
 GET /assignments/{assignment_id}/history
@@ -925,7 +925,8 @@ clean:
 # Browser opens at http://localhost:14242/ui
 # Login with teacher@cuhk.edu.hk / Aa12345678
 # Create a course → create an assignment → click Execute Generation
-# Expected: job reaches "succeeded", output rendered in chat, file appears in workspace/
+# Expected: job reaches "succeeded", chat renders final answer only, file appears in workspace/
+# Intermediate iteration text (e.g. "Round 1/2/3", "Draft v1") must not appear
 ```
 
 ---
@@ -960,6 +961,7 @@ All of the following must be true simultaneously:
 - [ ] `teacher@cuhk.edu.hk` can log in with password `Aa12345678`.
 - [ ] Teacher can create a course and an assignment.
 - [ ] Teacher can submit a generation job and receive output within 60 seconds.
+- [ ] Chat/API/file outputs contain final answer only; no explicit intermediate iteration rounds.
 - [ ] Student domain (`@link.cuhk.edu.hk`) receives 403 on `/generate-answer`.
 - [ ] Each successful job produces three artifacts:
   - A row in PostgreSQL `generation_jobs` with `status="succeeded"`.

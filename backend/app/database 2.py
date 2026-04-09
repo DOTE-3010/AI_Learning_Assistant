@@ -12,7 +12,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Mongo
 mongo_client = MongoClient(MONGODB_URL)
-mongo_db = mongo_client["solver42"]
+mongo_db = mongo_client["ai_learning_assistant"]
 
 def get_db():
     db = SessionLocal()

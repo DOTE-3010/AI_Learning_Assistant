@@ -1,7 +1,7 @@
 @echo off
 cd /d "%~dp0"
 
-echo 🚀 Starting Solver#42 (Offline Edition)...
+echo 🚀 Starting AI Learning Assistant (Offline Edition)...
 
 :: 1. Check Docker
 docker info >nul 2>&1
@@ -16,7 +16,7 @@ if %errorlevel% neq 0 (
 echo 📦 Checking system images...
 
 :: Function-like logic for checking images using call
-call :CheckAndLoad "solver42:latest" "images\backend.tar"
+call :CheckAndLoad "ai_learning_assistant:latest" "images\backend.tar"
 if %errorlevel% neq 0 exit /b
 
 call :CheckAndLoad "postgres:15-alpine" "images\postgres.tar"
@@ -37,6 +37,9 @@ if not exist .env (
 echo ✨ Launching services...
 
 :: Clean up conflicting containers
+docker rm -f ai_learning_assistant-backend >nul 2>&1
+docker rm -f ai_learning_assistant-postgres >nul 2>&1
+docker rm -f ai_learning_assistant-mongo >nul 2>&1
 docker rm -f solver42-backend >nul 2>&1
 docker rm -f solver42-postgres >nul 2>&1
 docker rm -f solver42-mongo >nul 2>&1
