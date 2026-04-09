@@ -39,8 +39,8 @@ def init_db():
     # Seed Assignment
     assignment = Assignment(
         course_id=course.id,
-        title="Tutorial: How to Use Solver#42",
-        instructions="""**Welcome to Solver#42!**
+        title="Tutorial: How to Use AI Learning Assistant",
+        instructions="""**Welcome to AI Learning Assistant!**
 
 This tutorial assignment helps you understand how to use the system.
 

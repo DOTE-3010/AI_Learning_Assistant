@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🎓 Solver#42
+# 🎓 AI Learning Assistant
 
 **香港中文大學商學院 LLM 智能作業助手**
 
@@ -60,7 +60,7 @@
 
 </details>
 
-> **注意：** `Solver42_Dist/images/` 目錄包含預先匯出的 Docker 映像檔壓縮包，已從 git 排除。請另行取得完整發行套件。
+> **注意：** `ai_learning_assistant_dist/images/` 目錄包含預先匯出的 Docker 映像檔壓縮包，已從 git 排除。請另行取得完整發行套件。
 
 ---
 

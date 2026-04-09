@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 from pypdf import PdfReader
 
-app = FastAPI(title="Solver#42 MVP Backend")
+app = FastAPI(title="AI Learning Assistant MVP Backend")
 MAX_REFERENCE_CHARS = 20000
 JOB_CONTEXT_ESTIMATES = {}
 

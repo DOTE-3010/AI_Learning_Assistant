@@ -9,6 +9,7 @@ import socket
 APP_PORT = 14242
 DB_PORT_PG = 15432
 DB_PORT_MONGO = 27017 # Mongo default is usually fine, but can change if needed. Keeping for now as 27017 is standard.
+COMPOSE_PROJECT = "ai_learning_assistant"
 
 def is_port_open(host, port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -23,7 +24,7 @@ def run_command(cmd, cwd=None, env=None):
         sys.exit(1)
 
 def main():
-    print("🚀 Starting Solver#42 Local MVP...")
+    print("🚀 Starting AI Learning Assistant Local MVP...")
     
     # 1. Check Docker
     print("Checking Docker...")
@@ -35,10 +36,8 @@ def main():
         
     # 2. Start Databases
     print(f"📦 Starting Databases (PG: {DB_PORT_PG})...")
-    # Need to export ports for docker-compose to pick up if we parameterize them, 
-    # BUT standard docker-compose.yml uses static ports. 
-    # We will rely on docker-compose.yml having been updated to 15432.
-    run_command("docker-compose up -d postgres mongo")
+    # Use a fixed compose project name so Docker Desktop group naming stays consistent.
+    run_command(f"docker compose -p {COMPOSE_PROJECT} up -d postgres mongo")
     
     # 3. Wait for DBs
     print("⏳ Waiting for Database readiness...")
@@ -63,7 +62,7 @@ def main():
     env = os.environ.copy()
     env["PYTHONPATH"] = os.getcwd()
     # Pass custom DB URL to script via env var to override default config
-    env["POSTGRES_URL"] = f"postgresql://postgres:postgres@localhost:{DB_PORT_PG}/solver42"
+    env["POSTGRES_URL"] = f"postgresql://postgres:postgres@localhost:{DB_PORT_PG}/ai_learning_assistant"
     
     run_command(f"{sys.executable} -m backend.scripts.init_db", env=env)
 
@@ -89,11 +88,11 @@ def main():
     
     try:
         # Pass DB config to backend process
-        env["POSTGRES_URL"] = f"postgresql://postgres:postgres@localhost:{DB_PORT_PG}/solver42"
+        env["POSTGRES_URL"] = f"postgresql://postgres:postgres@localhost:{DB_PORT_PG}/ai_learning_assistant"
         subprocess.call(f"{sys.executable} -m uvicorn backend.main:app --reload --host 0.0.0.0 --port {APP_PORT}", shell=True, env=env)
     except KeyboardInterrupt:
         print("\n🛑 Stopping...")
-        run_command("docker-compose stop")
+        run_command(f"docker compose -p {COMPOSE_PROJECT} stop")
         print("Bye!")
 
 if __name__ == "__main__":
@@ -104,7 +103,7 @@ if __name__ == "__main__":
     
     if args.action == "reset":
         print("🧹 Resetting Demo...")
-        run_command("docker-compose down -v")
+        run_command(f"docker compose -p {COMPOSE_PROJECT} down -v")
         print("Done. Run 'python demo_launcher.py' to start.")
     else:
         main()

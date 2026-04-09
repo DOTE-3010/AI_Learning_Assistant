@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: solver42-backend
+    container_name: ai_learning_assistant-backend
     ports:
       - "14242:8000"
     depends_on:
@@ -14,26 +14,26 @@ services:
     env_file:
       - .env
     environment:
-      - POSTGRES_URL=postgresql://postgres:postgres@postgres:5432/solver42
+      - POSTGRES_URL=postgresql://postgres:postgres@postgres:5432/ai_learning_assistant
       - MONGODB_URL=mongodb://mongo:27017
     volumes:
       - ./workspace:/app/workspace
 
   postgres:
     image: postgres:15-alpine
-    container_name: solver42-postgres
+    container_name: ai_learning_assistant-postgres
     ports:
       - "15432:5432"
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=solver42
+      - POSTGRES_DB=ai_learning_assistant
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
   mongo:
     image: mongo:7.0
-    container_name: solver42-mongo
+    container_name: ai_learning_assistant-mongo
     ports:
       - "27017:27017"
     volumes:

@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🎓 Solver#42
+# 🎓 AI Learning Assistant
 
 **An LLM-powered assignment assistant for CUHK Business School**
 
@@ -60,7 +60,7 @@
 
 </details>
 
-> **Note:** The `Solver42_Dist/images/` directory contains pre-exported Docker image tarballs and is excluded from git. Obtain the full distribution package separately.
+> **Note:** The `ai_learning_assistant_dist/images/` directory contains pre-exported Docker image tarballs and is excluded from git. Obtain the full distribution package separately.
 
 ---
 

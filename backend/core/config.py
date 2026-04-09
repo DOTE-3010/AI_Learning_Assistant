@@ -14,7 +14,7 @@ CONTEXT_WINDOW_LIMIT = int(os.getenv("CONTEXT_WINDOW_LIMIT", "128000"))
 TARGET_OUTPUT_TOKENS = int(os.getenv("TARGET_OUTPUT_TOKENS", "1200"))
 
 # Update default to match Docker Compose credentials
-POSTGRES_URL = os.getenv("POSTGRES_URL", "postgresql://postgres:postgres@localhost:15432/solver42")
+POSTGRES_URL = os.getenv("POSTGRES_URL", "postgresql://postgres:postgres@localhost:15432/ai_learning_assistant")
 MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
 
 def validate_config():

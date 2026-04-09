@@ -1,10 +1,10 @@
 #!/bin/bash
-# Solver#42 Distribution Packager
+# AI Learning Assistant Distribution Packager
 
 # Exit on error
 set -e
 
-DIST_DIR="Solver42_Dist"
+DIST_DIR="ai_learning_assistant_dist"
 echo "📦 Starting Packaging Process..."
 
 # 1. Ensure backend image is up to date
@@ -19,13 +19,13 @@ mkdir -p "$DIST_DIR/workspace"
 
 # 3. Tag the backend image
 echo "🏷️  Tagging image..."
-docker tag solver42-backend:latest solver42:latest || docker tag solver42_backend:latest solver42:latest || echo "⚠️  Warning: Check image name manually if tag fails"
+docker tag ai_learning_assistant-backend:latest ai_learning_assistant:latest || docker tag ai_learning_assistant_backend:latest ai_learning_assistant:latest || echo "⚠️  Warning: Check image name manually if tag fails"
 
 # 4. Export Images
 echo "💾 Exporting Docker Images (This will take a while)..."
 
-echo "   -> Exporting Solver#42 Backend..."
-docker save -o "$DIST_DIR/images/backend.tar" solver42:latest
+echo "   -> Exporting AI Learning Assistant Backend..."
+docker save -o "$DIST_DIR/images/backend.tar" ai_learning_assistant:latest
 
 echo "   -> Exporting Postgres..."
 docker save -o "$DIST_DIR/images/postgres.tar" postgres:15-alpine
@@ -44,10 +44,10 @@ chmod +x "$DIST_DIR/start_dist_mac.command"
 
 # Create a README
 cat > "$DIST_DIR/README.txt" << EOF
-Solver#42 - Local Offline Edition
+AI Learning Assistant - Local Offline Edition
 =================================
 
-Thank you for using Solver#42! This package allows you to run the system locally on your machine without complex setup.
+Thank you for using AI Learning Assistant! This package allows you to run the system locally on your machine without complex setup.
 
 ------------------------------------------------------------------------
 📋 1. PRE-REQUISITES (MUST READ)
@@ -97,10 +97,10 @@ Q: The browser shows "This site can't be reached"?
 A: The system might still be starting up. Wait 10 seconds and refresh the page.
 
 Q: How do I stop it?
-A: Open Docker Desktop, go to "Containers", and click the Stop (square) button on the "solver42" group.
+A: Open Docker Desktop, go to "Containers", and click the Stop (square) button on the "ai_learning_assistant" group.
 
 =================================
-Solver#42 Team
+AI Learning Assistant Team
 EOF
 
 echo "✅ Packaging Complete!"
