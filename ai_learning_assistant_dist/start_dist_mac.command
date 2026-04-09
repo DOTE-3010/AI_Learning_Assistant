@@ -68,7 +68,7 @@ clean_conflict "solver42-postgres"
 clean_conflict "solver42-mongo"
 
 # 使用 docker compose 启动 (不带 --build，因为是成品镜像)
-docker compose up -d
+docker compose -p ai_learning_assistant up -d
 
 if [ $? -eq 0 ]; then
     echo "✅ System is running!"

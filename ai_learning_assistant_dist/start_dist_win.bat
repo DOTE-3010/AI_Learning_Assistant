@@ -44,7 +44,7 @@ docker rm -f solver42-backend >nul 2>&1
 docker rm -f solver42-postgres >nul 2>&1
 docker rm -f solver42-mongo >nul 2>&1
 
-docker compose up -d
+docker compose -p ai_learning_assistant up -d
 
 if %errorlevel% equ 0 (
     echo ✅ System is running!

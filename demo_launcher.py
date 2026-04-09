@@ -9,6 +9,7 @@ import socket
 APP_PORT = 14242
 DB_PORT_PG = 15432
 DB_PORT_MONGO = 27017 # Mongo default is usually fine, but can change if needed. Keeping for now as 27017 is standard.
+COMPOSE_PROJECT = "ai_learning_assistant"
 
 def is_port_open(host, port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -35,10 +36,8 @@ def main():
         
     # 2. Start Databases
     print(f"📦 Starting Databases (PG: {DB_PORT_PG})...")
-    # Need to export ports for docker-compose to pick up if we parameterize them, 
-    # BUT standard docker-compose.yml uses static ports. 
-    # We will rely on docker-compose.yml having been updated to 15432.
-    run_command("docker-compose up -d postgres mongo")
+    # Use a fixed compose project name so Docker Desktop group naming stays consistent.
+    run_command(f"docker compose -p {COMPOSE_PROJECT} up -d postgres mongo")
     
     # 3. Wait for DBs
     print("⏳ Waiting for Database readiness...")
@@ -93,7 +92,7 @@ def main():
         subprocess.call(f"{sys.executable} -m uvicorn backend.main:app --reload --host 0.0.0.0 --port {APP_PORT}", shell=True, env=env)
     except KeyboardInterrupt:
         print("\n🛑 Stopping...")
-        run_command("docker-compose stop")
+        run_command(f"docker compose -p {COMPOSE_PROJECT} stop")
         print("Bye!")
 
 if __name__ == "__main__":
@@ -104,7 +103,7 @@ if __name__ == "__main__":
     
     if args.action == "reset":
         print("🧹 Resetting Demo...")
-        run_command("docker-compose down -v")
+        run_command(f"docker compose -p {COMPOSE_PROJECT} down -v")
         print("Done. Run 'python demo_launcher.py' to start.")
     else:
         main()
