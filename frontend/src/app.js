@@ -9,6 +9,8 @@ import './styles.css';
         let activeJobId = null;
         const HIDDEN_COURSE_KEY_PREFIX = "hidden_courses_";
         const HIDDEN_ASSIGNMENT_KEY_PREFIX = "hidden_assignments_";
+        const LOCAL_CONTEXT_WINDOW_LIMIT = 128000;
+        const LOCAL_TARGET_OUTPUT_TOKENS = 1200;
 
         function getStorageKey(prefix) {
             return `${prefix}${currentUser?.email || 'guest'}`;
@@ -26,6 +28,74 @@ import './styles.css';
 
         function saveHiddenIds(prefix, ids) {
             localStorage.setItem(getStorageKey(prefix), JSON.stringify([...ids]));
+        }
+
+        function formatInt(value) {
+            if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+            return Number(value).toLocaleString();
+        }
+
+        function estimateTokensFromText(text) {
+            const normalized = String(text || "");
+            return Math.max(1, Math.floor(normalized.length / 4));
+        }
+
+        function buildLocalContextEstimate() {
+            const format = document.getElementById('output-format')?.value || 'md';
+            const customQuestion = document.getElementById('custom-question')?.value || '';
+            const file = document.getElementById('file-upload')?.files?.[0];
+            const formatHint = format === 'pdf' ? 'latex beamer output' : `${format} output`;
+            const fileApproxChars = file ? Math.min(Number(file.size || 0), 20000) : 0;
+
+            const assignmentTitle = document.getElementById('assign-title')?.value || '';
+            const assignmentInstructions = document.getElementById('assign-instr')?.value || '';
+
+            const estimatedInputTokens =
+                estimateTokensFromText(assignmentTitle) +
+                estimateTokensFromText(assignmentInstructions) +
+                estimateTokensFromText(customQuestion) +
+                estimateTokensFromText(formatHint) +
+                Math.floor(fileApproxChars / 4);
+
+            const estimatedTotalTokens = estimatedInputTokens + LOCAL_TARGET_OUTPUT_TOKENS;
+            const utilizationRatio = estimatedTotalTokens / LOCAL_CONTEXT_WINDOW_LIMIT;
+            let warningLevel = 'ok';
+            if (utilizationRatio > 0.85) warningLevel = 'critical';
+            else if (utilizationRatio >= 0.70) warningLevel = 'warning';
+
+            return {
+                estimated_input_tokens: estimatedInputTokens,
+                estimated_total_tokens: estimatedTotalTokens,
+                context_window_limit: LOCAL_CONTEXT_WINDOW_LIMIT,
+                utilization_ratio: utilizationRatio,
+                warning_level: warningLevel,
+                source: 'LOCAL'
+            };
+        }
+
+        function updateContextWindowPanel(estimate) {
+            const panel = document.getElementById('context-window-panel');
+            if (!panel) return;
+            panel.classList.remove('hidden');
+            if (!estimate) return;
+
+            document.getElementById('cw-source').textContent = String(estimate.source || 'BACKEND').toUpperCase();
+            document.getElementById('cw-input').textContent = formatInt(estimate.estimated_input_tokens);
+            document.getElementById('cw-total').textContent = formatInt(estimate.estimated_total_tokens);
+            document.getElementById('cw-limit').textContent = formatInt(estimate.context_window_limit);
+            document.getElementById('cw-ratio').textContent = `${(Number(estimate.utilization_ratio || 0) * 100).toFixed(1)}%`;
+
+            const warning = String(estimate.warning_level || 'ok').toLowerCase();
+            const warningEl = document.getElementById('cw-warning-level');
+            warningEl.textContent = warning.toUpperCase();
+            warningEl.className = 'text-[10px] font-mono';
+            if (warning === 'critical') warningEl.classList.add('text-red-400');
+            else if (warning === 'warning') warningEl.classList.add('text-yellow-400');
+            else warningEl.classList.add('text-green-400');
+        }
+
+        function refreshPersistentContextEstimate() {
+            updateContextWindowPanel(buildLocalContextEstimate());
         }
 
         function switchAuthMode(mode) {
@@ -306,7 +376,7 @@ import './styles.css';
             const hiddenAssignmentIds = getHiddenIds(HIDDEN_ASSIGNMENT_KEY_PREFIX);
             // Client-side filter for demo simplicity (ideally backend filters)
             const assignments = allAssignments.filter(a =>
-                a.course_id === currentCourse.id && !hiddenAssignmentIds.has(Number(a.id))
+                String(a.course_id) === String(currentCourse.id) && !hiddenAssignmentIds.has(Number(a.id))
             );
             
             const list = document.getElementById('assignment-list');
@@ -380,6 +450,14 @@ import './styles.css';
                 return;
             }
 
+            // If this ID existed in local hidden set (e.g. DB reset reused IDs), unhide it.
+            if (created && created.id !== undefined && created.id !== null) {
+                const hiddenAssignmentIds = getHiddenIds(HIDDEN_ASSIGNMENT_KEY_PREFIX);
+                if (hiddenAssignmentIds.delete(Number(created.id))) {
+                    saveHiddenIds(HIDDEN_ASSIGNMENT_KEY_PREFIX, hiddenAssignmentIds);
+                }
+            }
+
             document.getElementById('new-assign-modal').classList.add('hidden');
             document.getElementById('assign-title').value = "";
             document.getElementById('assign-instr').value = "";
@@ -443,6 +521,7 @@ import './styles.css';
                 label.innerText = "Click to attach";
                 label.classList.remove('text-cyan-400');
             }
+            refreshPersistentContextEstimate();
         }
 
         function addMessage(role, content) {
@@ -495,6 +574,13 @@ import './styles.css';
                 
                 const data = await res.json();
                 if (data.job_id) {
+                    // Clear prompt inputs once backend accepted the request.
+                    document.getElementById('custom-question').value = '';
+                    fileInput.value = '';
+                    document.getElementById('file-label').innerText = "Click to attach";
+                    document.getElementById('file-label').classList.remove('text-cyan-400');
+                    refreshPersistentContextEstimate();
+
                     if (activeJobInterval) {
                         clearInterval(activeJobInterval);
                         activeJobInterval = null;
@@ -518,6 +604,14 @@ import './styles.css';
                         } 
                     });
                     const data = await res.json();
+                    if (data.context_window_estimate) {
+                        updateContextWindowPanel({
+                            ...data.context_window_estimate,
+                            source: 'BACKEND'
+                        });
+                    } else {
+                        refreshPersistentContextEstimate();
+                    }
                     
                     if (data.status === 'succeeded') {
                         clearInterval(activeJobInterval);
@@ -554,9 +648,12 @@ import './styles.css';
                     generateAnswer();
                 }
             });
+            customQuestion.addEventListener('input', refreshPersistentContextEstimate);
         }
 
         setupInputShortcuts();
+        document.getElementById('output-format')?.addEventListener('change', refreshPersistentContextEstimate);
+        refreshPersistentContextEstimate();
 
 Object.assign(window, {
     switchAuthMode,

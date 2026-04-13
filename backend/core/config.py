@@ -8,6 +8,10 @@ BIANXIE_API_KEY = os.getenv("BIANXIE_API_KEY", "sk-lXrpvF2HGabKdbMmtF9R9rcjklOqp
 BIANXIE_ENDPOINT = os.getenv("BIANXIE_ENDPOINT", "https://api.bianxie.ai/v1")
 # Default Model: gemini-3-pro-preview (as requested)
 MODEL_NAME = os.getenv("MODEL_NAME", "gemini-3-pro-preview")
+CONTEXT_ADAPTER = os.getenv("CONTEXT_ADAPTER", "langchain").strip().lower()
+ITERATION_TURNS = int(os.getenv("ITERATION_TURNS", "3"))
+CONTEXT_WINDOW_LIMIT = int(os.getenv("CONTEXT_WINDOW_LIMIT", "128000"))
+TARGET_OUTPUT_TOKENS = int(os.getenv("TARGET_OUTPUT_TOKENS", "1200"))
 
 # Update default to match Docker Compose credentials
 POSTGRES_URL = os.getenv("POSTGRES_URL", "postgresql://postgres:postgres@localhost:5432/ai_learning_assistant")

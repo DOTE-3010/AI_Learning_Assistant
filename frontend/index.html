@@ -173,6 +173,36 @@
                     </div>
                 </div>
             </div>
+
+            <div id="context-window-panel" class="hidden md:block absolute top-4 right-4 z-30 w-80 pointer-events-none">
+                <div class="glass border border-slate-700 rounded-xl p-3 shadow-2xl">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="text-[11px] font-mono uppercase tracking-wide text-cyan-400">Context Window</div>
+                        <div class="flex items-center gap-2">
+                            <div id="cw-source" class="text-[10px] font-mono text-slate-500">LOCAL</div>
+                            <div id="cw-warning-level" class="text-[10px] font-mono text-slate-400">-</div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="bg-slate-950/70 rounded p-2 border border-slate-800">
+                            <div class="text-slate-500">Estimated Input</div>
+                            <div id="cw-input" class="text-slate-200 font-mono">-</div>
+                        </div>
+                        <div class="bg-slate-950/70 rounded p-2 border border-slate-800">
+                            <div class="text-slate-500">Estimated Total</div>
+                            <div id="cw-total" class="text-slate-200 font-mono">-</div>
+                        </div>
+                        <div class="bg-slate-950/70 rounded p-2 border border-slate-800">
+                            <div class="text-slate-500">Context Limit</div>
+                            <div id="cw-limit" class="text-slate-200 font-mono">-</div>
+                        </div>
+                        <div class="bg-slate-950/70 rounded p-2 border border-slate-800">
+                            <div class="text-slate-500">Utilization</div>
+                            <div id="cw-ratio" class="text-slate-200 font-mono">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </section>
     </main>
     <script type="module" src="/src/app.js"></script>
