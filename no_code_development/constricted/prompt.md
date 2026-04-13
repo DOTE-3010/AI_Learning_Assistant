@@ -4,7 +4,7 @@ Do not change any "Fixed" sections. Output the complete filled PRD in Markdown.
 App name: <short code name, e.g. AI Learning Assistant>
 Display title: <shown in navbar, e.g. AI Learning Assistant>
 Tagline: <one line, e.g. your private study assistant>
-DB name: <lowercase no spaces, e.g. solver42>
+Database name: <lowercase no spaces, e.g. ai_learning_assistant>
 
 **Target audience: <who is this demo for, e.g. the CUHK Business School>**
 **What it does: <one sentence, e.g. help teachers generate standard answers from course assignments and allow students to view assignment instructions>**
@@ -13,8 +13,8 @@ Role 1: <name, e.g. teacher> — email domain: <@xxx.com, e.g. @cuhk.edu.hk>
 Role 2: <name, e.g. student> — email domain: <@xxx.com, e.g. @link.cuhk.edu.hk> 
 Demo account: <role1 email / password, e.g. teacher@cuhk.edu.hk / Aa12345678>
 
-Primary entity: <name, e.g. Course> 
-Secondary entity: <name, e.g. Assignment> 
+Primary entity (That is like the Excel file): <name, e.g. Course> 
+Secondary entity (That is like the individual spreadsheet): <name, e.g. Assignment> 
 
 **What the LLM generates: <e.g. a standard answer for the given assignment>**
 **Generation input: <field names from secondary entity passed to LLM, e.g. assignment_title, instructions, custom_context>**
