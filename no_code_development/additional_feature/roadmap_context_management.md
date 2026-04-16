@@ -1,178 +1,215 @@
-# Roadmap: Demo Branch Context Management Integration
+# Roadmap: Context Management and Iterative Generation (One-Pass)
 
-## 1. Goal
+## 1) Goal and Constraints
 
-Implement a **demo-branch-safe**, **one-pass** feature that adds:
+This roadmap defines a **single implementation run** to deliver multi-turn iterative assignment generation with explicit context-window statistics, while preserving existing behavior and minimizing unrelated refactors.
 
-- Multi-turn iterative assignment generation.
-- LangChain-based context management behind interfaces.
-- Explicit context window estimation output per generation job.
-- Stack swappability via adapter + technical description, without changing orchestration flow.
+Hard constraints for this run:
+- Keep architecture decoupled via interfaces in `backend/app/iterative_generation/contracts.py`.
+- Use LangChain as default context manager (`CONTEXT_ADAPTER=langchain`) while preserving swappability (`native` or future adapters).
+- Preserve current API behavior unless changes are strictly required for this feature.
+- Ensure integrated `/ui` demo flow regressions are prevented:
+  1. New assignments appear immediately in sidebar.
+  2. Context-window statistics panel is persistently visible and updated by local estimate + backend polling.
+  3. Input box and attachment label clear after generation request is accepted.
+  4. Frontend source changes are built into backend static assets served at `/ui`.
 
-This roadmap is intentionally scoped to the current `demo` branch baseline.
+## 2) Current-Codebase Fit (Why this is low-risk)
 
----
+The codebase already contains the core building blocks:
+- Adapter contracts and orchestrator: `backend/app/iterative_generation/contracts.py`, `orchestrator.py`, `adapters.py`.
+- Generation pipeline entrypoint: `backend/app/standard_answer_generator.py`.
+- Job polling endpoint with estimate field: `backend/main.py` (`/jobs/{job_id}`).
+- Demo UI flow and local estimate logic: `frontend/src/app.js`.
+- Frontend build output directly to backend static directory: `frontend/vite.config.js` (`outDir` -> `../backend/static`).
 
-## 2. Constraints for Demo Branch
+Therefore the implementation run should focus on **hardening and wiring completeness**, not broad redesign.
 
-1. Keep existing API routes and frontend contract stable unless required by this feature.
-2. Avoid broad refactors from `main`; migrate only feature-critical code.
-3. Preserve existing defaults in `backend/core/config.py` (model and database defaults), then add new context controls.
-4. Keep PDF conversion behavior unchanged in demo to reduce integration risk.
-5. Treat frontend-demo regressions as first-class acceptance criteria for this feature.
+## 3) One-Pass Implementation Plan (File-Level)
 
----
+### Phase A - Backend context-window telemetry contract hardening
 
-## 3. Target Files and Required Changes
+#### A1. `backend/app/iterative_generation/contracts.py`
+- Add explicit typed shape for context-window telemetry payload (either dedicated dataclass or documented dict schema near `TokenEstimate`).
+- Keep existing interfaces (`ContextManager`, `PromptCompiler`, `ModelGateway`, `TokenEstimator`, `TelemetrySink`) unchanged to preserve adapter swappability.
+- No API-facing schema changes here.
 
-## 3.1 New Module (Add)
+#### A2. `backend/app/iterative_generation/orchestrator.py`
+- Keep existing turn loop and warning-level thresholds.
+- Ensure each turn emits telemetry payload with stable keys used by UI/backend:
+  - `estimated_input_tokens`
+  - `estimated_output_tokens`
+  - `estimated_total_tokens`
+  - `context_window_limit`
+  - `utilization_ratio`
+  - `safety_margin_tokens`
+  - `warning_level`
+  - `section_breakdown`
+- Keep compression flow (`warning`/`critical`) and retry guidance behavior unchanged.
+- Avoid changing turn semantics or output contract behavior.
 
-Create and wire a decoupled iterative module in:
+#### A3. `backend/app/iterative_generation/adapters.py`
+- Keep `LangChainContextAdapter` as default-ready implementation.
+- Preserve `NativeAPIContextAdapter` as swappable fallback.
+- Confirm no direct coupling from adapter internals to API layer.
+- Keep compression behaviors adapter-specific to maintain stack swappability.
 
-- `backend/app/iterative_generation/__init__.py`
-- `backend/app/iterative_generation/contracts.py`
-- `backend/app/iterative_generation/prompt_schema.py`
-- `backend/app/iterative_generation/orchestrator.py`
-- `backend/app/iterative_generation/adapters.py`
+### Phase B - Stack swappability and technical-description swap point
 
-### Required capabilities
+#### B1. `backend/app/standard_answer_generator.py`
+- Keep adapter selection centralized in `_select_context_adapter()`.
+- Keep `technical_description` generation as swap point (`_technical_description_for(output_format, adapter_name)`), so stack changes can be reflected without touching orchestrator or API routes.
+- Preserve return shape when `return_details=True`; continue surfacing latest `context_window_estimate`.
+- Do not alter public function signature of `generate_answer_logic(...)`.
 
-- Prompt contract dataclasses and interfaces (`ContextManager`, `PromptCompiler`, `ModelGateway`, `TokenEstimator`, `TelemetrySink`).
-- LangChain context adapter as default.
-- Native adapter scaffold for future swap validation.
-- Token estimator with section-level breakdown and utilization ratio.
-- Orchestrator guardrails (`ok`, `warning`, `critical`) and retry guidance fallback.
-- In-memory telemetry sink with `context_window_estimate` events.
+#### B2. `backend/core/config.py`
+- Keep `CONTEXT_ADAPTER` environment switch and defaults.
+- Ensure default remains `"langchain"` to satisfy feature requirement.
+- No unrelated config refactors.
 
-## 3.2 Existing Backend Integration (Update)
+### Phase C - API integration (behavior-preserving)
 
-- `backend/app/standard_answer_generator.py`
-  - Replace single-shot prompt with sectioned prompt orchestration.
-  - Inject iterative generation pipeline.
-  - Keep existing output conversion behavior for demo compatibility.
-  - Add `return_details=True` support to return context telemetry to caller.
+#### C1. `backend/main.py`
+- Keep existing endpoints and request/response structure.
+- Confirm `process_generation_job(...)` stores latest estimate in `JOB_CONTEXT_ESTIMATES[job_id]`.
+- Keep `/jobs/{job_id}` response backward-compatible and include `context_window_estimate` (already present).
+- Preserve `POST /generate-answer` behavior; only ensure estimate lifecycle is reliable:
+  - initialize estimate slot when queued/running,
+  - update when generation returns details,
+  - clear on failure.
+- No new route required; no breaking shape changes.
 
-- `backend/main.py`
-  - In generation job worker, call iterative generator with `return_details=True`.
-  - Store latest context estimate in in-memory map by `job_id`.
-  - Extend `/jobs/{job_id}` response to include `context_window_estimate`.
-  - Add `iteration_turns` form field to `/generate-answer`.
+### Phase D - Demo UI regression prevention and persistent stats UX
 
-- `backend/core/config.py`
-  - Add:
-    - `CONTEXT_ADAPTER`
-    - `ITERATION_TURNS`
-    - `CONTEXT_WINDOW_LIMIT`
-    - `TARGET_OUTPUT_TOKENS`
-  - Do not change existing demo-specific defaults unrelated to this feature.
+#### D1. `frontend/src/app.js` (assignment immediacy)
+- Keep optimistic/near-immediate assignment refresh path in `createAssignment()`:
+  - close modal,
+  - clear fields,
+  - `await loadAssignments()` immediately.
+- Ensure no later async call overwrites this state unexpectedly.
 
-- `backend/requirements.txt`
-  - Keep resolver-stable versions for demo integration.
-  - Ensure iterative module imports are satisfied without long dependency backtracking.
+#### D2. `frontend/src/app.js` (persistent context panel)
+- Keep panel always visible via `updateContextWindowPanel(...)` + `refreshPersistentContextEstimate()`.
+- Ensure local estimate updates on:
+  - custom question input,
+  - file select change,
+  - output format change,
+  - post-request input clearing.
+- Keep backend polling override in `pollJob(jobId)`:
+  - if backend estimate exists -> display source `BACKEND`,
+  - else -> fallback to local estimate (`LOCAL`).
 
-## 3.3 Frontend and Static Runtime Integration (Update)
+#### D3. `frontend/src/app.js` (clear inputs after acceptance)
+- In `generateAnswer()`, preserve clearing logic only after backend accepted request (`data.job_id` exists):
+  - clear `custom-question`,
+  - clear file input,
+  - reset attachment label text + style.
+- Keep this behavior tied to acceptance to avoid data loss on failed requests.
 
-- `frontend/src/app.js`
-  - Ensure assignment list filtering is type-safe (`course_id` comparison).
-  - Unhide newly created assignment IDs from local hidden cache when reused.
-  - Add persistent context-window panel updater with:
-    - local estimate fallback
-    - backend polling override from `/jobs/{job_id}.context_window_estimate`
-  - Clear `custom-question` and file attachment label/input after generation request is accepted.
+#### D4. `frontend/src/styles.css` (if needed)
+- Only add/adjust styles required for persistent context panel readability.
+- No broad theme/layout refactor.
 
-- `frontend/index.html`
-  - Add persistent context-window panel container and fields:
-    - source, warning level, estimated input, estimated total, limit, utilization.
+### Phase E - Static asset integration for `/ui`
 
-- `backend/static/index.html` and `backend/static/assets/*`
-  - Rebuild frontend bundle so `/ui` serves latest behavior.
-  - Do not leave source and static runtime out of sync.
+#### E1. `frontend/vite.config.js`
+- Keep build target:
+  - `base: "/ui/"`
+  - `outDir: "../backend/static"`
+  - `emptyOutDir: true`
+- This guarantees frontend source changes are deployed into backend static assets used by `/ui`.
 
----
+#### E2. Build outputs (generated, not hand-edited)
+- Regenerate:
+  - `backend/static/index.html`
+  - `backend/static/assets/*`
+- Do not manually edit compiled asset files.
 
-## 4. Prompt Contract for Iterative Pipeline
+## 4) Dependency and Tooling Updates
 
-Use immutable sections:
+### Backend (`backend/requirements.txt`)
+- Ensure `langchain-core` remains present and pinned (currently `langchain-core==1.2.27`) because `LangChainContextAdapter` relies on it.
+- No additional dependency is required for this feature unless adapter strategy changes.
 
-- `task_definition`
-- `technical_description`
-- `iteration_state`
-- `quality_bar`
-- `output_contract`
-- `context_bundle`
+### Frontend (`frontend/package.json`)
+- Keep existing scripts (`dev`, `build`, `preview`).
+- No package additions required for this run.
 
-Swappability rule:
+## 5) Single-Run Execution Order (Implementation + Build)
 
-- Stack swap should require only:
-  - adapter selection/config change
-  - technical description text change
-- Must not require orchestrator flow rewrite.
+Run in this exact order to complete in one pass:
 
----
+1. Implement backend hardening updates:
+   - `contracts.py`, `orchestrator.py`, `adapters.py`, `standard_answer_generator.py`, `main.py`, and config checks.
+2. Implement frontend regression-prevention updates:
+   - `frontend/src/app.js` (and `styles.css` only if needed).
+3. Install/update dependencies once:
+   - `pip install -r backend/requirements.txt`
+   - `cd frontend && npm install` (or `npm ci` in CI).
+4. Build frontend into backend static:
+   - `cd frontend && npm run build`
+5. Start app stack and run integrated verification:
+   - via existing local launcher or `uvicorn` flow.
 
-## 5. Implementation Sequence (One Pass)
+## 6) Verification Checklist (Must Pass in Same Run)
 
-1. Add iterative contracts/schema/orchestrator/adapters module.
-2. Add config constants and dependency entries.
-3. Refactor standard answer generator to use orchestrator.
-4. Update background job path and job status response in `main.py`.
-5. Apply frontend regression fixes (assignment visibility, persistent context panel, input clearing).
-6. Build frontend into backend static runtime.
-7. Run lightweight verification commands for import/runtime sanity.
+### Backend verification
+- `GET /health` returns OK.
+- Trigger generation job and poll `/jobs/{job_id}`:
+  - `context_window_estimate` appears when available.
+  - status transitions `queued -> running -> succeeded/failed` remain unchanged.
+- Non-estimate API fields remain backward-compatible.
 
----
+### Frontend regression verification (required)
+- **R1 Assignment sidebar immediacy**
+  - Create assignment in selected course.
+  - Confirm new assignment appears in sidebar immediately without manual refresh.
 
-## 6. Verification Checklist
+- **R2 Persistent context-window panel**
+  - Before generation: panel visible with `LOCAL` estimate.
+  - During polling: panel updates to `BACKEND` estimate when available.
+  - If backend estimate absent: panel remains visible and uses `LOCAL` estimate fallback.
 
-Run in demo branch after implementation:
+- **R3 Input/attachment clearing on acceptance**
+  - Submit generation request with custom text + file.
+  - After request accepted (`job_id` received), confirm:
+    - custom input is empty,
+    - file input is cleared,
+    - attachment label resets to default.
 
-1. Install dependencies from `backend/requirements.txt`.
-2. Start backend and trigger one generation request with `iteration_turns=3`.
-3. Query `/jobs/{job_id}` and verify:
-   - `status` returns normally.
-   - `context_window_estimate` exists and includes:
-     - `estimated_input_tokens`
-     - `estimated_output_tokens`
-     - `estimated_total_tokens`
-     - `context_window_limit`
-     - `utilization_ratio`
-     - `safety_margin_tokens`
-     - `warning_level`
-4. Validate frontend behavior in `/ui`:
-   - Creating assignment shows it immediately in sidebar.
-   - Context window panel is visible persistently and updates during polling.
-   - Input box and attachment label clear after request acceptance.
-5. Rebuild frontend and verify `backend/static/index.html` references current asset bundle.
-6. Confirm existing output formats still work as before.
+- **R4 `/ui` static asset integration**
+  - After frontend source edit + `npm run build`, open `/ui`.
+  - Confirm new UI behavior is present (not stale old bundle).
 
----
+### Non-regression checks
+- Existing auth flow (`register/login`) still works.
+- Course creation and assignment selection still work.
+- Generation completion still renders final output in chat.
 
-## 7. Risks and Mitigations (Demo-Scoped)
+## 7) Rollout Strategy
 
-- **Risk:** Merge conflicts in `main.py` and `standard_answer_generator.py`  
-  **Mitigation:** perform manual integration, keep non-feature logic unchanged.
+### Local rollout
+- Execute full one-pass implementation and verification on local dev environment first.
+- Keep `CONTEXT_ADAPTER=langchain` default.
+- Optionally run one smoke pass with `CONTEXT_ADAPTER=native` to validate swap safety.
 
-- **Risk:** LangChain dependency mismatch in local demo environment  
-  **Mitigation:** pin minimum versions and verify imports before runtime.
+### Release rollout
+- Ship backend + rebuilt static assets together (single deploy unit), preventing `/ui` mismatch.
+- Maintain API compatibility; no frontend contract migration required.
 
-- **Risk:** Context estimate not visible to frontend polling path  
-  **Mitigation:** include estimate directly in `/jobs/{job_id}` response payload.
+### Rollback plan
+- Revert to previous commit/deploy artifact if:
+  - `/jobs/{job_id}` polling breaks,
+  - context panel becomes non-persistent,
+  - `/ui` serves stale or broken assets.
+- Since changes are localized, rollback scope is limited to touched files and generated static assets.
 
-- **Risk:** Frontend source fixes not reflected in `/ui` runtime  
-  **Mitigation:** enforce `frontend` build step and verify updated static asset reference in `backend/static/index.html`.
+## 8) Definition of Done
 
-- **Risk:** Assignment created but hidden due to stale local hide cache or id-type mismatch  
-  **Mitigation:** normalize id comparison and unhide newly created assignment ID after successful create.
-
----
-
-## 8. Definition of Done
-
-Done when all are true:
-
-1. Demo backend uses iterative context pipeline through adapters.
-2. Generation job response explicitly returns context-window estimate data.
-3. Feature runs end-to-end without requiring main-branch-only refactors.
-4. Frontend `/ui` shows persistent context panel and clears input after accepted generation request.
-5. Assignment creation is immediately visible in sidebar after integration run.
-6. Stack swap path remains open via adapter/config and technical description updates.
+Feature is complete when all are true:
+- Multi-turn iterative generation runs through orchestrator with adapter-based context management.
+- LangChain remains default context adapter; native adapter remains viable via configuration.
+- Technical-description swap point remains centralized and adapter-aware.
+- Context-window stats are visible in UI and update from both local estimate and backend polling.
+- All four required demo-flow regressions are explicitly prevented and verified.
+- Frontend source updates are reflected in backend static assets served from `/ui`.
