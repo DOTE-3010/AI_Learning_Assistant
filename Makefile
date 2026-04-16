@@ -18,20 +18,7 @@ frontend-build:
 	npm --prefix frontend run build
 
 # 2. 启动演示 (会自动使用 venv 中的 python)
-# If npm is unavailable, fallback to committed static assets for demo safety.
-demo-start:
-	@if command -v npm >/dev/null 2>&1; then \
-		echo "🔧 npm detected. Building frontend..."; \
-		$(MAKE) frontend-build; \
-	else \
-		if [ -f backend/static/index.html ] && ls backend/static/assets/index-*.js >/dev/null 2>&1; then \
-			echo "⚠️ npm not found. Skipping frontend build and using prebuilt static assets."; \
-		else \
-			echo "❌ npm not found and no prebuilt frontend assets detected."; \
-			echo "Please install Node.js/npm or commit built files under backend/static."; \
-			exit 1; \
-		fi; \
-	fi
+demo-start: frontend-build
 	$(PYTHON) demo_launcher.py start
 
 # 3. 重置数据
