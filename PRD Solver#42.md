@@ -1,13 +1,13 @@
-# PRD: Solver#42 (Local Demo MVP)
+# PRD: AI Learning Assistant (Local Demo MVP)
 
 ## 1. Product Identity
 
 | Field | Value |
 |---|---|
-| **App Name** | Solver#42 |
-| **Display Title** | Solver#42 |
+| **App Name** | AI Learning Assistant (Local Demo MVP) |
+| **Display Title** | AI Learning Assistant (Local Demo MVP) |
 | **Tagline** | your private study nomenclator |
-| **Database Name** | solver42 |
+| **Database Name** | ai_learning_assistant |
 | **Demo Account (Teacher)** | teacher@cuhk.edu.hk / Aa12345678 |
 | **Target Environment** | macOS local machine, single user |
 
@@ -15,7 +15,7 @@
 
 ## 2. Product Overview
 
-**Solver#42** is a localized, low-cost demo MVP for the CUHK Business School. It uses LLMs to help teachers generate standard answers from course assignments and allows students to view assignment instructions. The product runs entirely on a local machine with no cloud infrastructure.
+**AI Learning Assistant** is a localized, low-cost demo MVP for the CUHK Business School. It uses LLMs to help teachers generate standard answers from course assignments and allows students to view assignment instructions. The product runs entirely on a local machine with no cloud infrastructure.
 
 Core design philosophy: **"Zero Infrastructure Cost"** and **"Plug and Play"** — starts with one double-click, no deployment needed.
 
@@ -230,7 +230,7 @@ Background task arguments passed from `assignment` object: `assignment.title`, `
 
 - **Theme**: Dark glassmorphism. Background `bg-slate-900`. Glass panels: `rgba(30,41,59,0.7)` + `backdrop-filter: blur(10px)`.
 - **Layout**: 3-panel — sticky navbar / left sidebar (course + assignment management) / main workspace (chat area + input panel).
-- **Chat metaphor**: Teacher messages appear as right-aligned blue bubbles; AI responses appear as left-aligned dark bubbles with "Solver#42 Core" label.
+- **Chat metaphor**: Teacher messages appear as right-aligned blue bubbles; AI responses appear as left-aligned dark bubbles with "AI Learning Assistant Core" label.
 - **Input panel**: Textarea (`Ask your question here...`) + file upload zone + format selector dropdown + `Execute Generation` button.
 - **Login overlay**: Full-screen on load. Pre-filled with demo credentials `teacher@cuhk.edu.hk` / `Aa12345678`.
 - **Markdown rendering**: `marked.js` renders LLM output (code blocks, headers, lists) inside AI bubbles.
@@ -257,4 +257,4 @@ Background task arguments passed from `assignment` object: `assignment.title`, `
 
 ## 10. Project Summary
 
-Solver#42 validates the feasibility of building a functional AI-assisted teaching tool using only local infrastructure (Docker + Python + LLM API). The demo covers the full user journey: account creation, course/assignment setup, LLM-powered answer generation with web context augmentation, multi-format output, and persistent history — all from a single double-click launcher, zero cloud cost.
+AI Learning Assistant validates the feasibility of building a functional AI-assisted teaching tool using only local infrastructure (Docker + Python + LLM API). The demo covers the full user journey: account creation, course/assignment setup, LLM-powered answer generation with web context augmentation, multi-format output, and persistent history — all from a single double-click launcher, zero cloud cost.
