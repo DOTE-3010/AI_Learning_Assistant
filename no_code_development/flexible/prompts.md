@@ -82,4 +82,4 @@ Refer to @Bianxie.ipynb to fetch LLM API needed and the way to call it.
 
 # 3 roadmap to MVP
 
-Refer to @roadmap.md, develop the local MVP of Solver 42 step by step. Note Docker Desktop is running now. Ask me to check after each step finished.
+Refer to @roadmap.md, develop the local MVP of AI Learning Assistant step by step. Note Docker Desktop is running now. Ask me to check after each step finished.
