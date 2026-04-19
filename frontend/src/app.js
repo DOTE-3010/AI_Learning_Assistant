@@ -541,22 +541,36 @@
             return div;
         }
 
+        function addUserQuestionBubble(question) {
+            const history = document.getElementById('chat-history');
+            const div = document.createElement('div');
+            div.className = "chat-bubble teacher shadow-lg";
+            div.innerHTML = escapeHtml(String(question || '')).replaceAll('\n', '<br>');
+            history.appendChild(div);
+            history.scrollTop = history.scrollHeight;
+            return div;
+        }
+
         function removeGeneratedOutputBubbles() {
             document.querySelectorAll('.generated-output-bubble').forEach(node => node.remove());
         }
 
-        function addGeneratedOutputBubble(output, timestamp = null) {
+        function addGeneratedOutputBubble(output, timestamp = null, showWorkspaceSavedNotice = false) {
             const history = document.getElementById('chat-history');
             const div = document.createElement('div');
             div.className = "chat-bubble ai shadow-lg generated-output-bubble";
             const ts = timestamp ? `<div class="text-[10px] text-slate-500 mt-3">Restored from ${escapeHtml(new Date(timestamp).toLocaleString())}</div>` : '';
+            const workspaceNotice = showWorkspaceSavedNotice
+                ? '<div class="text-[11px] text-green-400 mt-1">Report saved to <span class="font-mono">workspace</span>.</div>'
+                : '';
             div.innerHTML = `
                 <div class="flex items-center gap-2 mb-2 border-b border-slate-600/50 pb-1">
                     <div class="h-2 w-2 rounded-full bg-green-400"></div>
                     <span class="text-[10px] font-mono text-slate-400 uppercase">AI Learning Assistant Core</span>
                 </div>
                 <div class="flex flex-col gap-2">
-                    <div class="text-sm text-slate-300">Latest generated output</div>
+                    <div class="text-sm text-slate-300">Generated output</div>
+                    ${workspaceNotice}
                     <div class="max-h-80 overflow-y-auto bg-slate-950 p-3 rounded border border-slate-800 text-xs text-slate-200">${marked.parse(String(output || ''))}</div>
                     ${ts}
                 </div>
@@ -658,13 +672,15 @@
             const fileInput = document.getElementById('file-upload');
             const assignmentAtSubmit = currentAssignmentId;
 
-            let msg = `Requesting standard answer generation in **${format.toUpperCase()}** format.`;
-            if (customContext) msg += `\n\n> **Constraints**: ${customContext}`;
-            if (fileInput.files.length > 0) msg += `\n\n> **Attachment**: ${fileInput.files[0].name}`;
-            addMessage('teacher', msg);
-
             clearActivePollLoop();
             refreshPersistentContextEstimate();
+            if (currentStatusBubble && currentStatusBubble.isConnected) {
+                currentStatusBubble.remove();
+            }
+            currentStatusBubble = null;
+            if (customContext.trim()) {
+                addUserQuestionBubble(customContext);
+            }
             setStatusBubbleState("Generating...", true, "text-cyan-400");
 
             const formData = new FormData();
@@ -724,8 +740,7 @@
                         clearActivePollLoop();
                         setStatusBubbleState("Finished", false, "text-green-400");
                         if (String(currentAssignmentId) !== String(assignmentAtSubmit)) return;
-                        removeGeneratedOutputBubbles();
-                        addGeneratedOutputBubble(data.output || '');
+                        addGeneratedOutputBubble(data.output || '', null, true);
                     } else if (data.status === 'failed') {
                         clearActivePollLoop();
                         setStatusBubbleState("Failed", false, "text-red-400");
