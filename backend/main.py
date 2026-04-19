@@ -18,6 +18,7 @@ import json
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 from pypdf import PdfReader
+from backend.scripts.init_db import init_db
 
 app = FastAPI(title="AI Learning Assistant MVP Backend")
 MAX_REFERENCE_CHARS = 20000
@@ -126,6 +127,8 @@ async def startup_event():
             # Try to create tables (which connects to DB)
             print(f"🔄 Attempting to connect to database ({i+1}/{max_retries})...")
             Base.metadata.create_all(bind=engine)
+            # Ensure default demo data (teacher account/course/tutorial assignment) exists.
+            init_db()
             print("✅ Database connection successful.")
             break
         except Exception as e:

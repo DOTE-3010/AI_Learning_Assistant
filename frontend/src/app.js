@@ -236,8 +236,8 @@
                     body: JSON.stringify({ email, password: pass, confirm_password: confirm })
                 });
 
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.detail);
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.detail || data.error || "Registration failed");
 
                 msg.innerText = "Success! Switching to login...";
                 msg.classList.remove('text-red-400');
@@ -271,8 +271,8 @@
                     body: JSON.stringify({ email, password })
                 });
 
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.detail);
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.detail || data.error || "Login failed");
 
                 currentUser = {
                     email: data.email,
