@@ -18,9 +18,21 @@ import json
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 from pypdf import PdfReader
+from backend.api.auth import auth_error_handler, router as auth_router
+from backend.api.runs import router as runs_router, run_error_handler
+from backend.api.settings import router as settings_router, settings_error_handler
+from backend.core.model_settings import SettingsError
+from backend.core.runs import RunError
+from backend.core.weak_auth import AuthError
 from backend.scripts.init_db import init_db
 
 app = FastAPI(title="AI Learning Assistant MVP Backend")
+app.add_exception_handler(AuthError, auth_error_handler)
+app.add_exception_handler(RunError, run_error_handler)
+app.add_exception_handler(SettingsError, settings_error_handler)
+app.include_router(auth_router)
+app.include_router(runs_router)
+app.include_router(settings_router)
 MAX_REFERENCE_CHARS = 20000
 JOB_CONTEXT_ESTIMATES = {}
 

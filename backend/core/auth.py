@@ -5,6 +5,9 @@ import base64
 async def email_auth_middleware(request: Request, call_next):
     # Skip auth for public/health endpoints and static files
     # Also skip auth for registration AND login endpoints
+    if request.url.path.startswith("/api/"):
+        return await call_next(request)
+
     if request.url.path in ["/", "/health", "/docs", "/openapi.json", "/auth/register", "/auth/login"] or request.url.path.startswith("/ui"):
         return await call_next(request)
         

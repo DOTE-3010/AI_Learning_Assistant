@@ -1,7 +1,11 @@
 import pytest
+import os
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
+os.environ.setdefault("TESTING", "1")
+
 from backend.main import app
 from backend.models.postgres import Base as ModelBase, User, Course, Assignment, GenerationJob, AuditEvent
 from backend.app.database import Base, get_db
@@ -47,4 +51,4 @@ def client(db_session):
          patch("backend.app.database.get_db", side_effect=override_get_db), \
          TestClient(app) as c:
         yield c
-
+    app.dependency_overrides.clear()
