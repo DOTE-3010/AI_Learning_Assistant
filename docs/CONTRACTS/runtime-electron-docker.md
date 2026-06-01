@@ -63,7 +63,7 @@ It should not include Postgres or Mongo for the rebuilt local runtime.
 | Backend `/health` never ready within timeout | Stop polling, show diagnostics | `failed` with a "view logs" affordance |
 | Backend crashes after ready | Surface health-lost state | Non-destructive prompt to restart services |
 
-Shell errors are presented to the user; they are not the API error envelope (that governs backend HTTP responses).
+Shell errors are presented to the user and also written to the launching terminal/stdout-stderr stream when one exists. They are not the API error envelope (that governs backend HTTP responses).
 
 ## Launcher Scripts
 

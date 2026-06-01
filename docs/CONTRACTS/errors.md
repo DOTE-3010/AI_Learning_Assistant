@@ -85,7 +85,7 @@ Generic codes (map to the listed HTTP status on synchronous responses):
 | --- | --- | --- |
 | `validation_error` | 400 | Request failed schema/business validation; `fields` SHOULD be present |
 | `unauthorized` | 401 | Missing or invalid token |
-| `forbidden` | 403 | Authenticated but not allowed (e.g. student generation disabled) |
+| `forbidden` | 403 | Authenticated but not allowed for a future role-restricted capability |
 | `not_found` | 404 | Resource id does not exist or is not owned by the caller |
 | `conflict` | 409 | State conflict (e.g. duplicate email registration) |
 | `rate_limited` | 429 | Too many requests |

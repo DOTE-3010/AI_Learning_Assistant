@@ -1,8 +1,8 @@
-# Task: Add Intent Router And Context Builder
+# Task: Add Explicit Intent Router And Context Builder
 
 ## Goal
 
-Implement intent classification and context preparation with mockable model/search dependencies.
+Implement explicit intent routing and context preparation with mockable model/search dependencies.
 
 ## Source Context
 
@@ -15,7 +15,7 @@ Implement intent classification and context preparation with mockable model/sear
 
 ### Touch
 
-- Backend intent router.
+- Backend explicit intent router.
 - Context builder/file extraction coordinator.
 - Unit tests for routing and token estimates.
 
@@ -27,15 +27,16 @@ Implement intent classification and context preparation with mockable model/sear
 
 ## Requirements
 
-- Support explicit intents and `auto`.
+- Support only explicit artifact intents: `code_homework`, `essay_latex`, `beamer_slides`, and `cheat_sheet`.
+- Reject `auto` or missing intent with the canonical `unsupported_intent` error.
 - Produce context budget estimates consumable by the UI.
 - Parse or summarize uploaded text/PDF/notebook metadata through isolated helpers.
 - Return a structured routing decision for the run service.
 
 ## Acceptance Criteria
 
-- Explicit intent bypasses classifier.
-- `auto` intent returns one of the four supported intents in mocked tests.
+- Explicit intent routes to exactly one supported pipeline target.
+- `auto` intent is rejected; prompt-only guessing is not part of phase 1.
 - Context estimate includes utilization ratio and warning level.
 - Oversized context produces a controlled warning or rejection.
 
@@ -49,9 +50,9 @@ Implement intent classification and context preparation with mockable model/sear
 
 ## Size Justification
 
-This task spans two `docs/ARCH.md` modules (Context Builder and intent routing), which crosses one soft sizing limit. They are kept together because intent classification consumes the same extracted context and budget estimate that the builder produces; splitting them would force a throwaway interface and a half-built first slice. Single backend concern, mockable, no UI, no schema change. If implementation exceeds ~300 lines, split classifier and extractor into 007a/007b.
+This task spans two `docs/ARCH.md` modules (Context Builder and intent routing), which crosses one soft sizing limit. They are kept together because routing consumes the same extracted context and budget estimate that the builder produces. Single backend concern, mockable, no UI, no schema change. If implementation exceeds ~300 lines, split router and extractor into 007a/007b.
 
 ## Handoff Notes
 
-- Cursor should review: classifier boundaries and context estimate shape.
-- Human should decide: default behavior when classifier confidence is low.
+- Cursor should review: explicit routing boundaries and context estimate shape.
+- Human should decide: no remaining low-confidence classifier behavior; artifact type is selected by UI.

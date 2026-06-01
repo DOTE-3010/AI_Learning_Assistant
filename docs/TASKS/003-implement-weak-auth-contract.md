@@ -51,4 +51,4 @@ Rebuild local CUHK weak auth on top of SQLite with opaque tokens and future stro
 ## Handoff Notes
 
 - Cursor should review: auth boundary isolation and lack of raw token/password leakage.
-- Human should decide: whether students can run generation in the first release.
+- Human decided: students can run generation in the first release.

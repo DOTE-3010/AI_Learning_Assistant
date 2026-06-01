@@ -15,7 +15,7 @@ The product should feel like a polished consumer creative tool, not a generic ad
 ## Users
 
 - CUHK teachers using `@cuhk.edu.hk` accounts who create model answers, code solutions, slides, and course cheat sheets.
-- CUHK students using `@link.cuhk.edu.hk` accounts when student-facing workflows are enabled later.
+- CUHK students using `@link.cuhk.edu.hk` accounts who use the same artifact studio workflows as teachers in phase 1.
 - The developer/operator who needs local `.env` or equivalent secret injection for smoke testing without committing secrets.
 - Future deployment agents that may package the same product as a native app, signed macOS `.app`, or hosted server.
 
@@ -25,7 +25,7 @@ The product should feel like a polished consumer creative tool, not a generic ad
 - Generate essay-style assignments as full LaTeX source plus compiled PDF.
 - Generate presentation slides as LaTeX Beamer source plus compiled PDF.
 - Generate dense A4 cheat-sheet PDFs from many course slide PDFs and a requested page count.
-- Recognize intent before generation and route to the correct artifact pipeline.
+- Let users explicitly choose one of the four artifact modes and route to the selected pipeline.
 - Treat uploads as optional and web search as `auto`, `on`, or `off`.
 - Let users configure their own Qwen/OpenAI-compatible API key, base URL, and model, with development defaults only in untracked local files.
 - Persist local history and settings without requiring Postgres or Mongo for the desktop product.
@@ -43,9 +43,9 @@ The product should feel like a polished consumer creative tool, not a generic ad
 
 1. User signs in or registers with the weak CUHK email auth flow.
 2. User opens the desktop app and configures a model profile, or relies on a local development profile when present.
-3. User chooses or lets the app infer the desired artifact type.
+3. User chooses the desired artifact type from an explicit control.
 4. User enters the assignment/task text and optionally attaches files.
-5. The app classifies intent, estimates context budget, decides whether web search is useful, and shows a compact visual status indicator.
+5. The app estimates context budget, decides whether web search is useful, and shows a compact visual status indicator.
 6. The backend runs the selected artifact pipeline and streams stage status to the UI.
 7. The app writes a structured output folder containing source files, PDFs when applicable, metadata, citations, and logs.
 8. User reviews, opens, or regenerates the artifact.
@@ -53,6 +53,7 @@ The product should feel like a polished consumer creative tool, not a generic ad
 ## Functional Requirements
 
 - Weak auth must support registration and login for `@cuhk.edu.hk` and `@link.cuhk.edu.hk`.
+- Teacher and student roles both have full artifact generation capability in phase 1.
 - Model settings must allow user-supplied API key, base URL, and model name.
 - Default model settings must target Qwen-compatible usage and be overridable by untracked local config.
 - File upload parsing must support text, Markdown, Python, notebooks, and PDF text extraction as first-class inputs.
@@ -65,6 +66,7 @@ The product should feel like a polished consumer creative tool, not a generic ad
 
 - First screen should be the usable artifact studio, not a marketing page or admin dashboard.
 - The UI should feel refined, visual, and consumer-grade while keeping interactions direct.
+- Artifact type must be selected through an explicit UI control such as a dropdown, segmented selector, or tabs; the backend must not infer the pipeline solely from prompt text.
 - The context/token indicator should be graphical and compact by default, with exact numbers shown on hover or focused inspection.
 - Avoid course-management-heavy navigation in the primary flow.
 - Output should be visible as files and as an in-app preview where feasible.
@@ -82,9 +84,9 @@ The product should feel like a polished consumer creative tool, not a generic ad
 
 Product-observable outcomes for the first phase:
 
-- A teacher can register and log in with a CUHK email and land directly in the artifact studio.
-- A teacher can generate each artifact type -- homework code (`.py`/`.ipynb`), essay LaTeX + PDF, Beamer slides + PDF, and a dense A4 cheat sheet -- from a task and optional uploads.
-- `intent = auto` resolves to exactly one of the four pipelines and records the chosen intent in run metadata.
+- A teacher or student can register and log in with a CUHK email and land directly in the artifact studio.
+- A teacher or student can generate each artifact type -- homework code (`.py`/`.ipynb`), essay LaTeX + PDF, Beamer slides + PDF, and a dense A4 cheat sheet -- from a task and optional uploads.
+- The selected artifact type is recorded in run metadata; prompt-only intent guessing is not part of the first-phase product.
 - Every run produces an inspectable output folder with `manifest.json`, source files, and a compiled PDF when applicable; `.tex` source survives even if PDF compilation fails.
 - Web search mode (`auto`, `on`, `off`) is honored and recorded, with citations when search is used.
 - With Docker Desktop running, the Electron shell launches services and opens the workbench; without it, the shell shows a clear, actionable failure state.
@@ -104,15 +106,16 @@ Process outcomes that make the rebuild safe for rotating agents (verified by `sc
 - The user will provide real Qwen API credentials through untracked local config or in-app settings.
 - Docker Desktop is acceptable for the first packaged implementation.
 - Phase-1 code stays in `backend/`, `frontend/`, and `apps/desktop/`.
-- Student accounts can register and log in, but generation is disabled for students until a task explicitly enables a student workflow.
+- Student accounts have the same phase-1 artifact generation capability as teacher accounts.
 - Generated artifacts default to `workspace/`.
 - If Qwen defaults are not yet verified, implementation should ship placeholder defaults plus a clear setup error rather than guessing a live endpoint.
 
 ## Open Questions
 
 - Exact default Qwen model and endpoint should be verified against current official documentation before implementation.
-- Whether students get any generation capability in the first release, or remain login-only.
+- None for first-phase student generation; students have full generation capability.
 
 ## Changelog
 
 - 2026-05-31: Rebuild specification authored; split product vs. governance acceptance criteria; added uploads as a first-class input.
+- 2026-05-31: Updated phase-1 decisions: students get full generation access; artifact type must be explicitly selected rather than inferred from prompt text.

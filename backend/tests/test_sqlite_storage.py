@@ -111,3 +111,4 @@ def test_repository_inserts_and_reads_representative_metadata(tmp_path):
     assert repo.get_upload(upload["id"])["stored_path"] == "workspace/uploads/brief.pdf"
     assert repo.get_artifact(artifact["id"])["kind"] == "manifest"
     assert repo.get_citation(citation["id"])["url"] == "https://example.edu/reference"
+    assert repo.list_citations_for_run(run["id"])[0]["id"] == citation["id"]

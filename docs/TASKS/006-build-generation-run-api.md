@@ -50,4 +50,4 @@ Add the rebuilt generation run API and lifecycle state without implementing arti
 ## Handoff Notes
 
 - Cursor should review: API shape and lifecycle names.
-- Human should decide: whether student users are blocked at API layer for generation.
+- Human decided: student users are not blocked at the generation API layer in phase 1.

@@ -24,7 +24,7 @@ Route user intent to reliable artifact-specific generation instead of one generi
 ```json
 {
   "task_text": "Write a two-page essay about ...",
-  "intent": "auto",
+  "intent": "essay_latex",
   "output_preference": "pdf",
   "search_mode": "auto",
   "model_profile_id": "default-qwen",
@@ -36,6 +36,8 @@ Route user intent to reliable artifact-specific generation instead of one generi
   }
 }
 ```
+
+`intent` is selected by the UI through an explicit artifact-type control. The backend must not infer the pipeline solely from `task_text` in phase 1.
 
 ## Run Lifecycle
 
@@ -50,7 +52,7 @@ queued -> cancelled
 1. Validate request and auth.
 2. Resolve model profile.
 3. Extract uploaded context.
-4. Classify intent if `intent = auto`.
+4. Use the explicit selected intent to choose a pipeline.
 5. Decide web search if `search_mode = auto`.
 6. Estimate context budget and compress or reject if needed.
 7. Generate artifact source.
@@ -119,7 +121,7 @@ Uses the canonical envelope (`errors.md`). `POST /api/runs` validation errors ar
 
 | Scenario | Surfaced as | Code |
 | --- | --- | --- |
-| Unknown/unsupported `intent` | 400 sync | `unsupported_intent` |
+| Missing/unknown/unsupported `intent` | 400 sync | `unsupported_intent` |
 | `cheat_sheet` without `options.target_pages` | 400 sync | `validation_error` |
 | Referenced `upload_ids` missing | 400 sync | `not_found` |
 | No usable model key | run `failed` | `missing_api_key` |
@@ -130,11 +132,10 @@ Uses the canonical envelope (`errors.md`). `POST /api/runs` validation errors ar
 
 ## Validation Rules
 
-- `intent` is one of `auto`, `code_homework`, `essay_latex`, `beamer_slides`, `cheat_sheet`.
+- `intent` is one of `code_homework`, `essay_latex`, `beamer_slides`, `cheat_sheet`.
 - `search_mode` is one of `auto`, `on`, `off`.
 - `cheat_sheet` requires `options.target_pages` (positive integer).
-- A resolved (non-`auto`) intent skips classification.
-- Students are rejected at the API layer with `forbidden` until a task enables student generation.
+- Students and teachers can both create generation runs in phase 1.
 
 ## Compatibility
 
@@ -147,11 +148,11 @@ Uses the canonical envelope (`errors.md`). `POST /api/runs` validation errors ar
 
 ## Acceptance Checks
 
-- A request with `intent = auto` returns a chosen intent in run metadata.
+- A request records the explicitly selected intent in run metadata.
 - Each intent has a pipeline entrypoint with mocked model tests.
 - Failed generation records sanitized error metadata and any partial source/logs.
 - Context stats can be consumed by the UI context dial.
 
 ## Open Questions
 
-- How the `auto` classifier behaves at low confidence (default to `essay_latex` vs ask the user) — pending product decision in task 007.
+- None for prompt-based intent inference; phase 1 requires explicit artifact type selection.

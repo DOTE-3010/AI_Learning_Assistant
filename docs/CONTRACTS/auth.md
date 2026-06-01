@@ -15,7 +15,7 @@ Preserve teaching-product identity while keeping the implementation replaceable 
 | Email Pattern | Role | First-Phase Capability |
 | --- | --- | --- |
 | `*@cuhk.edu.hk` | `teacher` | Full artifact generation |
-| `*@link.cuhk.edu.hk` | `student` | Login/register preserved; generation capability may be disabled until product decision |
+| `*@link.cuhk.edu.hk` | `student` | Full artifact generation |
 
 Unknown domains must be rejected.
 
@@ -108,7 +108,7 @@ Failure cases:
 | Email already registered | 409 | `conflict` |
 | Wrong password on login | 401 | `unauthorized` |
 | Missing/expired/invalid bearer token | 401 | `unauthorized` |
-| Student calling a teacher-only capability | 403 | `forbidden` |
+| Authenticated user calling a future role-restricted capability | 403 | `forbidden` |
 
 ## Validation Rules
 
@@ -129,6 +129,7 @@ Failure cases:
 
 - CUHK teacher email can register and log in.
 - CUHK student email can register and log in.
+- Teacher and student sessions can authenticate to phase-1 generation APIs.
 - Unknown email domains are rejected with `unknown_email_domain`.
 - Protected APIs reject missing or invalid token with `unauthorized`.
 - UI and Electron never need to know how tokens are generated internally.

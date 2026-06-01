@@ -548,3 +548,8 @@ class SQLiteRepository:
 
     def get_citation(self, citation_id: str) -> dict[str, Any] | None:
         return self._get_by_id(citations, citation_id)
+
+    def list_citations_for_run(self, run_id: str) -> list[dict[str, Any]]:
+        with self.engine.connect() as connection:
+            rows = connection.execute(select(citations).where(citations.c.run_id == run_id)).all()
+            return [dict(row._mapping) for row in rows]

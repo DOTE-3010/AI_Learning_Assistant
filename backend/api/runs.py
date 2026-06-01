@@ -16,6 +16,7 @@ from backend.core.runs import (
     run_error_envelope,
 )
 from backend.core.weak_auth import current_user_from_authorization
+from backend.context.search_policy import DuckDuckGoSearchAdapter, WebSearchAdapter
 from backend.storage.sqlite import SQLiteRepository
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
@@ -25,7 +26,7 @@ class RunCreateRequest(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
     task_text: str
-    intent: str = "auto"
+    intent: str | None = None
     output_preference: str | None = None
     search_mode: str = "auto"
     model_profile_id: str | None = None
@@ -49,6 +50,10 @@ def get_run_executor() -> RunExecutor:
     return default_run_executor
 
 
+def get_run_search_adapter() -> WebSearchAdapter:
+    return DuckDuckGoSearchAdapter()
+
+
 def run_current_user(
     authorization: Annotated[str | None, Header()] = None,
     repo: SQLiteRepository = Depends(get_auth_repository),
@@ -63,6 +68,7 @@ def post_run(
     repo: SQLiteRepository = Depends(get_run_repository),
     workspace_root: str | None = Depends(get_workspace_root),
     executor: RunExecutor = Depends(get_run_executor),
+    search_adapter: WebSearchAdapter = Depends(get_run_search_adapter),
 ) -> JSONResponse:
     body = create_run(
         repo,
@@ -70,6 +76,7 @@ def post_run(
         request=request.model_dump(),
         workspace_root=workspace_root,
         executor=executor,
+        search_adapter=search_adapter,
     )
     return JSONResponse(status_code=202, content=body)
 
