@@ -1,48 +1,53 @@
 :root {
     color-scheme: dark;
 
-    --studio-bg: #141716;
-    --studio-surface: #1e2320;
-    --studio-surface-raised: #262b27;
-    --studio-surface-inset: #101311;
-    --studio-border-subtle: #374039;
-    --studio-border-strong: #596258;
+    --studio-bg: #151411;
+    --studio-bg-2: #1d1b16;
+    --studio-graphite: #23231e;
+    --studio-graphite-2: #2b2a24;
+    --studio-graphite-3: #343228;
+    --studio-ink: #f2eee4;
+    --studio-ink-soft: #c8c0ae;
+    --studio-ink-muted: #938c7e;
+    --studio-ink-faint: #6f695f;
+    --studio-paper: #f3ecda;
+    --studio-paper-2: #fff8e8;
+    --studio-paper-ink: #262118;
 
-    --studio-text: #edf1ea;
-    --studio-text-muted: #aab3a7;
-    --studio-text-faint: #737d72;
+    --studio-line: #403d34;
+    --studio-line-soft: #333026;
+    --studio-line-bright: #635d4d;
 
-    --studio-accent-teal: #48c7bd;
-    --studio-accent-blue: #6aa8ff;
-    --studio-accent-amber: #dfad4f;
-    --studio-accent-coral: #e06b62;
-    --studio-accent-plum: #b38ad8;
+    --accent-teal: #58d6c7;
+    --accent-blue: #78a8ff;
+    --accent-amber: #e0b755;
+    --accent-coral: #ed746a;
+    --accent-violet: #ba94e6;
+    --accent-green: #89d98b;
 
-    --studio-paper: #f3efe4;
-    --studio-paper-ink: #252820;
-    --studio-code-surface: #151a17;
-    --studio-code-ink: #cce7d9;
+    --context-ok: var(--accent-teal);
+    --context-warning: var(--accent-amber);
+    --context-critical: var(--accent-coral);
 
-    --context-ok: #48c7bd;
-    --context-warning: #dfad4f;
-    --context-critical: #e06b62;
+    --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: "SFMono-Regular", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
 
-    --studio-font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    --studio-font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 10px;
 
-    --studio-radius-sm: 6px;
-    --studio-radius-md: 8px;
-    --studio-radius-lg: 12px;
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
 
-    --studio-space-1: 4px;
-    --studio-space-2: 8px;
-    --studio-space-3: 12px;
-    --studio-space-4: 16px;
-    --studio-space-6: 24px;
-    --studio-space-8: 32px;
-
-    --studio-shadow-raised: 0 18px 48px rgb(0 0 0 / 28%);
-    --studio-shadow-focus: 0 0 0 3px rgb(72 199 189 / 24%);
+    --shadow-panel: 0 20px 54px rgb(0 0 0 / 28%);
+    --shadow-paper: 0 22px 60px rgb(0 0 0 / 30%);
+    --shadow-focus: 0 0 0 3px rgb(88 214 199 / 22%);
 }
 
 [data-context-state="ok"] {

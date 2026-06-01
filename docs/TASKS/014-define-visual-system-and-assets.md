@@ -28,9 +28,9 @@ Create the first concrete visual system for the consumer-grade artifact studio b
 
 ## Requirements
 
-- Define a product visual direction that avoids generic SaaS dashboard styling.
+- Define a warm editorial product visual direction that avoids generic SaaS dashboard styling, sci-fi styling, and brand-copying.
 - Create prompt briefs for the first required static/dynamic assets.
-- Define initial asset naming, color, typography, spacing, and context dial state guidance.
+- Define initial asset naming, warm color palette, serif/sans/mono typography, locale-aware CJK font fallback, spacing, and context dial state guidance.
 - Keep generated asset files optional; prompt briefs are enough if generation is deferred.
 
 ## Acceptance Criteria

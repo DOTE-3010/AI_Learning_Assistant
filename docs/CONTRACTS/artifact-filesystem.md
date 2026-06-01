@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-05-31
+Last Reviewed: 2026-06-01
 Status: Active
 -->
 
@@ -54,6 +54,7 @@ Only files relevant to a run need to exist.
 {
   "schema_version": 1,
   "run_id": "01H...",
+  "revision_of_run_id": null,
   "intent": "essay_latex",
   "created_at": "2026-05-31T00:00:00Z",
   "model": {
@@ -84,6 +85,7 @@ Only files relevant to a run need to exist.
 - Sanitize path segments.
 - Preserve original upload extension when safe.
 - Avoid overwriting by using run-specific folders.
+- Revision runs always create a new run-specific folder and may reference the prior run id in `manifest.json`; they never overwrite previous output.
 - Never write outside the configured root.
 - Keep `.tex` source even if PDF compilation fails.
 

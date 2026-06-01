@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-05-31
+Last Reviewed: 2026-06-01
 Status: Active
 -->
 
@@ -18,6 +18,24 @@ These are repo-specific rules. General programming hygiene and anything a linter
 - Use structured parsers for PDFs, notebooks, JSON, and LaTeX manifests when available.
 - Do not keep new product behavior only in chat; update SPEC, ARCH, RULES, or CONTRACTS when durable knowledge changes.
 
+## Frontend Experience Rules
+
+- The existing frontend appearance is disposable. Do not preserve old component structure, styling, placeholder art, or dashboard/chat composition unless it actively serves the new workbench contract.
+- Preserve frontend capabilities and backend-facing behavior, not old visuals. Auth, model settings, upload, search mode, run creation/status, context dial, and artifact file access should survive the rebuild.
+- Frontend appearance rebuild tasks must not touch backend code. If the existing API is awkward, adapt the frontend client first; if the API is truly insufficient, create a separate backend task and contract update.
+- Treat the workbench as a production console plus artifact preview, not as a generic chatbot, support widget, course dashboard, or form-only generator.
+- The target visual language is warm, elegant, and editorial. Prefer warm graphite, ink, parchment, clay/terracotta, sage, amber, and coral over blue-purple sci-fi palettes, neon glows, generic dark SaaS surfaces, or dashboard-heavy styling.
+- Serif typography is a product requirement, not decoration. Use a serif display/text stack for brand, pane titles, preview titles, empty states, and artifact-adjacent prose; keep dense controls in sans-serif and code/run metadata in monospace.
+- Do not copy another product's proprietary brand assets, proprietary typefaces, or exact visual identity. References such as Claude can guide warmth, restraint, and editorial typography, but the product must remain original.
+- The redesigned workbench must support English, Simplified Chinese (`zh-Hans`), and Traditional Chinese (`zh-Hant`) UI copy through a locale catalog or equivalent boundary. Do not add new hard-coded user-facing strings directly inside view code when implementing task 018.
+- Chinese UI copy must use serious written language. Controls, chips, segmented buttons, tabs, and colored state blocks must fit at 100% browser zoom in English, Simplified Chinese, and Traditional Chinese; use stable dimensions, wrapping, concise labels, or tooltips instead of overflow.
+- Keep generated artifacts preview-only in phase 1. Add copy/open/reveal/regenerate affordances, but do not add direct source editing without a new task and contract update.
+- Code previews must use a real syntax-highlighting renderer and professional code chrome: file tabs, line numbers or stable gutters when useful, copy buttons, status/error panels, and readable monospace typography.
+- PDF-producing artifacts should lead with rendered/PDF-like previews. Raw LaTeX is an inspectable secondary file view, not the default artifact experience.
+- Motion is allowed when it clarifies generation state, panel focus, preview replacement, or refinement flow. Respect reduced-motion settings and keep animations from blocking task completion.
+- Do not execute generated JavaScript, notebooks, shell commands, or arbitrary HTML in the frontend renderer unless a later sandbox contract explicitly allows it.
+- Avoid UI text that explains the product in marketing language. The interface should show the workbench through controls, status, previews, and artifacts.
+
 ## Architecture Rules
 
 - Respect the `Owns`/`Must Not Own` columns in `docs/ARCH.md`; a module reaching into another's owned surface is flagged in review.
@@ -30,9 +48,12 @@ These are repo-specific rules. General programming hygiene and anything a linter
 
 - Backend behavior needs focused tests for auth, settings, storage repositories, artifact writing, and pipeline routing.
 - Frontend UI changes need at least build verification and targeted component/interaction checks when a test framework exists.
+- Frontend experience changes that affect layout, typography, localization, or preview rendering need desktop and narrow-width visual QA, preferably through the in-app Browser or Playwright screenshots when available.
+- Workbench visual QA must include English, Simplified Chinese, and Traditional Chinese at 100% browser zoom and confirm that labels, buttons, chips, preview headers, and artifact type controls do not overflow or overlap.
 - Electron runtime tasks need explicit smoke checks for Docker detection, backend health, and window startup.
 - Pipeline tasks may mock model provider calls; real API smoke tests must use untracked credentials and must not be required in CI.
 - If a task removes legacy code, tests should verify the replacement path rather than preserving legacy behavior.
+- For task 018, frontend build and visual QA are required; backend tests are not required unless the frontend rebuild unexpectedly changes backend-facing contracts, which it should avoid.
 
 ## Security And Safety Rules
 
@@ -49,6 +70,8 @@ These are repo-specific rules. General programming hygiene and anything a linter
 - Do not add Postgres or Mongo back to the local desktop runtime without a decision record.
 - Qwen integration should use an OpenAI-compatible adapter first unless official documentation proves a native SDK is required.
 - New frontend dependencies should serve the polished workbench experience or Electron packaging; avoid dashboard-heavy component kits unless they fit the product aesthetic.
+- Syntax highlighting, PDF preview, and animation dependencies are acceptable when they replace fragile homegrown renderers and stay inside the frontend boundary.
+- Do not add backend dependencies to satisfy frontend appearance work.
 - New LaTeX or PDF tooling must work inside the Docker runtime.
 
 ## Contract Rules

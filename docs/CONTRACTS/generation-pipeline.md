@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-05-31
+Last Reviewed: 2026-06-01
 Status: Active
 -->
 
@@ -28,6 +28,7 @@ Route user intent to reliable artifact-specific generation instead of one generi
   "output_preference": "pdf",
   "search_mode": "auto",
   "model_profile_id": "default-qwen",
+  "revision_of_run_id": null,
   "upload_ids": ["upload-1"],
   "options": {
     "target_pages": 2,
@@ -41,6 +42,8 @@ Route user intent to reliable artifact-specific generation instead of one generi
 
 For `code_homework`, `output_preference` defaults to `py` and may be either `py` or `ipynb`. The backend may normalize UI-friendly aliases such as `.py`, `python`, `script`, `.ipynb`, `notebook`, or `jupyter` into those canonical values. Unsupported code output preferences fail request validation with `validation_error`.
 
+`revision_of_run_id` is optional. When present, the new run is a follow-up to a prior run owned by the same authenticated user. The backend may use the prior manifest, generated source, and output metadata as context for the revision, but the new run still produces its own run folder and manifest.
+
 ## Run Lifecycle
 
 ```text
@@ -52,15 +55,16 @@ queued -> cancelled
 ## Stages
 
 1. Validate request and auth.
-2. Resolve model profile.
-3. Extract uploaded context.
-4. Use the explicit selected intent to choose a pipeline.
-5. Decide web search if `search_mode = auto`.
-6. Estimate context budget and compress or reject if needed.
-7. Generate artifact source.
-8. Validate/repair source when feasible.
-9. Compile PDF or notebook when applicable.
-10. Write manifest, artifacts, citations, and logs.
+2. Resolve revision context if `revision_of_run_id` is present.
+3. Resolve model profile.
+4. Extract uploaded context.
+5. Use the explicit selected intent to choose a pipeline.
+6. Decide web search if `search_mode = auto`.
+7. Estimate context budget and compress or reject if needed.
+8. Generate artifact source.
+9. Validate/repair source when feasible.
+10. Compile PDF or notebook when applicable.
+11. Write manifest, artifacts, citations, and logs.
 
 ## Status Event Shape
 
@@ -122,6 +126,7 @@ Search citations must be stored in metadata and manifest when used.
 - Code generation writes either `solution.py` or `solution.ipynb`; notebook output must validate as nbformat JSON.
 - LaTeX generation should produce full compilable documents for essay, slides, and cheat-sheet intents.
 - Cheat-sheet layout may use aggressive typography, columns, and small fonts, but must target the requested A4 page count.
+- Revision runs must be independent persisted runs. They may reference prior run metadata and files, but must not overwrite the prior run folder.
 - Model calls must be mockable in tests.
 
 ## Errors
@@ -134,6 +139,7 @@ Uses the canonical envelope (`errors.md`). `POST /api/runs` validation errors ar
 | Unsupported `code_homework.output_preference` | 400 sync | `validation_error` |
 | `cheat_sheet` without `options.target_pages` | 400 sync | `validation_error` |
 | Referenced `upload_ids` missing | 400 sync | `not_found` |
+| `revision_of_run_id` missing or not owned by caller | 404 sync | `not_found` |
 | No usable model key | run `failed` | `missing_api_key` |
 | Provider rejects key / unreachable | run `failed` | `provider_auth_failed` / `provider_unavailable` |
 | Context too large after compression | run `failed` | `context_overflow` |
@@ -146,11 +152,12 @@ Uses the canonical envelope (`errors.md`). `POST /api/runs` validation errors ar
 - `search_mode` is one of `auto`, `on`, `off`.
 - `code_homework.output_preference` is `py` or `ipynb` after normalization.
 - `cheat_sheet` requires `options.target_pages` (positive integer).
+- `revision_of_run_id`, when present, references a run owned by the authenticated user.
 - Students and teachers can both create generation runs in phase 1.
 
 ## Compatibility
 
-- Additive: new optional `options.*`, new status `stage` strings, new `context` fields.
+- Additive: new optional request fields, new optional `options.*`, new status `stage` strings, new `context` fields.
 - Breaking (ADR required): adding/removing an intent, changing the run lifecycle states, or changing the status event envelope.
 
 ## Versioning

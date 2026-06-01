@@ -1,0 +1,12 @@
+---
+description: Project governance for AI Learning Assistant
+alwaysApply: true
+---
+
+`AGENTS.md` is canonical. Read it before implementation, then identify the active task in `docs/TASKS/` and the contracts it cites.
+
+For frontend work, also read `docs/CONTRACTS/ui-workbench.md` and `docs/CONTRACTS/visual-assets.md`. The phase-1 UI is a preview-only conversational artifact workbench: production console beside a persistent artifact preview panel, with explicit artifact type selection and professional code/PDF previews.
+
+For task 018, treat old frontend appearance, layout, component hierarchy, and visual assets as disposable. Preserve backend-facing behavior and do not change backend code or contracts for appearance work.
+
+Keep changes bounded to the active task. If implementation needs to cross task scope or change a contract, update the governance asset first or ask the human.

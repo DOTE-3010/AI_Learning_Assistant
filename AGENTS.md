@@ -1,5 +1,5 @@
 Status: Active
-Last Reviewed: 2026-05-31
+Last Reviewed: 2026-06-01
 
 # Agent Instructions
 
@@ -20,6 +20,10 @@ Start with these files before implementing:
 - Replace the default model path with Qwen through an OpenAI-compatible provider abstraction. Do not hard-code development API keys.
 - Use SQLite as the local default datastore. Generated files belong on disk; SQLite stores metadata and status.
 - First packaged target: Electron desktop shell plus Docker Desktop backend/runtime. Native no-host-dependency apps, signed macOS `.app`, and server deployments are future targets that must stay portable.
+- Frontend direction: the authenticated product surface should feel like a conversational artifact workbench, with a production console beside a persistent preview panel. It should support polished preview-only rendering for code, notebooks, PDFs, Beamer slides, and cheat sheets.
+- Visual direction: the workbench should feel warm, elegant, and editorial rather than sci-fi or dashboard-like. Use serif-led typography, warm graphite/ink surfaces, parchment/ivory artifact previews, clay/terracotta primary accents, restrained sage/amber/coral state color, and purposeful motion. Claude-like warmth and restraint are acceptable references, but do not copy proprietary brand assets, proprietary typefaces, exact palettes, or distinctive layouts.
+- Locale direction: the workbench must support English, Simplified Chinese (`zh-Hans`), and Traditional Chinese (`zh-Hant`) UI copy through a locale catalog or equivalent boundary. Chinese copy should use serious written language and fit controls at 100% browser zoom without overflow.
+- Current frontend appearance is disposable. Rebuild frontend visuals and component structure freely when tasked, but preserve backend contracts and phase-1 capabilities.
 
 ## Commands
 
@@ -58,6 +62,9 @@ Do not create `apps/web/` or `services/api/` in phase 1 unless a new decision re
 - Keep implementation slices small enough for one agent pass and one review pass.
 - Prefer contracts and tests before broad rewrites.
 - Use repo-native patterns only when they still match the new architecture; legacy course/assignment/chat structure is not authoritative.
+- Do not treat chat UI as a generic support widget. For frontend tasks, follow `docs/CONTRACTS/ui-workbench.md`: production console, side artifact preview, explicit artifact type, preview-only outputs, professional code/PDF renderers, and purposeful motion.
+- For task 018, do not touch backend code or backend contracts. Adapt the frontend to existing documented APIs and record backend gaps separately.
+- For task 018, partial frontend refactor is acceptable: preserve working API/auth/model/upload/run-status logic, then rebuild visual shell, design tokens, locale catalog, production console, preview surfaces, and motion to match `docs/CONTRACTS/ui-workbench.md`, `docs/CONTRACTS/visual-assets.md`, `docs/ASSET_PROMPTS/`, and the generated assets under `frontend/src/assets/`.
 - Large local cleanup is allowed when scoped by a task, because remote `archived` branches preserve the old MVP.
 
 ## Handoff Notes

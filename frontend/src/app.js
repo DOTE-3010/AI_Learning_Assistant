@@ -16,57 +16,83 @@ const DEFAULT_MODEL_FORM = {
 
 const intents = [
     {
-        id: "auto",
-        label: "Auto",
-        short: "A",
-        family: "Router",
-        outputs: ["manifest.json"],
-        accent: "plum",
-    },
-    {
         id: "code_homework",
         label: "Code",
         short: "PY",
-        family: "Homework",
+        title: "Homework code",
+        description: "Script or notebook answer",
         outputs: ["solution.py", "solution.ipynb"],
+        stages: ["route", "context", "generate", "validate"],
         accent: "teal",
     },
     {
         id: "essay_latex",
         label: "Essay",
         short: "TEX",
-        family: "LaTeX report",
-        outputs: ["main.tex", "main.pdf"],
+        title: "LaTeX essay",
+        description: "Source plus compiled PDF",
+        outputs: ["main.pdf", "main.tex"],
+        stages: ["route", "context", "write", "compile"],
         accent: "blue",
     },
     {
         id: "beamer_slides",
         label: "Slides",
         short: "PDF",
-        family: "Beamer deck",
-        outputs: ["slides.tex", "slides.pdf"],
+        title: "Beamer deck",
+        description: "Slide source plus PDF",
+        outputs: ["slides.pdf", "slides.tex"],
+        stages: ["route", "outline", "write", "compile"],
         accent: "amber",
     },
     {
         id: "cheat_sheet",
         label: "Cheat sheet",
         short: "A4",
-        family: "Dense study sheet",
-        outputs: ["cheat-sheet.tex", "cheat-sheet.pdf"],
+        title: "Dense A4 sheet",
+        description: "Course compression PDF",
+        outputs: ["cheat-sheet.pdf", "cheat-sheet.tex"],
+        stages: ["ingest", "compress", "layout", "compile"],
         accent: "coral",
     },
 ];
+
+const stageVocabulary = {
+    compose: "Compose",
+    choose_intent: "Select artifact",
+    validate_request: "Validate",
+    upload_inputs: "Upload inputs",
+    submit_run: "Submit run",
+    queued: "Queued",
+    running: "Running",
+    resolve_model: "Model",
+    extract_context: "Context",
+    decide_search: "Search",
+    generate_source: "Generate",
+    validate_source: "Validate",
+    compile_pdf: "Compile PDF",
+    write_manifest: "Manifest",
+    poll_status: "Refresh",
+    output_files: "Output files",
+};
 
 const state = {
     authMode: "login",
     token: localStorage.getItem(TOKEN_KEY) || "",
     user: readStoredUser(),
+    activePane: "console",
     intent: "code_homework",
+    outputPreference: "py",
     searchMode: "auto",
     targetPages: 2,
     taskText: "",
+    refinementText: "",
     files: [],
+    fieldErrors: {},
     context: null,
+    previewTab: "primary",
+    activeFile: "solution.py",
+    notice: { message: "", tone: "neutral" },
     model: {
         editorOpen: false,
         profiles: [],
@@ -79,13 +105,17 @@ const state = {
     },
     authMessage: "",
     authTone: "neutral",
-    run: {
-        id: "",
-        status: "idle",
-        stage: "compose",
-        message: "Ready",
-        error: null,
-    },
+    run: initialRunState(),
+    history: [
+        {
+            id: "session-ready",
+            kind: "system",
+            status: "idle",
+            title: "Console ready",
+            message: "Choose an artifact type, add source material, then run.",
+            timestamp: new Date().toISOString(),
+        },
+    ],
 };
 
 const app = document.getElementById("app");
@@ -95,6 +125,7 @@ init();
 
 function init() {
     refreshLocalContext();
+    normalizeActiveFile();
     render();
     if (state.token) {
         refreshCurrentUser();
@@ -118,10 +149,14 @@ async function refreshCurrentUser() {
 function render() {
     const isAuthenticated = Boolean(state.user && state.token);
     app.innerHTML = `
-        <div class="studio-app ${isAuthenticated ? "" : "is-locked"}">
+        <div class="studio-app ${isAuthenticated ? "" : "is-locked"}" data-mobile-pane="${escapeHtml(state.activePane)}">
             ${renderHeader(isAuthenticated)}
             <main class="studio-main">
-                ${renderWorkbench(isAuthenticated)}
+                ${renderMobilePaneSwitch()}
+                <section class="workbench-grid" aria-label="Conversational artifact workbench">
+                    ${renderConsolePane(isAuthenticated)}
+                    ${renderPreviewPane(isAuthenticated)}
+                </section>
                 ${isAuthenticated ? "" : renderAuthPanel()}
                 ${isAuthenticated && state.model.editorOpen ? renderModelSettingsPanel() : ""}
             </main>
@@ -135,95 +170,87 @@ function renderHeader(isAuthenticated) {
     return `
         <header class="studio-header">
             <div class="brand-lockup" aria-label="AI Learning Assistant">
-                <div class="brand-mark">AI</div>
+                <div class="brand-mark" aria-hidden="true">AL</div>
                 <div>
                     <div class="brand-title">AI Learning Assistant</div>
-                    <div class="brand-subtitle">Artifact Studio</div>
+                    <div class="brand-subtitle">CUHK artifact studio</div>
                 </div>
             </div>
             <div class="header-actions">
-                <div class="runtime-pill">
+                <div class="runtime-chip">
                     <span class="runtime-dot"></span>
-                    <span>Local runtime</span>
+                    <span>Docker backend</span>
                 </div>
                 ${
                     isAuthenticated
-                        ? `<button class="user-chip" type="button" data-action="logout">
+                        ? `<button class="identity-chip" type="button" data-action="logout">
                             <span>${escapeHtml(state.user.email)}</span>
                             <strong>${escapeHtml(state.user.role)}</strong>
                         </button>`
-                        : `<span class="user-chip is-muted">CUHK session</span>`
+                        : `<span class="identity-chip is-muted">CUHK session required</span>`
                 }
             </div>
         </header>
     `;
 }
 
-function renderWorkbench(isAuthenticated) {
-    const selectedIntent = getSelectedIntent();
+function renderMobilePaneSwitch() {
     return `
-        <section class="workbench-shell" aria-label="Artifact studio workbench">
-            <section class="composer-panel studio-panel">
-                <div class="panel-kicker">Compose</div>
-                <label class="field-label" for="task-text">Task brief</label>
-                <textarea id="task-text" class="task-input" rows="9" placeholder="Describe the assignment, deliverable, constraints, and source material.">${escapeHtml(state.taskText)}</textarea>
+        <nav class="mobile-pane-switch" aria-label="Workbench panes">
+            <button type="button" class="${state.activePane === "console" ? "is-active" : ""}" data-pane="console">Console</button>
+            <button type="button" class="${state.activePane === "preview" ? "is-active" : ""}" data-pane="preview">Preview</button>
+        </nav>
+    `;
+}
 
-                <div class="control-block">
-                    <div class="field-label">Artifact type</div>
-                    <div class="intent-grid" role="radiogroup" aria-label="Artifact type">
-                        ${intents.map(renderIntentButton).join("")}
-                    </div>
+function renderConsolePane(isAuthenticated) {
+    return `
+        <section class="console-pane workbench-pane" aria-label="Production console">
+            <div class="pane-head">
+                <div>
+                    <div class="pane-kicker">Production console</div>
+                    <h1>Generate artifacts</h1>
                 </div>
+                <button class="tool-button" type="button" data-action="open-model-settings" ${isAuthenticated ? "" : "disabled"}>
+                    <span class="tool-glyph" aria-hidden="true"></span>
+                    <span>${escapeHtml(modelButtonLabel())}</span>
+                </button>
+            </div>
 
-                <div class="composer-row">
-                    <label class="compact-field">
-                        <span class="field-label">Search</span>
-                        <div class="segmented-control" data-control="search-mode">
-                            ${["auto", "on", "off"].map((mode) => `
-                                <button type="button" class="${state.searchMode === mode ? "is-active" : ""}" data-search-mode="${mode}">
-                                    ${mode}
-                                </button>
-                            `).join("")}
-                        </div>
-                    </label>
-                    <label class="compact-field">
-                        <span class="field-label">Model</span>
-                        <button class="model-select" type="button" data-action="open-model-settings">
-                            <span>${escapeHtml(modelButtonLabel())}</span>
-                            <span class="chevron" aria-hidden="true">v</span>
-                        </button>
-                    </label>
-                </div>
-
-                ${state.intent === "cheat_sheet" ? renderCheatSheetOptions() : ""}
-
-                <div class="run-row">
-                    <button class="run-button" type="button" data-action="run" ${canSubmitRun(isAuthenticated) ? "" : "disabled"}>
-                        <span class="button-glyph"></span>
-                        <span>Run artifact</span>
-                    </button>
-                    <div class="run-note">${escapeHtml(runNote(isAuthenticated))}</div>
-                </div>
-            </section>
-
-            <section class="stage-panel studio-panel">
-                <div class="stage-toolbar">
-                    <div>
-                        <div class="panel-kicker">Preview</div>
-                        <h1>${escapeHtml(selectedIntent.family)}</h1>
-                    </div>
-                    <div class="stage-badge">${escapeHtml(selectedIntent.short)}</div>
-                </div>
-                ${renderArtifactPreview(selectedIntent)}
-                ${renderUploadArea()}
-            </section>
-
-            <aside class="status-panel studio-panel">
-                <div class="panel-kicker">Run state</div>
+            <div class="console-utility-row">
                 ${renderContextDial()}
-                ${renderRunStatus()}
-                ${renderOutputList(selectedIntent)}
-            </aside>
+                ${renderSearchModeControl()}
+            </div>
+
+            <div class="artifact-type-bar" role="radiogroup" aria-label="Artifact type">
+                ${intents.map(renderIntentButton).join("")}
+            </div>
+
+            <section class="command-composer" aria-label="Generation command">
+                <div class="composer-head">
+                    <label class="field-label" for="task-text">Brief</label>
+                    <span>${escapeHtml(getSelectedIntent().description)}</span>
+                </div>
+                <textarea
+                    id="task-text"
+                    class="task-input ${state.fieldErrors.task_text ? "has-error" : ""}"
+                    rows="8"
+                    placeholder="Paste the assignment brief, constraints, marking expectations, and any output notes."
+                >${escapeHtml(state.taskText)}</textarea>
+                ${state.fieldErrors.task_text ? `<div class="field-error">${escapeHtml(state.fieldErrors.task_text)}</div>` : ""}
+                ${renderIntentOptions()}
+                ${renderUploadArea()}
+                <div class="composer-actions">
+                    <button class="run-button" type="button" data-action="run" ${canSubmitRun(isAuthenticated) ? "" : "disabled"}>
+                        <span class="run-glyph" aria-hidden="true"></span>
+                        <span>${runButtonLabel()}</span>
+                    </button>
+                    <span class="run-note">${escapeHtml(runNote(isAuthenticated))}</span>
+                </div>
+            </section>
+
+            ${renderRefinementComposer(isAuthenticated)}
+            ${renderCommandHistory()}
         </section>
     `;
 }
@@ -231,95 +258,485 @@ function renderWorkbench(isAuthenticated) {
 function renderIntentButton(intent) {
     const active = state.intent === intent.id;
     return `
-        <button type="button" class="intent-button ${active ? "is-active" : ""}" data-intent="${intent.id}" data-accent="${intent.accent}" role="radio" aria-checked="${active}">
-            <span class="intent-short">${escapeHtml(intent.short)}</span>
+        <button
+            type="button"
+            class="artifact-type ${active ? "is-active" : ""}"
+            data-intent="${intent.id}"
+            data-accent="${intent.accent}"
+            role="radio"
+            aria-checked="${active}"
+        >
+            <span class="artifact-short">${escapeHtml(intent.short)}</span>
             <span>
                 <strong>${escapeHtml(intent.label)}</strong>
-                <small>${escapeHtml(intent.family)}</small>
+                <small>${escapeHtml(intent.title)}</small>
             </span>
         </button>
     `;
 }
 
-function renderCheatSheetOptions() {
+function renderSearchModeControl() {
     return `
-        <div class="option-strip">
-            <label class="stepper-field">
-                <span class="field-label">Target pages</span>
-                <input id="target-pages" type="number" min="1" max="12" value="${state.targetPages}">
-            </label>
-            <div class="paper-pill">A4</div>
-            <div class="paper-pill">Dense</div>
-        </div>
-    `;
-}
-
-function renderArtifactPreview(intent) {
-    const previewClass = `artifact-preview is-${intent.id.replace("_", "-")}`;
-    return `
-        <div class="${previewClass}" data-preview="${intent.id}">
-            <div class="preview-source-rail">
-                <span></span><span></span><span></span>
-            </div>
-            <div class="preview-canvas">
-                ${previewMarkup(intent.id)}
+        <div class="search-control">
+            <span class="field-label">Search</span>
+            <div class="segmented-control" data-control="search-mode">
+                ${["auto", "on", "off"].map((mode) => `
+                    <button type="button" class="${state.searchMode === mode ? "is-active" : ""}" data-search-mode="${mode}">
+                        ${mode}
+                    </button>
+                `).join("")}
             </div>
         </div>
     `;
 }
 
-function previewMarkup(intentId) {
-    if (intentId === "code_homework") {
+function renderIntentOptions() {
+    if (state.intent === "code_homework") {
         return `
-            <div class="code-window">
-                <span class="code-line wide"></span>
-                <span class="code-line"></span>
-                <span class="code-line short"></span>
-                <span class="code-line accent"></span>
-                <span class="code-line"></span>
-            </div>
-        `;
-    }
-    if (intentId === "beamer_slides") {
-        return `
-            <div class="slide-stack">
-                <div class="slide-card"></div>
-                <div class="slide-card is-front">
-                    <span></span><span></span><span></span>
+            <div class="option-row">
+                <div>
+                    <span class="field-label">Output</span>
+                    <div class="segmented-control is-tight" data-control="code-output">
+                        <button type="button" class="${state.outputPreference === "py" ? "is-active" : ""}" data-output-preference="py">.py</button>
+                        <button type="button" class="${state.outputPreference === "ipynb" ? "is-active" : ""}" data-output-preference="ipynb">.ipynb</button>
+                    </div>
                 </div>
+                <div class="status-capsule">Preview only</div>
             </div>
         `;
     }
-    if (intentId === "cheat_sheet") {
+    if (state.intent === "cheat_sheet") {
         return `
-            <div class="sheet-grid">
-                ${Array.from({ length: 18 }, (_, index) => `<span class="${index % 5 === 0 ? "is-strong" : ""}"></span>`).join("")}
+            <div class="option-row">
+                <label class="number-field">
+                    <span class="field-label">Target pages</span>
+                    <input id="target-pages" class="${state.fieldErrors.target_pages ? "has-error" : ""}" type="number" min="1" max="12" value="${state.targetPages}">
+                </label>
+                <div class="status-capsule">A4</div>
+                <div class="status-capsule">Dense</div>
             </div>
-        `;
-    }
-    if (intentId === "auto") {
-        return `
-            <div class="routing-map">
-                <span></span><span></span><span></span><span></span>
-            </div>
+            ${state.fieldErrors.target_pages ? `<div class="field-error">${escapeHtml(state.fieldErrors.target_pages)}</div>` : ""}
         `;
     }
     return `
-        <div class="paper-preview">
-            <span class="paper-title"></span>
-            <span></span><span></span><span></span><span class="paper-rule"></span><span></span>
+        <div class="option-row">
+            <div class="status-capsule">PDF first</div>
+            <div class="status-capsule">Source kept</div>
         </div>
     `;
 }
 
 function renderUploadArea() {
+    const selectedText = state.files.length
+        ? `${state.files.length} reference file${state.files.length === 1 ? "" : "s"} selected`
+        : "Drop or choose reference files";
     return `
-        <div class="upload-zone" data-action="open-file-picker" role="button" tabindex="0" aria-label="Choose reference files">
-            <input id="file-input" type="file" multiple>
-            <div class="upload-glyph"></div>
+        <section class="upload-module" aria-label="Reference files">
+            <div class="upload-zone" data-action="open-file-picker" role="button" tabindex="0">
+                <input id="file-input" type="file" multiple>
+                <span class="upload-mark" aria-hidden="true"></span>
+                <div>
+                    <strong>Reference files</strong>
+                    <span>${escapeHtml(selectedText)}</span>
+                </div>
+            </div>
+            ${state.files.length ? renderSelectedFiles() : ""}
+            ${state.notice.message ? `<div class="inline-notice is-${state.notice.tone}">${escapeHtml(state.notice.message)}</div>` : ""}
+        </section>
+    `;
+}
+
+function renderSelectedFiles() {
+    return `
+        <div class="selected-files">
+            ${state.files.map((item) => `
+                <div class="selected-file" data-file-key="${escapeHtml(item.key)}">
+                    <span class="file-kind">${escapeHtml(fileKind(item.name))}</span>
+                    <span class="file-name">${escapeHtml(item.name)}</span>
+                    <small>${escapeHtml(uploadStatusLabel(item))}</small>
+                    <button class="icon-action" type="button" data-remove-file="${escapeHtml(item.key)}" aria-label="Remove ${escapeHtml(item.name)}">x</button>
+                </div>
+            `).join("")}
+        </div>
+    `;
+}
+
+function renderRefinementComposer(isAuthenticated) {
+    const disabled = !isAuthenticated || !state.run.id || state.run.status === "queued" || state.run.status === "running";
+    return `
+        <section class="refinement-composer" aria-label="Follow-up refinement">
+            <div class="composer-head">
+                <label class="field-label" for="refinement-text">Follow-up</label>
+                <span>${state.run.id ? `Revision source ${shortRunId(state.run.id)}` : "Available after first run"}</span>
+            </div>
+            <textarea
+                id="refinement-text"
+                rows="3"
+                placeholder="Ask for a tighter proof, more comments, fewer slides, or a different structure."
+                ${disabled ? "disabled" : ""}
+            >${escapeHtml(state.refinementText)}</textarea>
+            <div class="composer-actions">
+                <button class="secondary-action" type="button" data-action="run-refinement" ${disabled || !state.refinementText.trim() ? "disabled" : ""}>
+                    New revision run
+                </button>
+                <span class="run-note">Creates a new run; generated files stay source-of-truth on disk.</span>
+            </div>
+        </section>
+    `;
+}
+
+function renderCommandHistory() {
+    return `
+        <section class="history-stream" aria-label="Run history">
+            <div class="history-head">
+                <span>Run history</span>
+                <small>${state.history.length} entries</small>
+            </div>
+            <div class="history-list">
+                ${state.history.slice().reverse().map(renderHistoryItem).join("")}
+            </div>
+        </section>
+    `;
+}
+
+function renderHistoryItem(item) {
+    return `
+        <article class="history-item is-${escapeHtml(item.kind)}" data-status="${escapeHtml(item.status || "idle")}">
+            <div class="history-marker"></div>
+            <div class="history-content">
+                <div class="history-title">
+                    <strong>${escapeHtml(item.title)}</strong>
+                    <span>${escapeHtml(formatHistoryTime(item.timestamp))}</span>
+                </div>
+                <p>${escapeHtml(item.message)}</p>
+                ${
+                    item.meta
+                        ? `<div class="history-meta">${escapeHtml(item.meta)}</div>`
+                        : ""
+                }
+            </div>
+        </article>
+    `;
+}
+
+function renderPreviewPane(isAuthenticated) {
+    const intent = getSelectedIntent();
+    return `
+        <section class="preview-pane workbench-pane" aria-label="Artifact preview">
+            <div class="preview-header">
+                <div>
+                    <div class="pane-kicker">Artifact preview</div>
+                    <h2>${escapeHtml(intent.title)}</h2>
+                </div>
+                <div class="preview-actions">
+                    <button class="secondary-action" type="button" data-action="copy-current-path" ${state.run.outputRoot ? "" : "disabled"}>Copy path</button>
+                    <button class="secondary-action" type="button" data-action="reveal-run" ${state.run.outputRoot ? "" : "disabled"}>Reveal</button>
+                    <button class="secondary-action" type="button" data-action="regenerate" ${canSubmitRun(isAuthenticated) ? "" : "disabled"}>Regenerate</button>
+                </div>
+            </div>
+
+            <div class="preview-status-strip">
+                ${renderRunStatusPill()}
+                ${renderStageTrack(intent)}
+            </div>
+
+            <div class="preview-shell" data-intent="${escapeHtml(state.intent)}" data-run-status="${escapeHtml(state.run.status)}">
+                ${renderPreviewTabs()}
+                <div class="preview-body">
+                    ${renderPreviewBody()}
+                </div>
+            </div>
+
+            ${renderOutputFiles()}
+        </section>
+    `;
+}
+
+function renderRunStatusPill() {
+    return `
+        <div class="run-status-pill" data-status="${escapeHtml(state.run.status)}">
+            <span class="status-light"></span>
             <div>
-                <strong>Reference files</strong>
-                <span>${fileLabel()}</span>
+                <strong>${escapeHtml(state.run.status)}</strong>
+                <span>${escapeHtml(stageLabel(state.run.stage))}</span>
+            </div>
+        </div>
+        <p class="run-message">${escapeHtml(state.run.error || state.run.message)}</p>
+    `;
+}
+
+function renderStageTrack(intent) {
+    const current = normalizedStageBucket(state.run.stage, state.run.status);
+    return `
+        <div class="stage-track" aria-label="Generation stages">
+            ${intent.stages.map((stage) => `
+                <span class="${stage === current ? "is-active" : ""}">${escapeHtml(stage)}</span>
+            `).join("")}
+        </div>
+    `;
+}
+
+function renderPreviewTabs() {
+    const tabs = getPreviewTabs();
+    return `
+        <div class="preview-tabs" role="tablist" aria-label="Preview tabs">
+            ${tabs.map((tab) => `
+                <button type="button" role="tab" class="${state.previewTab === tab.id ? "is-active" : ""}" data-preview-tab="${tab.id}">
+                    ${escapeHtml(tab.label)}
+                </button>
+            `).join("")}
+        </div>
+    `;
+}
+
+function renderPreviewBody() {
+    if (state.previewTab === "source") return renderSourceInspection();
+    if (state.previewTab === "logs") return renderLogInspection();
+    if (state.previewTab === "manifest") return renderManifestInspection();
+    if (state.intent === "code_homework") return renderCodePreview();
+    if (state.intent === "essay_latex") return renderEssayPreview();
+    if (state.intent === "beamer_slides") return renderSlidesPreview();
+    return renderCheatSheetPreview();
+}
+
+function renderCodePreview() {
+    if (state.outputPreference === "ipynb") {
+        return renderNotebookPreview();
+    }
+    const files = getCodeFiles();
+    return `
+        <div class="code-product">
+            <div class="code-tabs">
+                ${files.map((file) => `
+                    <button type="button" class="${state.activeFile === file ? "is-active" : ""}" data-active-file="${escapeHtml(file)}">
+                        ${escapeHtml(file)}
+                    </button>
+                `).join("")}
+                <button class="copy-code-button" type="button" data-action="copy-visible-preview">Copy visible</button>
+            </div>
+            <div class="code-editor" aria-label="Syntax highlighted code preview">
+                ${renderHighlightedCode(codePreviewText(state.activeFile))}
+            </div>
+            <div class="terminal-strip" data-status="${escapeHtml(state.run.status)}">
+                <span>${escapeHtml(codeStatusTitle())}</span>
+                <strong>${escapeHtml(codeStatusDetail())}</strong>
+            </div>
+        </div>
+    `;
+}
+
+function renderNotebookPreview() {
+    return `
+        <div class="notebook-product">
+            <div class="notebook-toolbar">
+                <span>solution.ipynb</span>
+                <button class="copy-code-button" type="button" data-action="copy-visible-preview">Copy visible</button>
+            </div>
+            <div class="notebook-cell is-markdown">
+                <span class="cell-label">Markdown</span>
+                <h3>Approach</h3>
+                <p>State the algorithm, edge cases, and complexity before the implementation cell.</p>
+            </div>
+            <div class="notebook-cell">
+                <span class="cell-label">Code</span>
+                <div class="code-editor is-compact">${renderHighlightedCode(notebookCodeText())}</div>
+            </div>
+            <div class="terminal-strip" data-status="${escapeHtml(state.run.status)}">
+                <span>Notebook validation</span>
+                <strong>${state.run.status === "failed" ? "Preserved for inspection" : "Preview-only, no execution"}</strong>
+            </div>
+        </div>
+    `;
+}
+
+function renderEssayPreview() {
+    return `
+        <div class="pdf-stage">
+            <div class="page-rail">
+                <span class="is-active">1</span>
+                <span>2</span>
+                <span>3</span>
+            </div>
+            <article class="pdf-page essay-page">
+                <header>
+                    <span class="paper-overline">LaTeX report</span>
+                    <h3>${escapeHtml(briefTitle("Generated Essay"))}</h3>
+                    <div class="paper-rule"></div>
+                </header>
+                <section>
+                    <h4>Introduction</h4>
+                    <p></p><p class="short"></p>
+                    <h4>Argument</h4>
+                    <p></p><p></p><p class="shorter"></p>
+                    <h4>References</h4>
+                    <p class="short"></p>
+                </section>
+            </article>
+            ${renderPreviewOverlay("PDF renderer", "Pages are shown as PDF-like preview until artifact bytes are exposed.")}
+        </div>
+    `;
+}
+
+function renderSlidesPreview() {
+    return `
+        <div class="slide-product">
+            <aside class="slide-thumbs" aria-label="Slide thumbnails">
+                <span class="is-active"></span>
+                <span></span>
+                <span></span>
+                <span></span>
+            </aside>
+            <div class="slide-canvas">
+                <div class="slide-page">
+                    <span class="slide-kicker">Beamer deck</span>
+                    <h3>${escapeHtml(briefTitle("Course Presentation"))}</h3>
+                    <div class="slide-columns">
+                        <span></span><span></span><span></span><span></span>
+                    </div>
+                    <div class="slide-footer">Slide 1 / 12</div>
+                </div>
+            </div>
+            ${renderPreviewOverlay("Deck preview", "Compiled PDF pages will replace this deck skeleton when a file endpoint is available.")}
+        </div>
+    `;
+}
+
+function renderCheatSheetPreview() {
+    const pageCount = Math.max(1, Math.round(Number(state.targetPages) || 1));
+    return `
+        <div class="cheat-product">
+            <div class="cheat-toolbar">
+                <span>A4 dense layout</span>
+                <strong>${pageCount} page${pageCount === 1 ? "" : "s"}</strong>
+            </div>
+            <div class="cheat-pages">
+                ${Array.from({ length: Math.min(pageCount, 4) }, (_, pageIndex) => `
+                    <article class="cheat-page">
+                        <header>
+                            <span></span><span></span>
+                        </header>
+                        <div class="cheat-grid">
+                            ${Array.from({ length: 36 }, (_, index) => `
+                                <i class="${(index + pageIndex) % 7 === 0 ? "is-strong" : ""}"></i>
+                            `).join("")}
+                        </div>
+                    </article>
+                `).join("")}
+            </div>
+            ${renderPreviewOverlay("Sheet preview", "Dense PDF-like pages stay visible while generation runs.")}
+        </div>
+    `;
+}
+
+function renderPreviewOverlay(title, message) {
+    if (state.run.status === "succeeded" && state.run.outputRoot) return "";
+    if (state.run.status === "failed") {
+        return `
+            <div class="preview-overlay is-error">
+                <strong>${escapeHtml(state.run.errorCode || "Run failed")}</strong>
+                <span>${escapeHtml(state.run.error || "Any preserved source or logs remain available from the run folder.")}</span>
+            </div>
+        `;
+    }
+    if (state.run.status === "queued" || state.run.status === "running") {
+        return `
+            <div class="preview-overlay is-running">
+                <strong>${escapeHtml(stageLabel(state.run.stage))}</strong>
+                <span>${escapeHtml(state.run.message)}</span>
+            </div>
+        `;
+    }
+    return `
+        <div class="preview-overlay">
+            <strong>${escapeHtml(title)}</strong>
+            <span>${escapeHtml(message)}</span>
+        </div>
+    `;
+}
+
+function renderSourceInspection() {
+    const filename = sourceFilenameForIntent();
+    const language = filename.endsWith(".tex") ? "latex" : filename.endsWith(".json") ? "json" : "python";
+    return `
+        <div class="inspection-product">
+            <div class="inspection-head">
+                <span>${escapeHtml(filename)}</span>
+                <button class="copy-code-button" type="button" data-action="copy-visible-preview">Copy visible</button>
+            </div>
+            <div class="code-editor">${renderHighlightedCode(sourcePreviewText(), language)}</div>
+            <div class="inspection-note">${escapeHtml(artifactAccessNote())}</div>
+        </div>
+    `;
+}
+
+function renderLogInspection() {
+    return `
+        <div class="inspection-product">
+            <div class="inspection-head">
+                <span>generation.log</span>
+                <button class="copy-code-button" type="button" data-action="copy-visible-preview">Copy visible</button>
+            </div>
+            <div class="log-view">
+                <p><span>${escapeHtml(timestampLabel())}</span> ${escapeHtml(stageLabel(state.run.stage))}: ${escapeHtml(state.run.message)}</p>
+                <p><span>run</span> ${state.run.id ? escapeHtml(state.run.id) : "not-started"}</p>
+                <p><span>status</span> ${escapeHtml(state.run.status)}</p>
+                ${state.run.error ? `<p class="is-error"><span>error</span> ${escapeHtml(state.run.error)}</p>` : ""}
+            </div>
+            <div class="inspection-note">${escapeHtml(artifactAccessNote())}</div>
+        </div>
+    `;
+}
+
+function renderManifestInspection() {
+    const manifest = {
+        schema_version: 1,
+        run_id: state.run.id || null,
+        revision_of_run_id: state.run.revisionOfRunId || null,
+        intent: state.intent,
+        search: { mode: state.searchMode },
+        status: state.run.status,
+        outputs: getExpectedFiles().map((file) => ({ path: file.relativePath, kind: file.kind })),
+    };
+    return `
+        <div class="inspection-product">
+            <div class="inspection-head">
+                <span>manifest.json</span>
+                <button class="copy-code-button" type="button" data-action="copy-visible-preview">Copy visible</button>
+            </div>
+            <div class="code-editor">${renderHighlightedCode(JSON.stringify(manifest, null, 2), "json")}</div>
+            <div class="inspection-note">${escapeHtml(artifactAccessNote())}</div>
+        </div>
+    `;
+}
+
+function renderOutputFiles() {
+    const files = getExpectedFiles();
+    return `
+        <section class="output-dock" aria-label="Output files">
+            <div class="output-head">
+                <span>Files</span>
+                <small>${state.run.outputRoot ? escapeHtml(truncatePath(state.run.outputRoot)) : "Run folder pending"}</small>
+            </div>
+            <div class="output-grid">
+                ${files.map((file) => renderOutputFile(file)).join("")}
+            </div>
+        </section>
+    `;
+}
+
+function renderOutputFile(file) {
+    const path = artifactAbsolutePath(file.relativePath);
+    const isReady = Boolean(state.run.outputRoot && (state.run.status === "succeeded" || file.kind !== "pdf"));
+    return `
+        <div class="output-file" data-kind="${escapeHtml(file.kind)}">
+            <span class="file-kind">${escapeHtml(file.badge)}</span>
+            <div>
+                <strong>${escapeHtml(file.name)}</strong>
+                <small>${escapeHtml(isReady ? file.readyLabel : file.pendingLabel)}</small>
+            </div>
+            <div class="file-actions">
+                <button type="button" data-copy-file="${escapeHtml(path || file.relativePath)}" ${path ? "" : "disabled"}>Copy</button>
+                <button type="button" data-open-file="${escapeHtml(path || "")}" ${path ? "" : "disabled"}>Open</button>
             </div>
         </div>
     `;
@@ -329,10 +746,8 @@ function renderContextDial() {
     const estimate = getCurrentContextEstimate();
     return `
         <div class="context-widget" tabindex="0" data-context-state="${escapeHtml(estimate.warning_level)}" aria-label="${escapeHtml(contextAriaLabel(estimate))}">
-            <div class="context-dial" aria-label="Context budget">
-                <div class="dial-ring">
-                    <span data-context-field="state">${escapeHtml(contextStateLabel(estimate.warning_level))}</span>
-                </div>
+            <div class="dial-ring" aria-hidden="true">
+                <span data-context-field="state">${escapeHtml(contextStateLabel(estimate.warning_level))}</span>
             </div>
             <div class="context-copy">
                 <strong data-context-field="source-label">${escapeHtml(contextSourceLabel(estimate.source))}</strong>
@@ -343,7 +758,7 @@ function renderContextDial() {
                 <div><span>Output</span><strong data-context-field="output">${formatInt(estimate.estimated_output_tokens)}</strong></div>
                 <div><span>Total</span><strong data-context-field="total">${formatInt(estimate.estimated_total_tokens)}</strong></div>
                 <div><span>Limit</span><strong data-context-field="limit">${formatInt(estimate.context_window_limit)}</strong></div>
-                <div><span>Utilization</span><strong data-context-field="utilization">${formatPercent(estimate.utilization_ratio)}</strong></div>
+                <div><span>Use</span><strong data-context-field="utilization">${formatPercent(estimate.utilization_ratio)}</strong></div>
                 <div><span>Warning</span><strong data-context-field="warning">${escapeHtml(contextStateLabel(estimate.warning_level))}</strong></div>
                 <div><span>Source</span><strong data-context-field="source">${escapeHtml(contextSourceLabel(estimate.source))}</strong></div>
             </div>
@@ -351,51 +766,18 @@ function renderContextDial() {
     `;
 }
 
-function renderRunStatus() {
-    return `
-        <div class="status-stack">
-            <div class="status-line">
-                <span class="status-light" data-status="${state.run.status}"></span>
-                <div>
-                    <strong>${escapeHtml(state.run.status)}</strong>
-                    <span>${escapeHtml(state.run.stage)}</span>
-                </div>
-            </div>
-            <p>${escapeHtml(state.run.message)}</p>
-            ${state.run.error ? `<p class="status-error">${escapeHtml(state.run.error)}</p>` : ""}
-        </div>
-    `;
-}
-
-function renderOutputList(intent) {
-    return `
-        <div class="output-list">
-            <div class="list-head">
-                <span>Output files</span>
-                <button type="button" data-action="reveal-placeholder">Reveal</button>
-            </div>
-            ${intent.outputs.map((output) => `
-                <div class="file-row">
-                    <span class="file-icon">${fileKind(output)}</span>
-                    <span>${escapeHtml(output)}</span>
-                    <small>${state.run.status === "succeeded" ? "ready" : "pending"}</small>
-                </div>
-            `).join("")}
-            <div class="file-row">
-                <span class="file-icon">JS</span>
-                <span>manifest.json</span>
-                <small>pending</small>
-            </div>
-        </div>
-    `;
-}
-
 function renderAuthPanel() {
     return `
-        <section class="auth-panel studio-panel" aria-label="Authentication">
-            <div class="auth-tabs">
-                <button type="button" class="${state.authMode === "login" ? "is-active" : ""}" data-auth-mode="login">Login</button>
-                <button type="button" class="${state.authMode === "register" ? "is-active" : ""}" data-auth-mode="register">Register</button>
+        <section class="auth-panel" aria-label="Authentication">
+            <div class="auth-head">
+                <div>
+                    <div class="pane-kicker">CUHK weak auth</div>
+                    <h2>${state.authMode === "login" ? "Login" : "Register"}</h2>
+                </div>
+                <div class="auth-tabs">
+                    <button type="button" class="${state.authMode === "login" ? "is-active" : ""}" data-auth-mode="login">Login</button>
+                    <button type="button" class="${state.authMode === "register" ? "is-active" : ""}" data-auth-mode="register">Register</button>
+                </div>
             </div>
             <form id="auth-form" class="auth-form">
                 <label>
@@ -414,8 +796,8 @@ function renderAuthPanel() {
                         </label>`
                         : ""
                 }
-                <button class="auth-submit" type="submit">${state.authMode === "login" ? "Login" : "Create account"}</button>
-                <div class="auth-message is-${state.authTone}">${escapeHtml(state.authMessage)}</div>
+                <button class="run-button is-full" type="submit">${state.authMode === "login" ? "Login" : "Create account"}</button>
+                <div class="inline-notice is-${state.authTone}">${escapeHtml(state.authMessage)}</div>
             </form>
         </section>
     `;
@@ -428,13 +810,13 @@ function renderModelSettingsPanel() {
     const isBusy = Boolean(state.model.busy);
     return `
         <section class="model-modal" role="dialog" aria-modal="true" aria-label="Model settings">
-            <div class="model-dialog studio-panel">
+            <div class="model-dialog">
                 <div class="model-dialog-head">
                     <div>
-                        <div class="panel-kicker">Model settings</div>
+                        <div class="pane-kicker">Model settings</div>
                         <h2>${escapeHtml(form.displayName || "Qwen Default")}</h2>
                     </div>
-                    <button class="icon-button" type="button" data-action="close-model-settings" aria-label="Close model settings">x</button>
+                    <button class="icon-action is-large" type="button" data-action="close-model-settings" aria-label="Close model settings">x</button>
                 </div>
                 <form id="model-settings-form" class="model-form" novalidate>
                     ${renderModelField("displayName", "Display name", "text", form.displayName, "Qwen Default", false)}
@@ -446,10 +828,10 @@ function renderModelSettingsPanel() {
                         <span class="profile-id">${escapeHtml(profile?.id || "environment-default")}</span>
                     </div>
                     <div class="model-actions">
-                        <button class="secondary-button" type="button" data-action="test-model-settings" ${isBusy ? "disabled" : ""}>Test</button>
-                        <button class="auth-submit" type="submit" ${isBusy ? "disabled" : ""}>${state.model.busy === "save" ? "Saving" : "Save"}</button>
+                        <button class="secondary-action" type="button" data-action="test-model-settings" ${isBusy ? "disabled" : ""}>Test</button>
+                        <button class="run-button" type="submit" ${isBusy ? "disabled" : ""}>${state.model.busy === "save" ? "Saving" : "Save"}</button>
                     </div>
-                    <div class="auth-message is-${state.model.statusTone}">${escapeHtml(state.model.statusMessage)}</div>
+                    <div class="inline-notice is-${state.model.statusTone}">${escapeHtml(state.model.statusMessage)}</div>
                 </form>
             </div>
         </section>
@@ -475,6 +857,12 @@ function renderModelField(field, label, type, value, placeholder, required, auto
 }
 
 function bindEvents() {
+    document.querySelectorAll("[data-pane]").forEach((button) => {
+        button.addEventListener("click", () => {
+            state.activePane = button.dataset.pane;
+            render();
+        });
+    });
     document.querySelectorAll("[data-auth-mode]").forEach((button) => {
         button.addEventListener("click", () => {
             state.authMode = button.dataset.authMode;
@@ -482,18 +870,24 @@ function bindEvents() {
             render();
         });
     });
-
     document.getElementById("auth-form")?.addEventListener("submit", handleAuthSubmit);
     document.getElementById("task-text")?.addEventListener("input", (event) => {
         state.taskText = event.target.value;
+        delete state.fieldErrors.task_text;
+        refreshLocalContext();
+        updateContextDial();
+    });
+    document.getElementById("refinement-text")?.addEventListener("input", (event) => {
+        state.refinementText = event.target.value;
         refreshLocalContext();
         updateContextDial();
     });
     document.querySelectorAll("[data-intent]").forEach((button) => {
         button.addEventListener("click", () => {
             state.intent = button.dataset.intent;
-            stopRunPolling();
-            state.run = initialRunState();
+            state.previewTab = "primary";
+            state.fieldErrors = {};
+            normalizeActiveFile();
             refreshLocalContext();
             render();
         });
@@ -504,9 +898,18 @@ function bindEvents() {
             render();
         });
     });
+    document.querySelectorAll("[data-output-preference]").forEach((button) => {
+        button.addEventListener("click", () => {
+            state.outputPreference = button.dataset.outputPreference;
+            normalizeActiveFile();
+            refreshLocalContext();
+            render();
+        });
+    });
     document.getElementById("target-pages")?.addEventListener("input", (event) => {
         const value = Number(event.target.value);
         state.targetPages = Number.isFinite(value) && value > 0 ? Math.round(value) : 1;
+        delete state.fieldErrors.target_pages;
         refreshLocalContext();
         updateContextDial();
     });
@@ -518,11 +921,19 @@ function bindEvents() {
         document.getElementById("file-input")?.click();
     });
     document.getElementById("file-input")?.addEventListener("change", (event) => {
-        state.files = Array.from(event.target.files || []);
-        refreshLocalContext();
+        addLocalFiles(Array.from(event.target.files || []));
         render();
     });
-    document.querySelector("[data-action='run']")?.addEventListener("click", handleRun);
+    document.querySelectorAll("[data-remove-file]").forEach((button) => {
+        button.addEventListener("click", () => {
+            state.files = state.files.filter((file) => file.key !== button.dataset.removeFile);
+            refreshLocalContext();
+            render();
+        });
+    });
+    document.querySelector("[data-action='run']")?.addEventListener("click", () => handleRun({ isRevision: false }));
+    document.querySelector("[data-action='run-refinement']")?.addEventListener("click", () => handleRun({ isRevision: true }));
+    document.querySelector("[data-action='regenerate']")?.addEventListener("click", () => handleRun({ isRevision: false, isRegenerate: true }));
     document.querySelector("[data-action='logout']")?.addEventListener("click", () => {
         stopRunPolling();
         clearSession();
@@ -541,17 +952,28 @@ function bindEvents() {
             if (error) error.textContent = "";
         });
     });
-    document.onkeydown = handleGlobalKeydown;
-    document.querySelector("[data-action='reveal-placeholder']")?.addEventListener("click", () => {
-        state.run = {
-            id: state.run.id,
-            status: "idle",
-            stage: "output_files",
-            message: "Output list is ready.",
-            error: null,
-        };
-        render();
+    document.querySelectorAll("[data-preview-tab]").forEach((button) => {
+        button.addEventListener("click", () => {
+            state.previewTab = button.dataset.previewTab;
+            render();
+        });
     });
+    document.querySelectorAll("[data-active-file]").forEach((button) => {
+        button.addEventListener("click", () => {
+            state.activeFile = button.dataset.activeFile;
+            render();
+        });
+    });
+    document.querySelector("[data-action='copy-visible-preview']")?.addEventListener("click", copyVisiblePreview);
+    document.querySelector("[data-action='copy-current-path']")?.addEventListener("click", () => copyText(state.run.outputRoot || "", "Run folder path copied."));
+    document.querySelector("[data-action='reveal-run']")?.addEventListener("click", revealRunFolder);
+    document.querySelectorAll("[data-copy-file]").forEach((button) => {
+        button.addEventListener("click", () => copyText(button.dataset.copyFile || "", "Artifact path copied."));
+    });
+    document.querySelectorAll("[data-open-file]").forEach((button) => {
+        button.addEventListener("click", () => openLocalPath(button.dataset.openFile || ""));
+    });
+    document.onkeydown = handleGlobalKeydown;
 }
 
 async function handleAuthSubmit(event) {
@@ -559,7 +981,6 @@ async function handleAuthSubmit(event) {
     const email = document.getElementById("auth-email")?.value.trim().toLowerCase() || "";
     const password = document.getElementById("auth-password")?.value || "";
     const confirm = document.getElementById("auth-confirm")?.value || "";
-
     const endpoint = state.authMode === "login" ? "/api/auth/login" : "/api/auth/register";
     const payload = state.authMode === "login"
         ? { email, password }
@@ -576,9 +997,7 @@ async function handleAuthSubmit(event) {
             body: JSON.stringify(payload),
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-            throw new Error(errorMessage(data, "Authentication failed."));
-        }
+        if (!response.ok) throw new Error(errorMessage(data, "Authentication failed."));
         if (state.authMode === "register") {
             state.authMode = "login";
             state.authMessage = "Account created. Login is ready.";
@@ -588,34 +1007,24 @@ async function handleAuthSubmit(event) {
         }
         setUser({ email: data.email, role: data.role }, data.token);
     } catch (error) {
-        state.authMessage = error.message;
+        state.authMessage = safeDisplayMessage(error.message);
         state.authTone = "error";
         render();
     }
 }
 
-async function handleRun() {
+async function handleRun({ isRevision, isRegenerate = false }) {
     if (!state.user || !state.token) return;
+    const promptText = isRevision ? state.refinementText.trim() : state.taskText.trim();
+    const revisionOfRunId = isRevision ? state.run.id : null;
 
-    if (state.intent === "auto") {
+    if (!promptText) {
+        state.fieldErrors.task_text = isRevision ? "" : "Required";
         state.run = {
-            id: "",
-            status: "idle",
-            stage: "choose_intent",
-            message: "Choose Code, Essay, Slides, or Cheat sheet before running.",
-            error: null,
-        };
-        render();
-        return;
-    }
-
-    if (!state.taskText.trim()) {
-        state.run = {
-            id: "",
+            ...initialRunState(),
             status: "idle",
             stage: "validate_request",
-            message: "Add a task brief before running.",
-            error: null,
+            message: isRevision ? "Add a follow-up request before starting a revision." : "Add a task brief before running.",
         };
         render();
         return;
@@ -623,46 +1032,102 @@ async function handleRun() {
 
     stopRunPolling();
     refreshLocalContext();
+    state.fieldErrors = {};
+    state.notice = { message: "", tone: "neutral" };
     state.run = {
-        id: "",
+        ...initialRunState(),
         status: "queued",
-        stage: "submit_run",
-        message: "Submitting run to local backend.",
-        error: null,
+        stage: state.files.some((file) => !file.uploadId) ? "upload_inputs" : "submit_run",
+        message: state.files.some((file) => !file.uploadId) ? "Preparing reference uploads." : "Submitting run to local backend.",
+        revisionOfRunId,
     };
+    addHistory({
+        kind: isRevision ? "revision" : "command",
+        status: "queued",
+        title: isRevision ? "Follow-up request" : isRegenerate ? "Regenerate request" : "Generation request",
+        message: promptText,
+        meta: `${getSelectedIntent().label} / search ${state.searchMode}`,
+    });
+    state.activePane = "preview";
     render();
 
     try {
+        const uploadIds = await uploadFilesIfNeeded();
+        state.run = { ...state.run, stage: "submit_run", message: "Submitting run to local backend." };
+        render();
         const response = await fetch(`${API_URL}/api/runs`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${state.token}`,
             },
-            body: JSON.stringify(buildRunPayload()),
+            body: JSON.stringify(buildRunPayload({ promptText, uploadIds, revisionOfRunId })),
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            throw new Error(errorMessage(data, "Run request failed."));
+            applyRunApiError(data, "Run request failed.");
+            render();
+            return;
         }
         applyRunPayload(data);
+        upsertRunHistory();
+        if (isRevision) state.refinementText = "";
         render();
         if (data.id) {
             await pollRunEvent(data.id);
-            if (!TERMINAL_RUN_STATUSES.has(state.run.status)) {
-                startRunPolling(data.id);
-            }
+            if (!TERMINAL_RUN_STATUSES.has(state.run.status)) startRunPolling(data.id);
         }
     } catch (error) {
         state.run = {
-            id: "",
+            ...state.run,
             status: "failed",
-            stage: "submit_run",
+            stage: state.run.stage || "submit_run",
             message: "Run request failed.",
-            error: error.message,
+            error: safeDisplayMessage(error.message),
+            errorCode: "frontend_request_failed",
         };
+        upsertRunHistory();
         render();
     }
+}
+
+async function uploadFilesIfNeeded() {
+    const pending = state.files.filter((file) => !file.uploadId);
+    if (!pending.length) return state.files.map((file) => file.uploadId).filter(Boolean);
+
+    pending.forEach((file) => {
+        file.status = "uploading";
+    });
+    render();
+
+    const formData = new FormData();
+    pending.forEach((item) => formData.append("files", item.file, item.name));
+    const response = await fetch(`${API_URL}/api/uploads`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${state.token}` },
+        body: formData,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        pending.forEach((file) => {
+            file.status = "failed";
+        });
+        const fallback = response.status === 404
+            ? "Upload API is unavailable in this backend build."
+            : "Upload failed.";
+        throw new Error(errorMessage(data, fallback));
+    }
+
+    const uploads = Array.isArray(data.uploads) ? data.uploads : [];
+    pending.forEach((file, index) => {
+        const upload = uploads[index];
+        file.uploadId = upload?.id || "";
+        file.status = file.uploadId ? "uploaded" : "failed";
+    });
+    if (pending.some((file) => !file.uploadId)) {
+        throw new Error("Upload response did not include every upload id.");
+    }
+    return state.files.map((file) => file.uploadId).filter(Boolean);
 }
 
 function setUser(user, token) {
@@ -708,9 +1173,7 @@ function modelButtonLabel() {
 function openModelSettings() {
     hydrateModelFormFromProfile();
     state.model.editorOpen = true;
-    state.model.statusMessage = state.model.profile
-        ? "Saved profile loaded."
-        : "Local defaults loaded.";
+    state.model.statusMessage = state.model.profile ? "Saved profile loaded." : "Local defaults loaded.";
     state.model.statusTone = "neutral";
     state.model.fieldErrors = {};
     render();
@@ -725,9 +1188,7 @@ function closeModelSettings() {
 }
 
 function handleGlobalKeydown(event) {
-    if (event.key === "Escape" && state.model.editorOpen) {
-        closeModelSettings();
-    }
+    if (event.key === "Escape" && state.model.editorOpen) closeModelSettings();
 }
 
 async function loadModelProfiles() {
@@ -737,9 +1198,7 @@ async function loadModelProfiles() {
             headers: { Authorization: `Bearer ${state.token}` },
         });
         const data = await response.json().catch(() => []);
-        if (!response.ok) {
-            throw new Error(errorMessage(data, "Model profile load failed."));
-        }
+        if (!response.ok) throw new Error(errorMessage(data, "Model profile load failed."));
         const profiles = Array.isArray(data) ? data.map(sanitizeModelProfile) : [];
         state.model.profiles = profiles;
         state.model.profile = profiles.find((profile) => profile.is_default) || profiles[0] || null;
@@ -750,7 +1209,7 @@ async function loadModelProfiles() {
         }
         render();
     } catch (error) {
-        state.model.statusMessage = error.message;
+        state.model.statusMessage = safeDisplayMessage(error.message);
         state.model.statusTone = "error";
         if (state.model.editorOpen) render();
     }
@@ -810,7 +1269,7 @@ async function handleModelSettingsSave(event) {
         state.model.statusTone = "success";
         state.model.fieldErrors = {};
     } catch (error) {
-        state.model.statusMessage = error.message;
+        state.model.statusMessage = safeDisplayMessage(error.message);
         state.model.statusTone = "error";
     } finally {
         state.model.busy = "";
@@ -845,7 +1304,7 @@ async function handleModelSettingsTest() {
         state.model.statusTone = "success";
         state.model.fieldErrors = {};
     } catch (error) {
-        state.model.statusMessage = error.message;
+        state.model.statusMessage = safeDisplayMessage(error.message);
         state.model.statusTone = "error";
     } finally {
         state.model.busy = "";
@@ -863,16 +1322,14 @@ function buildModelProfilePayload({ includeApiKey }) {
         context_window_hint: CONTEXT_LIMIT,
         supports_streaming: true,
     };
-    if (includeApiKey && form.apiKey.trim()) {
-        payload.api_key = form.apiKey.trim();
-    }
+    if (includeApiKey && form.apiKey.trim()) payload.api_key = form.apiKey.trim();
     return payload;
 }
 
 function applyModelApiError(data, fallback) {
     const error = data?.error || {};
     state.model.statusMessage = error.code
-        ? `${error.code}: ${error.message || fallback}`
+        ? `${error.code}: ${safeDisplayMessage(error.message || fallback)}`
         : errorMessage(data, fallback);
     state.model.statusTone = "error";
     state.model.fieldErrors = modelFieldErrors(error.fields || []);
@@ -908,26 +1365,29 @@ function initialRunState() {
         stage: "compose",
         message: "Ready",
         error: null,
+        errorCode: "",
+        outputRoot: "",
+        revisionOfRunId: null,
     };
 }
 
-function buildRunPayload() {
+function buildRunPayload({ promptText, uploadIds, revisionOfRunId }) {
     const payload = {
-        task_text: state.taskText.trim(),
+        task_text: promptText,
         intent: state.intent,
         output_preference: outputPreferenceForIntent(state.intent),
         search_mode: state.searchMode,
         model_profile_id: state.model.profile?.id || null,
-        upload_ids: [],
+        upload_ids: uploadIds,
         options: optionsForIntent(state.intent),
     };
+    if (revisionOfRunId) payload.revision_of_run_id = revisionOfRunId;
     return payload;
 }
 
 function outputPreferenceForIntent(intent) {
-    if (intent === "code_homework") return "py";
-    if (intent === "essay_latex" || intent === "beamer_slides" || intent === "cheat_sheet") return "pdf";
-    return null;
+    if (intent === "code_homework") return state.outputPreference;
+    return "pdf";
 }
 
 function optionsForIntent(intent) {
@@ -940,26 +1400,50 @@ function optionsForIntent(intent) {
 }
 
 function canSubmitRun(isAuthenticated) {
-    return isAuthenticated && state.intent !== "auto";
+    return isAuthenticated && state.taskText.trim() && state.run.status !== "queued" && state.run.status !== "running";
+}
+
+function applyRunApiError(data, fallback) {
+    const error = data?.error || {};
+    state.fieldErrors = runFieldErrors(error.fields || []);
+    state.run = {
+        ...state.run,
+        status: "failed",
+        stage: "submit_run",
+        message: "Run request failed.",
+        error: errorMessage(data, fallback),
+        errorCode: String(error.code || "request_failed"),
+    };
+    upsertRunHistory();
+}
+
+function runFieldErrors(fields) {
+    return fields.reduce((errors, field) => {
+        if (field.field === "task_text") errors.task_text = fieldErrorText(field.rule);
+        if (field.field === "options.target_pages") errors.target_pages = fieldErrorText(field.rule);
+        if (field.field === "output_preference") errors.output_preference = fieldErrorText(field.rule);
+        return errors;
+    }, {});
 }
 
 function applyRunPayload(payload) {
-    if (payload.context) {
-        state.context = normalizeContextEstimate(payload.context, "backend");
-    }
+    if (payload.context) state.context = normalizeContextEstimate(payload.context, "backend");
     state.run = {
+        ...state.run,
         id: payload.id || payload.run_id || state.run.id || "",
         status: payload.status || state.run.status,
         stage: payload.stage || state.run.stage || "queued",
         message: runMessageFromPayload(payload),
         error: errorFromPayload(payload),
+        errorCode: errorCodeFromPayload(payload),
+        outputRoot: payload.output_root || state.run.outputRoot || "",
     };
 }
 
 function runMessageFromPayload(payload) {
-    if (payload.message) return payload.message;
-    if (payload.error?.message) return payload.error.message;
-    if (payload.error_message) return payload.error_message;
+    if (payload.message) return safeDisplayMessage(payload.message);
+    if (payload.error?.message) return safeDisplayMessage(payload.error.message);
+    if (payload.error_message) return safeDisplayMessage(payload.error_message);
     if (payload.status === "succeeded") return "Run succeeded.";
     if (payload.status === "failed") return "Run failed.";
     if (payload.status === "running") return "Run is running.";
@@ -967,9 +1451,17 @@ function runMessageFromPayload(payload) {
 }
 
 function errorFromPayload(payload) {
-    if (payload.error?.message) return payload.error.message;
-    if (payload.status === "failed" && payload.error_message) return payload.error_message;
+    if (payload.error?.message) return safeDisplayMessage(payload.error.message);
+    if (payload.status === "failed" && payload.error_message) return safeDisplayMessage(payload.error_message);
     return null;
+}
+
+function errorCodeFromPayload(payload) {
+    if (payload.error?.code) return String(payload.error.code);
+    if (payload.status === "failed" && typeof payload.error_message === "string") {
+        return payload.error_message.split(":")[0] || "run_failed";
+    }
+    return "";
 }
 
 function startRunPolling(runId) {
@@ -982,8 +1474,10 @@ function startRunPolling(runId) {
                 status: "failed",
                 stage: "poll_status",
                 message: "Could not refresh run status.",
-                error: error.message,
+                error: safeDisplayMessage(error.message),
+                errorCode: "status_refresh_failed",
             };
+            upsertRunHistory();
             render();
         });
     }, RUN_POLL_INTERVAL_MS);
@@ -1001,14 +1495,11 @@ async function pollRunEvent(runId) {
         headers: { Authorization: `Bearer ${state.token}` },
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-        throw new Error(errorMessage(data, "Run status refresh failed."));
-    }
+    if (!response.ok) throw new Error(errorMessage(data, "Run status refresh failed."));
     applyRunPayload(data);
+    upsertRunHistory();
     render();
-    if (TERMINAL_RUN_STATUSES.has(state.run.status)) {
-        stopRunPolling();
-    }
+    if (TERMINAL_RUN_STATUSES.has(state.run.status)) stopRunPolling();
 }
 
 function updateContextDial() {
@@ -1047,16 +1538,17 @@ function getCurrentContextEstimate() {
 
 function calculateLocalContextEstimate() {
     const selected = getSelectedIntent();
-    const fileBytes = state.files.reduce((total, file) => total + Number(file.size || 0), 0);
-    const estimatedInput = Math.max(1, Math.ceil((state.taskText.length + Math.min(fileBytes, 200000)) / 4));
+    const fileBytes = state.files.reduce((total, item) => total + Number(item.size || 0), 0);
+    const promptText = `${state.taskText}\n${state.refinementText}`.trim();
+    const estimatedInput = Math.max(1, Math.ceil((promptText.length + Math.min(fileBytes, 200000)) / 4));
     const outputBase = selected.id === "cheat_sheet"
         ? Math.max(5000, state.targetPages * 1800)
         : selected.id === "beamer_slides"
             ? 7000
             : selected.id === "essay_latex"
                 ? 6000
-                : selected.id === "code_homework"
-                    ? 4000
+                : state.outputPreference === "ipynb"
+                    ? 5200
                     : 4000;
     const estimatedTotal = estimatedInput + outputBase;
     const ratio = estimatedTotal / CONTEXT_LIMIT;
@@ -1105,8 +1597,312 @@ function normalizeWarningLevel(level, ratio) {
     return "ok";
 }
 
+function addLocalFiles(files) {
+    const existingKeys = new Set(state.files.map((file) => file.key));
+    const additions = files.map((file) => ({
+        key: `${file.name}-${file.size}-${file.lastModified}`,
+        file,
+        name: file.name,
+        size: file.size,
+        status: "pending",
+        uploadId: "",
+    })).filter((file) => !existingKeys.has(file.key));
+    state.files = [...state.files, ...additions];
+    state.notice = additions.length
+        ? { message: "Files will upload before the next run.", tone: "neutral" }
+        : { message: "Those files are already selected.", tone: "neutral" };
+    refreshLocalContext();
+}
+
+function addHistory(entry) {
+    state.history.push({
+        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        timestamp: new Date().toISOString(),
+        ...entry,
+    });
+}
+
+function upsertRunHistory() {
+    if (!state.run.id) return;
+    const id = `run-${state.run.id}`;
+    const existing = state.history.find((item) => item.id === id);
+    const entry = {
+        id,
+        kind: "run",
+        status: state.run.status,
+        title: `Run ${shortRunId(state.run.id)}`,
+        message: state.run.error || state.run.message,
+        meta: `${stageLabel(state.run.stage)} / ${state.run.outputRoot ? truncatePath(state.run.outputRoot) : "folder pending"}`,
+        timestamp: new Date().toISOString(),
+    };
+    if (existing) Object.assign(existing, entry);
+    else state.history.push(entry);
+}
+
 function getSelectedIntent() {
-    return intents.find((intent) => intent.id === state.intent) || intents[1];
+    return intents.find((intent) => intent.id === state.intent) || intents[0];
+}
+
+function normalizeActiveFile() {
+    const files = getCodeFiles();
+    if (!files.includes(state.activeFile)) state.activeFile = files[0];
+}
+
+function getCodeFiles() {
+    if (state.outputPreference === "ipynb") return ["solution.ipynb"];
+    return ["solution.py", "tests.py", "README.md"];
+}
+
+function getPreviewTabs() {
+    return [
+        { id: "primary", label: state.intent === "code_homework" ? "Code" : "Rendered" },
+        { id: "source", label: state.intent === "code_homework" ? "Source" : "LaTeX" },
+        { id: "logs", label: "Logs" },
+        { id: "manifest", label: "Manifest" },
+    ];
+}
+
+function getExpectedFiles() {
+    if (state.intent === "code_homework") {
+        const main = state.outputPreference === "ipynb"
+            ? { name: "solution.ipynb", relativePath: "output/solution.ipynb", kind: "notebook", badge: "NB", readyLabel: "notebook output", pendingLabel: "pending" }
+            : { name: "solution.py", relativePath: "output/solution.py", kind: "script", badge: "PY", readyLabel: "script output", pendingLabel: "pending" };
+        return [
+            main,
+            { name: "generation.log", relativePath: "logs/generation.log", kind: "log", badge: "LOG", readyLabel: "run log", pendingLabel: "pending" },
+            { name: "manifest.json", relativePath: "manifest.json", kind: "manifest", badge: "JS", readyLabel: "metadata", pendingLabel: "pending" },
+        ];
+    }
+    if (state.intent === "essay_latex") {
+        return [
+            { name: "main.pdf", relativePath: "output/main.pdf", kind: "pdf", badge: "PDF", readyLabel: "compiled PDF", pendingLabel: "compile pending" },
+            { name: "main.tex", relativePath: "output/main.tex", kind: "source", badge: "TEX", readyLabel: "source preserved", pendingLabel: "pending" },
+            { name: "latex.log", relativePath: "logs/latex.log", kind: "log", badge: "LOG", readyLabel: "compile log", pendingLabel: "pending" },
+            { name: "manifest.json", relativePath: "manifest.json", kind: "manifest", badge: "JS", readyLabel: "metadata", pendingLabel: "pending" },
+        ];
+    }
+    if (state.intent === "beamer_slides") {
+        return [
+            { name: "slides.pdf", relativePath: "output/slides.pdf", kind: "pdf", badge: "PDF", readyLabel: "compiled deck", pendingLabel: "compile pending" },
+            { name: "slides.tex", relativePath: "output/slides.tex", kind: "source", badge: "TEX", readyLabel: "source preserved", pendingLabel: "pending" },
+            { name: "latex.log", relativePath: "logs/latex.log", kind: "log", badge: "LOG", readyLabel: "compile log", pendingLabel: "pending" },
+            { name: "manifest.json", relativePath: "manifest.json", kind: "manifest", badge: "JS", readyLabel: "metadata", pendingLabel: "pending" },
+        ];
+    }
+    return [
+        { name: "cheat-sheet.pdf", relativePath: "output/cheat-sheet.pdf", kind: "pdf", badge: "PDF", readyLabel: "compiled sheet", pendingLabel: "compile pending" },
+        { name: "cheat-sheet.tex", relativePath: "output/cheat-sheet.tex", kind: "source", badge: "TEX", readyLabel: "source preserved", pendingLabel: "pending" },
+        { name: "latex.log", relativePath: "logs/latex.log", kind: "log", badge: "LOG", readyLabel: "compile log", pendingLabel: "pending" },
+        { name: "manifest.json", relativePath: "manifest.json", kind: "manifest", badge: "JS", readyLabel: "metadata", pendingLabel: "pending" },
+    ];
+}
+
+function sourceFilenameForIntent() {
+    if (state.intent === "code_homework") return state.outputPreference === "ipynb" ? "solution.ipynb" : "solution.py";
+    if (state.intent === "beamer_slides") return "slides.tex";
+    if (state.intent === "cheat_sheet") return "cheat-sheet.tex";
+    return "main.tex";
+}
+
+function codePreviewText(filename) {
+    if (filename === "tests.py") {
+        return `from solution import solve\n\n\ndef test_sample_case():\n    assert solve([2, 4, 6]) == 12\n`;
+    }
+    if (filename === "README.md") {
+        return `# Solution Notes\n\n- Parse the assignment input explicitly.\n- Keep edge cases near the solver.\n- Include complexity in the final answer.\n`;
+    }
+    return `from __future__ import annotations\n\n\ndef solve(values: list[int]) -> int:\n    \"\"\"Return the requested aggregate for the homework task.\"\"\"\n    total = 0\n    for value in values:\n        if value < 0:\n            continue\n        total += value\n    return total\n\n\nif __name__ == \"__main__\":\n    print(solve([1, 2, 3]))\n`;
+}
+
+function notebookCodeText() {
+    return `def solve(values):\n    total = 0\n    for value in values:\n        total += value\n    return total\n\nsolve([1, 2, 3])`;
+}
+
+function sourcePreviewText() {
+    if (state.intent === "code_homework") return codePreviewText("solution.py");
+    if (state.intent === "beamer_slides") {
+        return `\\documentclass{beamer}\n\\title{${briefTitle("Generated Slides")}}\n\\begin{document}\n\\begin{frame}{Overview}\n  \\begin{itemize}\n    \\item Motivation\n    \\item Method\n    \\item Result\n  \\end{itemize}\n\\end{frame}\n\\end{document}\n`;
+    }
+    if (state.intent === "cheat_sheet") {
+        return `\\documentclass[a4paper]{article}\n\\usepackage[margin=0.45cm]{geometry}\n\\usepackage{multicol}\n\\begin{document}\n\\begin{multicols}{4}\n\\section*{Dense Review}\nKey definitions, formulas, and proof templates.\n\\end{multicols}\n\\end{document}\n`;
+    }
+    return `\\documentclass{article}\n\\title{${briefTitle("Generated Essay")}}\n\\begin{document}\n\\maketitle\n\\section{Introduction}\nThe generated source is preserved even if PDF compilation fails.\n\\section{Discussion}\nEvidence and citations are recorded in the run manifest.\n\\end{document}\n`;
+}
+
+function renderHighlightedCode(text, language = "python") {
+    const lines = String(text).replace(/\s+$/u, "").split("\n");
+    return `
+        <ol class="code-lines">
+            ${lines.map((line, index) => `
+                <li>
+                    <span class="line-no">${index + 1}</span>
+                    <code>${highlightLine(line, language)}</code>
+                </li>
+            `).join("")}
+        </ol>
+    `;
+}
+
+function highlightLine(line, language) {
+    if (language === "json") return highlightJson(line);
+    if (language === "latex") return highlightLatex(line);
+    return highlightPython(line);
+}
+
+function highlightPython(line) {
+    const tokens = line.match(/#.*$|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b\d+\b|\b[A-Za-z_][A-Za-z0-9_]*\b|\s+|./g) || [];
+    const keywords = new Set(["def", "class", "from", "import", "for", "if", "else", "elif", "return", "continue", "in", "as", "print", "with", "try", "except", "raise", "while", "True", "False", "None"]);
+    return tokens.map((token, index) => {
+        if (token.startsWith("#")) return `<span class="syntax-comment">${escapeHtml(token)}</span>`;
+        if (token.startsWith("\"") || token.startsWith("'")) return `<span class="syntax-string">${escapeHtml(token)}</span>`;
+        if (/^\d+$/u.test(token)) return `<span class="syntax-number">${escapeHtml(token)}</span>`;
+        if (keywords.has(token)) return `<span class="syntax-keyword">${escapeHtml(token)}</span>`;
+        if (/^[A-Za-z_][A-Za-z0-9_]*$/u.test(token) && nextNonSpaceToken(tokens, index) === "(") {
+            return `<span class="syntax-function">${escapeHtml(token)}</span>`;
+        }
+        return escapeHtml(token);
+    }).join("") || " ";
+}
+
+function highlightJson(line) {
+    const tokens = line.match(/"(?:\\.|[^"\\])*"|\btrue\b|\bfalse\b|\bnull\b|-?\d+(?:\.\d+)?|\s+|./g) || [];
+    return tokens.map((token, index) => {
+        if (token.startsWith("\"")) {
+            const cls = nextNonSpaceToken(tokens, index) === ":" ? "syntax-keyword" : "syntax-string";
+            return `<span class="${cls}">${escapeHtml(token)}</span>`;
+        }
+        if (/^(true|false|null)$/u.test(token)) return `<span class="syntax-keyword">${escapeHtml(token)}</span>`;
+        if (/^-?\d+(?:\.\d+)?$/u.test(token)) return `<span class="syntax-number">${escapeHtml(token)}</span>`;
+        return escapeHtml(token);
+    }).join("") || " ";
+}
+
+function highlightLatex(line) {
+    const tokens = line.match(/%.*$|\\[A-Za-z*]+|\{[^}]*\}|\s+|./g) || [];
+    return tokens.map((token) => {
+        if (token.startsWith("%")) return `<span class="syntax-comment">${escapeHtml(token)}</span>`;
+        if (token.startsWith("\\")) return `<span class="syntax-keyword">${escapeHtml(token)}</span>`;
+        if (token.startsWith("{") && token.endsWith("}")) return `<span class="syntax-string">${escapeHtml(token)}</span>`;
+        return escapeHtml(token);
+    }).join("") || " ";
+}
+
+function nextNonSpaceToken(tokens, index) {
+    for (let cursor = index + 1; cursor < tokens.length; cursor += 1) {
+        if (!/^\s+$/u.test(tokens[cursor])) return tokens[cursor];
+    }
+    return "";
+}
+
+async function copyVisiblePreview() {
+    const text = state.previewTab === "logs"
+        ? `${stageLabel(state.run.stage)}: ${state.run.message}`
+        : state.previewTab === "manifest"
+            ? JSON.stringify({
+                run_id: state.run.id || null,
+                intent: state.intent,
+                status: state.run.status,
+                outputs: getExpectedFiles().map((file) => file.relativePath),
+            }, null, 2)
+            : state.previewTab === "source"
+                ? sourcePreviewText()
+                : state.intent === "code_homework"
+                    ? state.outputPreference === "ipynb" ? notebookCodeText() : codePreviewText(state.activeFile)
+                    : state.run.outputRoot || artifactAccessNote();
+    await copyText(text, "Visible preview copied.");
+}
+
+async function copyText(text, message) {
+    if (!text) return;
+    try {
+        await navigator.clipboard.writeText(text);
+        state.notice = { message, tone: "success" };
+    } catch {
+        state.notice = { message: "Clipboard is not available in this browser context.", tone: "error" };
+    }
+    render();
+}
+
+function revealRunFolder() {
+    if (!state.run.outputRoot) return;
+    copyText(state.run.outputRoot, "Run folder path copied for reveal.");
+}
+
+function openLocalPath(path) {
+    if (!path) return;
+    const url = path.startsWith("file://") ? path : `file://${path}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function artifactAbsolutePath(relativePath) {
+    if (!state.run.outputRoot) return "";
+    return `${state.run.outputRoot.replace(/\/$/u, "")}/${relativePath}`;
+}
+
+function artifactAccessNote() {
+    if (state.run.outputRoot) return "Artifact bytes are in the run folder; browser byte rendering awaits an artifact file endpoint.";
+    return "Run folder appears after a run is accepted by the backend.";
+}
+
+function runButtonLabel() {
+    if (state.run.status === "queued" || state.run.status === "running") return "Running";
+    if (state.run.status === "failed") return "Run again";
+    return "Run artifact";
+}
+
+function runNote(isAuthenticated) {
+    if (!isAuthenticated) return "Login activates generation controls.";
+    if (!state.taskText.trim()) return "Add a task brief to enable generation.";
+    if (state.files.some((file) => !file.uploadId)) return "Selected files upload before run creation.";
+    if (state.run.status === "queued" || state.run.status === "running") return "Context and stage events update as the backend reports.";
+    return "Ready for a local generation run.";
+}
+
+function codeStatusTitle() {
+    if (state.run.status === "failed") return "Validation issue";
+    if (state.run.status === "succeeded") return "Artifact ready";
+    if (state.run.status === "queued" || state.run.status === "running") return "Generating";
+    return "Renderer armed";
+}
+
+function codeStatusDetail() {
+    if (state.run.status === "failed") return state.run.errorCode || "source preserved if available";
+    if (state.run.status === "succeeded") return state.run.outputRoot ? "copy/open paths available" : "completed";
+    if (state.run.status === "queued" || state.run.status === "running") return stageLabel(state.run.stage);
+    return "syntax preview, no execution";
+}
+
+function normalizedStageBucket(stage, status) {
+    if (status === "queued") return "route";
+    if (status === "succeeded") {
+        if (state.intent === "code_homework") return "validate";
+        return "compile";
+    }
+    if (stage?.includes("context") || stage?.includes("upload")) return state.intent === "cheat_sheet" ? "ingest" : "context";
+    if (stage?.includes("search") || stage?.includes("route")) return "route";
+    if (stage?.includes("compile")) return "compile";
+    if (stage?.includes("validate")) return "validate";
+    if (stage?.includes("outline")) return "outline";
+    if (stage?.includes("layout")) return "layout";
+    if (stage?.includes("compress")) return "compress";
+    if (stage?.includes("generate") || stage?.includes("source")) return state.intent === "beamer_slides" ? "write" : "generate";
+    return getSelectedIntent().stages[0];
+}
+
+function stageLabel(stage) {
+    return stageVocabulary[stage] || String(stage || "compose").replaceAll("_", " ");
+}
+
+function uploadStatusLabel(item) {
+    if (item.status === "uploaded") return "uploaded";
+    if (item.status === "uploading") return "uploading";
+    if (item.status === "failed") return "upload failed";
+    return formatBytes(item.size);
+}
+
+function fileKind(filename) {
+    const ext = String(filename).split(".").pop()?.slice(0, 3).toUpperCase();
+    return ext || "FILE";
 }
 
 function readStoredUser() {
@@ -1117,29 +1913,22 @@ function readStoredUser() {
     }
 }
 
-function fileLabel() {
-    if (!state.files.length) return "Drop or choose files";
-    if (state.files.length === 1) return state.files[0].name;
-    return `${state.files.length} files selected`;
-}
-
-function fileKind(filename) {
-    const ext = filename.split(".").pop()?.slice(0, 3).toUpperCase();
-    return ext || "FILE";
-}
-
-function runNote(isAuthenticated) {
-    if (!isAuthenticated) return "Login to activate run controls.";
-    if (state.intent === "auto") return "Choose a concrete artifact type for generation.";
-    if (state.run.status === "queued" || state.run.status === "running") return "Backend context events are updating the dial.";
-    return "Ready for a local run.";
-}
-
 function errorMessage(data, fallback) {
-    if (data?.error?.message) return data.error.message;
-    if (typeof data?.detail === "string") return data.detail;
-    if (typeof data?.message === "string") return data.message;
-    return fallback;
+    const message = data?.error?.message || (typeof data?.detail === "string" ? data.detail : "") || (typeof data?.message === "string" ? data.message : "") || fallback;
+    const code = data?.error?.code ? `${data.error.code}: ` : "";
+    return safeDisplayMessage(`${code}${message}`);
+}
+
+function safeDisplayMessage(message) {
+    return String(message || "")
+        .replace(/sk-[A-Za-z0-9_-]+/g, "[redacted-key]")
+        .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [redacted-token]")
+        .replace(/api[_-]?key["'\s:=]+[A-Za-z0-9._-]+/gi, "api_key [redacted]")
+        .split("\n")
+        .filter((line) => !/\s+at\s+/.test(line) && !/Traceback/.test(line))
+        .slice(0, 3)
+        .join(" ")
+        .trim();
 }
 
 function formatInt(value) {
@@ -1148,6 +1937,13 @@ function formatInt(value) {
 
 function formatPercent(value) {
     return `${Math.round(Number(value || 0) * 100)}%`;
+}
+
+function formatBytes(value) {
+    const bytes = Number(value || 0);
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${bytes} B`;
 }
 
 function contextStateLabel(level) {
@@ -1167,11 +1963,40 @@ function contextSourceLabel(source) {
 function contextSummary(estimate) {
     if (estimate.warning_level === "critical") return "Aggressive compression likely";
     if (estimate.warning_level === "warning") return "Compression may be needed";
-    return "Budget looks healthy";
+    return `${formatPercent(estimate.utilization_ratio)} of context`;
 }
 
 function contextAriaLabel(estimate) {
     return `Context budget ${contextStateLabel(estimate.warning_level)}, ${formatPercent(estimate.utilization_ratio)} utilized, ${contextSourceLabel(estimate.source)}`;
+}
+
+function briefTitle(fallback) {
+    const firstLine = state.taskText.trim().split("\n").find(Boolean) || "";
+    const cleaned = firstLine.replace(/[^\w\s:,-]/g, "").trim();
+    if (!cleaned) return fallback;
+    return cleaned.length > 52 ? `${cleaned.slice(0, 49)}...` : cleaned;
+}
+
+function shortRunId(runId) {
+    return String(runId || "").slice(0, 8) || "pending";
+}
+
+function formatHistoryTime(timestamp) {
+    try {
+        return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(new Date(timestamp));
+    } catch {
+        return "";
+    }
+}
+
+function timestampLabel() {
+    return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date());
+}
+
+function truncatePath(path) {
+    const text = String(path || "");
+    if (text.length <= 46) return text;
+    return `...${text.slice(-43)}`;
 }
 
 function escapeHtml(value) {

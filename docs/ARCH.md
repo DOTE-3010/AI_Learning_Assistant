@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-05-31
+Last Reviewed: 2026-06-01
 Status: Active
 -->
 
@@ -8,7 +8,11 @@ Status: Active
 
 ## Architecture Summary
 
-The rebuild uses a local-first architecture: Electron provides the desktop shell, a web renderer provides the artifact studio UI, Docker Desktop runs the backend/runtime container, SQLite stores local metadata, and generated artifacts are written to explicit filesystem folders.
+The rebuild uses a local-first architecture: Electron provides the desktop shell, a web renderer provides the conversational artifact workbench, Docker Desktop runs the backend/runtime container, SQLite stores local metadata, and generated artifacts are written to explicit filesystem folders.
+
+The web renderer is the product center. It presents a production console beside a persistent preview panel, so generation history, run status, and follow-up instructions stay adjacent to the current artifact instead of burying outputs in chat text.
+
+The existing frontend implementation is disposable from an architecture perspective. Future frontend tasks may replace the app shell, components, styles, and visual assets wholesale inside `frontend/`, provided they keep the backend HTTP/SSE contracts and phase-1 product capabilities stable.
 
 The system is intentionally portable. The same API, storage interfaces, and artifact contracts should later support a native no-Docker desktop build or a hosted server deployment without rewriting product logic. The shell talks to the backend only over HTTP/SSE so the runtime underneath can change.
 
@@ -17,7 +21,7 @@ The system is intentionally portable. The same API, storage interfaces, and arti
        |                                   |
        | loads window                      | docker compose up
        v                                   v
-[Web Workbench] --HTTP/SSE--> [Backend API container]
+[Web Workbench: console + preview] --HTTP/SSE--> [Backend API container]
                                    |--> SQLite file (metadata)
                                    |--> workspace/ (artifact bytes)
                                    |--> Qwen / OpenAI-compatible API
@@ -44,7 +48,7 @@ Major versions below are the supported baseline; exact patch versions live in lo
 | Module | Owns | Must Not Own | Initial Location | Key Contracts |
 | --- | --- | --- | --- | --- |
 | Desktop Shell | Electron startup, Docker Desktop detection, backend health polling, window lifecycle, reveal-in-folder | Backend business logic, Python imports, SQLite access, model calls | `apps/desktop/` | `runtime-electron-docker.md` |
-| Web Workbench | Artifact studio UI, upload controls, model settings UI, context dial, run preview, client state | Local secrets, direct filesystem/SQLite access, token-generation internals | `frontend/` | `ui-workbench.md`, `visual-assets.md` |
+| Web Workbench | Production console, artifact type controls, upload controls, model settings UI, context dial, stage status, preview-only artifact renderers, client state, locale catalog, warm editorial design tokens | Local secrets, direct filesystem/SQLite access, token-generation internals, editing generated source as source-of-truth, executing generated code/HTML, backend-owned translation or auth behavior | `frontend/` | `ui-workbench.md`, `visual-assets.md` |
 | API Backend | HTTP routes, auth/session, run orchestration, request validation, static serving | SQL details, LaTeX internals, Electron lifecycle, raw secret persistence | `backend/` | `auth.md`, `generation-pipeline.md`, `errors.md` |
 | Storage Layer | SQLite repositories, migrations, transactions for users/sessions/settings/runs/uploads/artifacts/citations | HTTP shapes, business rules, artifact bytes, prompt content | backend storage package | `sqlite-schema.md` |
 | Artifact Filesystem | Run/project folder creation, safe filenames, manifests, PDF/source persistence | Metadata-of-record (rows), HTTP concerns, model calls | backend artifact package | `artifact-filesystem.md` |
@@ -52,7 +56,7 @@ Major versions below are the supported baseline; exact patch versions live in lo
 | Context Builder | File extraction, context-budget estimation, web-search policy decision | Artifact generation, model-call orchestration, UI rendering | backend context package | `generation-pipeline.md`, `uploads.md` |
 | Artifact Pipelines | Code/essay/Beamer/cheat-sheet generation + repair, intent routing | Secret loading, Electron internals, HTTP transport, raw SQL | backend pipeline package | `generation-pipeline.md`, `artifact-filesystem.md` |
 
-Legacy modules under `backend/` and `frontend/` are not authoritative if they conflict with these boundaries. They may be deleted, moved, or mined for useful parsing/LaTeX patterns during scoped tasks.
+Legacy modules under `backend/` and `frontend/` are not authoritative if they conflict with these boundaries. They may be deleted, moved, or mined for useful parsing/LaTeX patterns during scoped tasks. For task 018, frontend UI modules, styling, placeholder assets, and layout code should be treated as replaceable rather than inherited design constraints.
 
 ## Canonical Phase-1 Layout
 
@@ -86,11 +90,38 @@ Source of truth for metadata is the SQLite file. Source of truth for bytes (uplo
 - Error envelope: every API error uses the canonical shape in `docs/CONTRACTS/errors.md`.
 - Files/artifacts: run folder shape and `manifest.json` per `docs/CONTRACTS/artifact-filesystem.md`.
 - Desktop/runtime: Electron-to-backend handshake and startup states per `docs/CONTRACTS/runtime-electron-docker.md`.
+- Frontend UX: split production console, artifact preview panel, preview states, and motion expectations per `docs/CONTRACTS/ui-workbench.md` and `docs/CONTRACTS/visual-assets.md`.
+
+## Workbench Interaction Model
+
+The workbench is a preview-first conversational editor, not a direct editor in phase 1.
+
+- The left production console owns prompts, explicit artifact-type selection, uploads, search/model controls, run commands, status messages, warnings, and follow-up refinement requests.
+- The right artifact panel owns the current preview, file tabs, generated file list, copy/reveal/open affordances, and preview-specific status such as PDF compile failure or code validation notes.
+- The frontend owns user-facing locale selection and localized UI strings for English, Simplified Chinese (`zh-Hans`), and Traditional Chinese (`zh-Hant`). Canonical backend values, API enums, error machine codes, artifact filenames, and metadata keys stay untranslated.
+- The frontend owns design-token application for the warm editorial visual system: serif display typography, warm graphite/ink surfaces, parchment preview surfaces, clay/terracotta primary accents, restrained sage/amber/coral states, and mono code/run chrome.
+- A user follow-up creates a new generation run or revision. It must not mutate generated files only in frontend memory.
+- Code previews are rendered with syntax highlighting and editor-grade chrome, but generated code is not executed by the browser unless a later task adds a sandboxed execution contract.
+- PDF, slide, and cheat-sheet previews use generated PDFs when available; while a run is in progress, they show PDF-like skeleton/pages rather than raw LaTeX as the default view.
+- Raw `.tex`, logs, and manifests remain inspectable through file affordances, but preview surfaces should lead with the human artifact.
+
+## Frontend Rebuild Boundary
+
+The frontend rebuild boundary is intentionally asymmetric:
+
+- Stable side: backend routes, auth/session behavior, model settings endpoints, upload APIs, run creation/events, artifact manifests, and canonical error envelope.
+- Disposable side: existing frontend layout, component hierarchy, CSS, visual assets, placeholder previews, dashboard/chat composition, hard-coded English UI strings, and local UI state shape.
+- Adaptation rule: when the redesigned frontend meets an existing backend endpoint, adapt the frontend client to the documented contract instead of changing the backend.
+- Escalation rule: if the current backend contract is insufficient for the desired appearance, create or update a separate task and contract before touching backend code.
+- Partial-refactor rule: implementation may preserve working API/auth/run logic while replacing the visual shell, design tokens, localized copy boundary, console presentation, preview panel composition, and motion styles. Do not require a total frontend rewrite if a staged refactor can meet the same contracts.
 
 ## Dependency Rules
 
 - Electron may depend on Docker CLI/Compose availability and backend HTTP health endpoints; it must not import backend Python code.
 - Web UI may call backend APIs and consume server-sent events or polling; it must not read local secrets directly.
+- Web UI may render generated source and PDFs, but it must not treat editable frontend state as the source of truth for artifacts.
+- Web UI must not execute generated JavaScript, notebooks, shell commands, or arbitrary HTML in the main renderer. Any future execution feature needs a sandbox contract and a new task.
+- Frontend appearance tasks may freely replace frontend implementation details, but must not require backend code changes to pass.
 - Backend owns SQLite, filesystem artifacts, model provider calls, web search, and LaTeX compilation.
 - SQLite stores metadata only. Large uploads, generated source, notebooks, PDFs, logs, and manifests stay on disk.
 - Model provider code must depend on an abstract provider profile, not hard-coded Bianxie/OpenAI/Qwen constants.
@@ -133,9 +164,10 @@ Future runtimes must preserve the same contracts:
 1. Establish contracts and task queue.
 2. Introduce new storage and settings foundations alongside or in place of legacy code.
 3. Build generation pipeline contracts and one pipeline at a time.
-4. Replace UI with the new workbench.
-5. Add Electron shell and Docker runtime management.
-6. Remove legacy Postgres/Mongo/course/chat surfaces after their replacements are verified.
+4. Fully rebuild the frontend product surface into the new workbench while preserving backend-facing contracts.
+5. Add revision-run support if needed for follow-up refinement.
+6. Add Electron shell and Docker runtime management.
+7. Remove legacy Postgres/Mongo/course/chat surfaces after their replacements are verified.
 
 ## Tradeoffs
 
@@ -143,6 +175,8 @@ Future runtimes must preserve the same contracts:
 - **Electron + Docker Desktop over native bundling**: accepted for speed and runtime consistency even though it is not the final native distribution. See `docs/DECISIONS/002-electron-docker-first.md`.
 - **OpenAI-compatible Qwen client over native SDK**: keeps provider code small and portable. See `docs/DECISIONS/003-qwen-provider-default.md`.
 - **Artifact-specific pipelines over one generic endpoint**: trades more pipeline code for reliable, intent-shaped outputs.
+- **Preview-only conversational workbench over direct editing**: gives the product a modern artifact-generation feel while keeping phase-1 persistence and safety simple. See `docs/DECISIONS/006-conversational-preview-workbench.md`.
+- **Full frontend appearance rebuild over incremental polish**: the existing frontend UI is not a compatibility target; backend contracts are. See `docs/DECISIONS/007-full-frontend-appearance-rebuild.md`.
 
 Rejected alternatives:
 

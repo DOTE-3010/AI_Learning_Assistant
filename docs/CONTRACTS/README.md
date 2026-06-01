@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-05-31
+Last Reviewed: 2026-06-01
 Status: Active
 -->
 
@@ -18,8 +18,8 @@ Stable interfaces that implementation agents must preserve during the rebuild. U
 | Artifact filesystem | `artifact-filesystem.md` | project-maintainer | artifact writer, Electron reveal, pipelines | Active |
 | Generation pipeline | `generation-pipeline.md` | project-maintainer | run API, context builder, pipelines, UI | Active |
 | Electron + Docker runtime | `runtime-electron-docker.md` | project-maintainer | Electron shell, compose, launchers | Active |
-| UI workbench | `ui-workbench.md` | project-maintainer | web frontend | Active |
-| Visual assets | `visual-assets.md` | project-maintainer | web frontend, asset prompts | Active |
+| UI workbench | `ui-workbench.md` | project-maintainer | web frontend | Active; split production console plus artifact preview; old frontend appearance is disposable |
+| Visual assets | `visual-assets.md` | project-maintainer | web frontend, asset prompts | Active; preview-first visual/motion system; replace legacy visual assets as needed |
 
 ## Contract Rules
 

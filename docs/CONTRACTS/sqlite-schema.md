@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-05-31
+Last Reviewed: 2026-06-01
 Status: Active
 -->
 
@@ -82,6 +82,7 @@ The exact host path may change, but it must be stable across restarts and includ
 | `search_mode` | text not null | `auto`, `on`, `off` |
 | `status` | text not null | `queued`, `running`, `succeeded`, `failed`, `cancelled` |
 | `model_profile_id` | text nullable | selected profile |
+| `revision_of_run_id` | text nullable | prior run id when this run is a follow-up/revision |
 | `output_root` | text nullable | folder path |
 | `error_message` | text nullable | sanitized |
 | `created_at` | text not null | ISO timestamp |
@@ -142,6 +143,7 @@ The exact host path may change, but it must be stable across restarts and includ
 
 - A new database can be created without Postgres or Mongo.
 - Users, sessions, profiles, runs, uploads, artifacts, and citations can be inserted in isolation.
+- A revision run can reference a prior run without overwriting or mutating the prior run row/folder.
 - Large file contents are absent from SQLite rows.
 - `api_key_ref` never contains a raw key or recoverable ciphertext (see `model-settings.md`).
 
