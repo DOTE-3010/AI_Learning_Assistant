@@ -84,6 +84,12 @@ For SSE or polling responses:
 }
 ```
 
+Phase-1 polling fallback:
+
+- `GET /api/runs/{run_id}/events` returns the latest status event object for the authenticated run owner.
+- Clients poll this endpoint until `status` is `succeeded`, `failed`, or `cancelled`.
+- When the in-memory event history is unavailable, the endpoint falls back to the persisted run status; `context` may be absent in that fallback case.
+
 ## Context Estimation
 
 The context dial and the `context` block in the status event are driven by an estimator, not by exact provider accounting.

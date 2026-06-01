@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Callable
 
 import nbformat
 
@@ -34,6 +34,7 @@ def run_code_homework_pipeline(
     options: dict[str, Any] | None,
     search: dict[str, Any],
     max_output_tokens: int,
+    emit_event: Callable[[str, str], None] | None = None,
 ) -> PipelineResult:
     output_kind = normalize_output_preference(output_preference)
     log_lines = [
@@ -48,6 +49,8 @@ def run_code_homework_pipeline(
         options=options or {},
         search=search,
     )
+    if emit_event:
+        emit_event("generate_source", "Generating homework code")
 
     try:
         raw_output = model_provider.generate_text(
@@ -75,8 +78,8 @@ def run_code_homework_pipeline(
         ) from exc
 
     if output_kind == "ipynb":
-        return _write_notebook_output(artifact_run, raw_output, log_lines)
-    return _write_python_output(artifact_run, raw_output, log_lines)
+        return _write_notebook_output(artifact_run, raw_output, log_lines, emit_event)
+    return _write_python_output(artifact_run, raw_output, log_lines, emit_event)
 
 
 def normalize_output_preference(output_preference: str | None) -> str:
@@ -129,6 +132,7 @@ def _write_python_output(
     artifact_run: ArtifactRun,
     raw_output: str,
     log_lines: list[str],
+    emit_event: Callable[[str, str], None] | None = None,
 ) -> PipelineResult:
     source = extract_fenced_or_raw(raw_output, accepted_languages={"python", "py"})
     source = source.strip() + "\n"
@@ -139,6 +143,8 @@ def _write_python_output(
         media_type="text/x-python",
     )
     log_lines.append("Stage: validate_python")
+    if emit_event:
+        emit_event("validate_python", "Validating generated Python")
     try:
         compile(source, "solution.py", "exec")
     except SyntaxError as exc:
@@ -157,6 +163,7 @@ def _write_notebook_output(
     artifact_run: ArtifactRun,
     raw_output: str,
     log_lines: list[str],
+    emit_event: Callable[[str, str], None] | None = None,
 ) -> PipelineResult:
     candidate = extract_fenced_or_raw(
         raw_output,
@@ -164,6 +171,8 @@ def _write_notebook_output(
     )
     candidate = _extract_json_document(candidate)
     log_lines.append("Stage: validate_notebook")
+    if emit_event:
+        emit_event("validate_notebook", "Validating generated notebook")
     try:
         notebook = nbformat.reads(candidate, as_version=4)
         nbformat.validate(notebook)

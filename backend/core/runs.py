@@ -15,6 +15,12 @@ from backend.context.search_policy import (
     execute_search_policy,
 )
 from backend.core.model_settings import MODEL_API_KEY_REF, default_profile_values
+from backend.core.run_events import (
+    RunEventStore,
+    default_run_event_store,
+    emit_run_event,
+    latest_event_for_run,
+)
 from backend.pipelines.beamer_slides import run_beamer_slides_pipeline
 from backend.pipelines.cheat_sheet import run_cheat_sheet_pipeline
 from backend.pipelines.code_homework import (
@@ -78,6 +84,38 @@ def run_error_envelope(exc: RunError) -> dict[str, object]:
     if exc.fields:
         error["fields"] = exc.fields
     return {"error": error}
+
+
+def _emit_run_event(
+    *,
+    run_id: str,
+    status: str,
+    stage: str,
+    message: str,
+    preparation: RunPreparation | None = None,
+    error: dict[str, str] | None = None,
+) -> None:
+    emit_run_event(
+        run_id=run_id,
+        status=status,
+        stage=stage,
+        message=message,
+        context=preparation.context.estimate if preparation else None,
+        error=error,
+    )
+
+
+def _running_event_sink(run_id: str, preparation: RunPreparation) -> Callable[[str, str], None]:
+    def _emit(stage: str, message: str) -> None:
+        _emit_run_event(
+            run_id=run_id,
+            status="running",
+            stage=stage,
+            message=message,
+            preparation=preparation,
+        )
+
+    return _emit
 
 
 def validate_run_request(request: dict[str, Any]) -> None:
@@ -232,6 +270,7 @@ def execute_code_homework_run(
     model_provider: TextGenerationProvider,
 ) -> None:
     repo.update_run(run["id"], status="running", error_message=None)
+    emit_event = _running_event_sink(run["id"], preparation)
     try:
         result = run_code_homework_pipeline(
             artifact_run=artifact_run,
@@ -243,6 +282,7 @@ def execute_code_homework_run(
             options=preparation.routing.options,
             search=artifact_run.search,
             max_output_tokens=preparation.context.estimate.estimated_output_tokens,
+            emit_event=emit_event,
         )
     except PipelineError as exc:
         repo.update_run(
@@ -252,11 +292,26 @@ def execute_code_homework_run(
         )
         artifact_run.write_log("generation.log", exc.to_log_text())
         artifact_run.write_manifest(status="failed")
+        _emit_run_event(
+            run_id=run["id"],
+            status="failed",
+            stage=exc.stage,
+            message=exc.message,
+            preparation=preparation,
+            error={"code": exc.code, "message": exc.message},
+        )
         return
 
     repo.update_run(run["id"], status="succeeded", error_message=None)
     artifact_run.write_log("generation.log", result.log_text)
     artifact_run.write_manifest(status="succeeded")
+    _emit_run_event(
+        run_id=run["id"],
+        status="succeeded",
+        stage="write_manifest",
+        message="Run succeeded.",
+        preparation=preparation,
+    )
 
 
 def execute_essay_latex_run(
@@ -269,6 +324,7 @@ def execute_essay_latex_run(
     latex_compiler: LatexCompiler,
 ) -> None:
     repo.update_run(run["id"], status="running", error_message=None)
+    emit_event = _running_event_sink(run["id"], preparation)
     try:
         result = run_essay_latex_pipeline(
             artifact_run=artifact_run,
@@ -281,6 +337,7 @@ def execute_essay_latex_run(
             options=preparation.routing.options,
             search=artifact_run.search,
             max_output_tokens=preparation.context.estimate.estimated_output_tokens,
+            emit_event=emit_event,
         )
     except PipelineError as exc:
         repo.update_run(
@@ -290,11 +347,26 @@ def execute_essay_latex_run(
         )
         artifact_run.write_log("generation.log", exc.to_log_text())
         artifact_run.write_manifest(status="failed")
+        _emit_run_event(
+            run_id=run["id"],
+            status="failed",
+            stage=exc.stage,
+            message=exc.message,
+            preparation=preparation,
+            error={"code": exc.code, "message": exc.message},
+        )
         return
 
     repo.update_run(run["id"], status="succeeded", error_message=None)
     artifact_run.write_log("generation.log", result.log_text)
     artifact_run.write_manifest(status="succeeded")
+    _emit_run_event(
+        run_id=run["id"],
+        status="succeeded",
+        stage="write_manifest",
+        message="Run succeeded.",
+        preparation=preparation,
+    )
 
 
 def execute_beamer_slides_run(
@@ -307,6 +379,7 @@ def execute_beamer_slides_run(
     latex_compiler: LatexCompiler,
 ) -> None:
     repo.update_run(run["id"], status="running", error_message=None)
+    emit_event = _running_event_sink(run["id"], preparation)
     try:
         result = run_beamer_slides_pipeline(
             artifact_run=artifact_run,
@@ -319,6 +392,7 @@ def execute_beamer_slides_run(
             options=preparation.routing.options,
             search=artifact_run.search,
             max_output_tokens=preparation.context.estimate.estimated_output_tokens,
+            emit_event=emit_event,
         )
     except PipelineError as exc:
         repo.update_run(
@@ -328,11 +402,26 @@ def execute_beamer_slides_run(
         )
         artifact_run.write_log("generation.log", exc.to_log_text())
         artifact_run.write_manifest(status="failed")
+        _emit_run_event(
+            run_id=run["id"],
+            status="failed",
+            stage=exc.stage,
+            message=exc.message,
+            preparation=preparation,
+            error={"code": exc.code, "message": exc.message},
+        )
         return
 
     repo.update_run(run["id"], status="succeeded", error_message=None)
     artifact_run.write_log("generation.log", result.log_text)
     artifact_run.write_manifest(status="succeeded")
+    _emit_run_event(
+        run_id=run["id"],
+        status="succeeded",
+        stage="write_manifest",
+        message="Run succeeded.",
+        preparation=preparation,
+    )
 
 
 def execute_cheat_sheet_run(
@@ -345,6 +434,7 @@ def execute_cheat_sheet_run(
     latex_compiler: LatexCompiler,
 ) -> None:
     repo.update_run(run["id"], status="running", error_message=None)
+    emit_event = _running_event_sink(run["id"], preparation)
     try:
         result = run_cheat_sheet_pipeline(
             artifact_run=artifact_run,
@@ -358,6 +448,7 @@ def execute_cheat_sheet_run(
             search=artifact_run.search,
             max_output_tokens=preparation.context.estimate.estimated_output_tokens,
             uploads=preparation.context.uploads,
+            emit_event=emit_event,
         )
     except PipelineError as exc:
         repo.update_run(
@@ -367,11 +458,26 @@ def execute_cheat_sheet_run(
         )
         artifact_run.write_log("generation.log", exc.to_log_text())
         artifact_run.write_manifest(status="failed")
+        _emit_run_event(
+            run_id=run["id"],
+            status="failed",
+            stage=exc.stage,
+            message=exc.message,
+            preparation=preparation,
+            error={"code": exc.code, "message": exc.message},
+        )
         return
 
     repo.update_run(run["id"], status="succeeded", error_message=None)
     artifact_run.write_log("generation.log", result.log_text)
     artifact_run.write_manifest(status="succeeded")
+    _emit_run_event(
+        run_id=run["id"],
+        status="succeeded",
+        stage="write_manifest",
+        message="Run succeeded.",
+        preparation=preparation,
+    )
 
 
 def prepare_run_request(
@@ -436,6 +542,13 @@ def create_run(
         status="queued",
         model_profile_id=model_profile_id,
     )
+    _emit_run_event(
+        run_id=run_id,
+        status="queued",
+        stage="queued",
+        message="Run queued.",
+        preparation=preparation,
+    )
 
     writer = ArtifactWriter(workspace_root, repository=repo)
     artifact_run = writer.start_run(
@@ -477,6 +590,17 @@ def create_run(
             + "\n",
         )
         artifact_run.write_manifest(status="failed")
+        _emit_run_event(
+            run_id=run_id,
+            status="failed",
+            stage="decide_search",
+            message="Web search is unavailable for forced search mode.",
+            preparation=preparation,
+            error={
+                "code": "search_unavailable",
+                "message": "Web search is unavailable for forced search mode.",
+            },
+        )
         return serialize_run(run, preparation=preparation)
 
     executor(repo, artifact_run, run, preparation)
@@ -488,6 +612,19 @@ def get_run_for_user(repo: SQLiteRepository, *, run_id: str, user_id: str) -> di
     if not run or run["user_id"] != user_id:
         raise RunError(404, "not_found", "Run was not found.")
     return serialize_run(run)
+
+
+def get_run_status_event_for_user(
+    repo: SQLiteRepository,
+    *,
+    run_id: str,
+    user_id: str,
+    event_store: RunEventStore = default_run_event_store,
+) -> dict[str, Any]:
+    run = repo.get_run(run_id)
+    if not run or run["user_id"] != user_id:
+        raise RunError(404, "not_found", "Run was not found.")
+    return latest_event_for_run(run, store=event_store).to_dict()
 
 
 def serialize_run(

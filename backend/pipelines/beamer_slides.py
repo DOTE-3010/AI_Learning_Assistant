@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Callable
 
 from backend.artifacts.filesystem import ArtifactRun
 from backend.pipelines.common import (
@@ -31,6 +31,7 @@ def run_beamer_slides_pipeline(
     options: dict[str, Any] | None,
     search: dict[str, Any],
     max_output_tokens: int,
+    emit_event: Callable[[str, str], None] | None = None,
 ) -> PipelineResult:
     log_lines = [
         "Pipeline: beamer_slides",
@@ -43,6 +44,8 @@ def run_beamer_slides_pipeline(
         options=options or {},
         search=search,
     )
+    if emit_event:
+        emit_event("generate_source", "Generating Beamer LaTeX source")
 
     try:
         raw_output = model_provider.generate_text(
@@ -81,6 +84,8 @@ def run_beamer_slides_pipeline(
         media_type="text/x-tex",
     )
     log_lines.extend(["Output: output/slides.tex", "Stage: compile_pdf"])
+    if emit_event:
+        emit_event("compile_pdf", "Compiling Beamer PDF")
 
     try:
         compile_result = latex_compiler.compile(

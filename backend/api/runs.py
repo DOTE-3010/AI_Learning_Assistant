@@ -12,9 +12,11 @@ from backend.core.runs import (
     RunExecutor,
     create_run,
     default_run_executor,
+    get_run_status_event_for_user,
     get_run_for_user,
     run_error_envelope,
 )
+from backend.core.run_events import RunEventStore, default_run_event_store
 from backend.core.weak_auth import current_user_from_authorization
 from backend.context.search_policy import DuckDuckGoSearchAdapter, WebSearchAdapter
 from backend.storage.sqlite import SQLiteRepository
@@ -54,6 +56,10 @@ def get_run_search_adapter() -> WebSearchAdapter:
     return DuckDuckGoSearchAdapter()
 
 
+def get_run_event_store() -> RunEventStore:
+    return default_run_event_store
+
+
 def run_current_user(
     authorization: Annotated[str | None, Header()] = None,
     repo: SQLiteRepository = Depends(get_auth_repository),
@@ -88,3 +94,18 @@ def get_run(
     repo: SQLiteRepository = Depends(get_run_repository),
 ) -> dict[str, Any]:
     return get_run_for_user(repo, run_id=run_id, user_id=current_user["id"])
+
+
+@router.get("/{run_id}/events")
+def get_run_events(
+    run_id: str,
+    current_user: dict[str, Any] = Depends(run_current_user),
+    repo: SQLiteRepository = Depends(get_run_repository),
+    event_store: RunEventStore = Depends(get_run_event_store),
+) -> dict[str, Any]:
+    return get_run_status_event_for_user(
+        repo,
+        run_id=run_id,
+        user_id=current_user["id"],
+        event_store=event_store,
+    )

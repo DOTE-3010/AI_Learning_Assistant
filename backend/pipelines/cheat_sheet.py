@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Callable
 
 from backend.artifacts.filesystem import ArtifactRun
 from backend.context.extraction import UploadExtraction
@@ -33,6 +33,7 @@ def run_cheat_sheet_pipeline(
     search: dict[str, Any],
     max_output_tokens: int,
     uploads: tuple[UploadExtraction, ...],
+    emit_event: Callable[[str, str], None] | None = None,
 ) -> PipelineResult:
     options = options or {}
     target_pages = options.get("target_pages")
@@ -45,6 +46,8 @@ def run_cheat_sheet_pipeline(
 
     extraction_log = format_extraction_log(uploads)
     artifact_run.write_log("extraction.log", extraction_log)
+    if emit_event:
+        emit_event("extract_context", "Summarizing PDF extraction")
     log_lines = [
         "Pipeline: cheat_sheet",
         f"Output preference: {output_preference or 'pdf'}",
@@ -59,6 +62,8 @@ def run_cheat_sheet_pipeline(
         search=search,
         extraction_log=extraction_log,
     )
+    if emit_event:
+        emit_event("generate_source", "Generating cheat-sheet LaTeX source")
 
     try:
         raw_output = model_provider.generate_text(
@@ -94,6 +99,8 @@ def run_cheat_sheet_pipeline(
         media_type="text/x-tex",
     )
     log_lines.extend(["Output: output/cheat-sheet.tex", "Stage: compile_pdf"])
+    if emit_event:
+        emit_event("compile_pdf", "Compiling cheat-sheet PDF")
 
     try:
         compile_result = latex_compiler.compile(

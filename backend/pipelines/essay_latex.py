@@ -5,7 +5,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from backend.artifacts.filesystem import ArtifactRun
 from backend.pipelines.common import (
@@ -126,6 +126,7 @@ def run_essay_latex_pipeline(
     options: dict[str, Any] | None,
     search: dict[str, Any],
     max_output_tokens: int,
+    emit_event: Callable[[str, str], None] | None = None,
 ) -> PipelineResult:
     log_lines = [
         "Pipeline: essay_latex",
@@ -138,6 +139,8 @@ def run_essay_latex_pipeline(
         options=options or {},
         search=search,
     )
+    if emit_event:
+        emit_event("generate_source", "Generating essay LaTeX source")
 
     try:
         raw_output = model_provider.generate_text(
@@ -173,6 +176,8 @@ def run_essay_latex_pipeline(
         media_type="text/x-tex",
     )
     log_lines.extend(["Output: output/main.tex", "Stage: compile_pdf"])
+    if emit_event:
+        emit_event("compile_pdf", "Compiling LaTeX PDF")
 
     try:
         compile_result = latex_compiler.compile(
