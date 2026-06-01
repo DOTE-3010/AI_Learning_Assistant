@@ -15,6 +15,7 @@ from backend.context.search_policy import (
     execute_search_policy,
 )
 from backend.core.model_settings import MODEL_API_KEY_REF, default_profile_values
+from backend.pipelines.beamer_slides import run_beamer_slides_pipeline
 from backend.pipelines.code_homework import (
     normalize_output_preference,
     run_code_homework_pipeline,
@@ -130,6 +131,16 @@ def default_run_executor(
             latex_compiler=LatexMkCompiler(),
         )
         return
+    if preparation.routing.target.pipeline == "beamer_slides":
+        execute_beamer_slides_run(
+            repo,
+            artifact_run,
+            run,
+            preparation,
+            model_provider=model_provider,
+            latex_compiler=LatexMkCompiler(),
+        )
+        return
 
     payload = {
         "routing": preparation.routing.to_dict(),
@@ -168,6 +179,16 @@ def make_run_executor(
             return
         if preparation.routing.target.pipeline == "essay_latex":
             execute_essay_latex_run(
+                repo,
+                artifact_run,
+                run,
+                preparation,
+                model_provider=model_provider,
+                latex_compiler=latex_compiler or LatexMkCompiler(),
+            )
+            return
+        if preparation.routing.target.pipeline == "beamer_slides":
+            execute_beamer_slides_run(
                 repo,
                 artifact_run,
                 run,
@@ -229,6 +250,44 @@ def execute_essay_latex_run(
     repo.update_run(run["id"], status="running", error_message=None)
     try:
         result = run_essay_latex_pipeline(
+            artifact_run=artifact_run,
+            model_profile=preparation.model,
+            model_provider=model_provider,
+            latex_compiler=latex_compiler,
+            task_text=run["task_text"],
+            context_bundle=preparation.context.context_bundle,
+            output_preference=preparation.routing.output_preference,
+            options=preparation.routing.options,
+            search=artifact_run.search,
+            max_output_tokens=preparation.context.estimate.estimated_output_tokens,
+        )
+    except PipelineError as exc:
+        repo.update_run(
+            run["id"],
+            status="failed",
+            error_message=f"{exc.code}: {exc.message}",
+        )
+        artifact_run.write_log("generation.log", exc.to_log_text())
+        artifact_run.write_manifest(status="failed")
+        return
+
+    repo.update_run(run["id"], status="succeeded", error_message=None)
+    artifact_run.write_log("generation.log", result.log_text)
+    artifact_run.write_manifest(status="succeeded")
+
+
+def execute_beamer_slides_run(
+    repo: SQLiteRepository,
+    artifact_run: ArtifactRun,
+    run: dict[str, Any],
+    preparation: RunPreparation,
+    *,
+    model_provider: TextGenerationProvider,
+    latex_compiler: LatexCompiler,
+) -> None:
+    repo.update_run(run["id"], status="running", error_message=None)
+    try:
+        result = run_beamer_slides_pipeline(
             artifact_run=artifact_run,
             model_profile=preparation.model,
             model_provider=model_provider,
