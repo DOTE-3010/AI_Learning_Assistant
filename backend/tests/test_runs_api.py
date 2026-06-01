@@ -46,9 +46,11 @@ class FakeSearchAdapter:
 
 
 @pytest.fixture()
-def run_client(client, tmp_path):
+def run_client(client, tmp_path, monkeypatch):
     repo = SQLiteRepository.from_path(tmp_path / "runs.sqlite")
     workspace_root = tmp_path / "workspace"
+    monkeypatch.delenv("MODEL_API_KEY", raising=False)
+    monkeypatch.setenv("MODEL_SECRET_FILE", str(tmp_path / "missing.env"))
     app.dependency_overrides[get_auth_repository] = lambda: repo
     app.dependency_overrides[get_run_repository] = lambda: repo
     app.dependency_overrides[get_workspace_root] = lambda: str(workspace_root)
@@ -125,10 +127,16 @@ def test_student_can_create_queued_run(run_client):
     client, _repo, _workspace_root = run_client
     headers = _register_and_login(client, "student@link.cuhk.edu.hk")
 
+    def fake_executor(_repo, artifact_run, _run, _preparation):
+        artifact_run.write_log("generation.log", "queued by fake executor\n")
+        artifact_run.write_manifest(status="queued")
+
+    app.dependency_overrides[get_run_executor] = lambda: fake_executor
+
     response = client.post(
         "/api/runs",
         headers=headers,
-        json={"task_text": "Write code.", "intent": "code_homework", "search_mode": "off"},
+        json={"task_text": "Write an essay.", "intent": "essay_latex", "search_mode": "off"},
     )
 
     assert response.status_code == 202
@@ -177,6 +185,27 @@ def test_run_api_rejects_missing_intent(run_client):
 
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "unsupported_intent"
+
+
+def test_run_api_rejects_unsupported_code_output_preference(run_client):
+    client, _repo, _workspace_root = run_client
+    headers = _register_and_login(client, "teacher@cuhk.edu.hk")
+
+    response = client.post(
+        "/api/runs",
+        headers=headers,
+        json={
+            "task_text": "Write code.",
+            "intent": "code_homework",
+            "output_preference": "pdf",
+            "search_mode": "off",
+        },
+    )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["error"]["code"] == "validation_error"
+    assert {"field": "output_preference", "rule": "enum"} in body["error"]["fields"]
 
 
 def test_search_mode_off_skips_adapter_call_and_persists_no_citations(run_client):

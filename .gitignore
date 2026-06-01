@@ -22,3 +22,7 @@ workspace/
 
 # OS/editor noise
 .DS_Store
+
+# API keys
+
+Qwen_API

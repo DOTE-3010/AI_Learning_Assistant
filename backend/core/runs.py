@@ -14,13 +14,25 @@ from backend.context.search_policy import (
     WebSearchAdapter,
     execute_search_policy,
 )
-from backend.core.model_settings import default_profile_values
+from backend.core.model_settings import MODEL_API_KEY_REF, default_profile_values
+from backend.pipelines.code_homework import (
+    normalize_output_preference,
+    run_code_homework_pipeline,
+)
+from backend.pipelines.common import PipelineError
+from backend.pipelines.essay_latex import (
+    LatexCompiler,
+    LatexMkCompiler,
+    run_essay_latex_pipeline,
+)
 from backend.pipelines.router import (
     SUPPORTED_INTENTS,
     RoutingDecision,
     UnsupportedIntentError,
     route_intent,
 )
+from backend.providers.base import TextGenerationProvider
+from backend.providers.openai_compatible import OpenAICompatibleTextProvider
 from backend.storage.sqlite import SQLiteRepository
 
 VALID_INTENTS = set(SUPPORTED_INTENTS)
@@ -78,6 +90,11 @@ def validate_run_request(request: dict[str, Any]) -> None:
         raise RunError(400, "unsupported_intent", "Unsupported generation intent.")
     if search_mode not in VALID_SEARCH_MODES:
         fields.append({"field": "search_mode", "rule": "enum"})
+    if intent == "code_homework":
+        try:
+            normalize_output_preference(request.get("output_preference"))
+        except PipelineError:
+            fields.append({"field": "output_preference", "rule": "enum"})
     if intent == "cheat_sheet":
         target_pages = (request.get("options") or {}).get("target_pages")
         if not isinstance(target_pages, int) or target_pages <= 0:
@@ -88,11 +105,32 @@ def validate_run_request(request: dict[str, Any]) -> None:
 
 
 def default_run_executor(
-    _repo: SQLiteRepository,
+    repo: SQLiteRepository,
     artifact_run: ArtifactRun,
-    _run: dict[str, Any],
+    run: dict[str, Any],
     preparation: RunPreparation,
 ) -> None:
+    model_provider = OpenAICompatibleTextProvider()
+    if preparation.routing.target.pipeline == "code_homework":
+        execute_code_homework_run(
+            repo,
+            artifact_run,
+            run,
+            preparation,
+            model_provider=model_provider,
+        )
+        return
+    if preparation.routing.target.pipeline == "essay_latex":
+        execute_essay_latex_run(
+            repo,
+            artifact_run,
+            run,
+            preparation,
+            model_provider=model_provider,
+            latex_compiler=LatexMkCompiler(),
+        )
+        return
+
     payload = {
         "routing": preparation.routing.to_dict(),
         "context": preparation.context.estimate.to_dict(),
@@ -106,6 +144,115 @@ def default_run_executor(
         + "\n",
     )
     artifact_run.write_manifest(status="queued")
+
+
+def make_run_executor(
+    model_provider: TextGenerationProvider,
+    *,
+    latex_compiler: LatexCompiler | None = None,
+) -> RunExecutor:
+    def _executor(
+        repo: SQLiteRepository,
+        artifact_run: ArtifactRun,
+        run: dict[str, Any],
+        preparation: RunPreparation,
+    ) -> None:
+        if preparation.routing.target.pipeline == "code_homework":
+            execute_code_homework_run(
+                repo,
+                artifact_run,
+                run,
+                preparation,
+                model_provider=model_provider,
+            )
+            return
+        if preparation.routing.target.pipeline == "essay_latex":
+            execute_essay_latex_run(
+                repo,
+                artifact_run,
+                run,
+                preparation,
+                model_provider=model_provider,
+                latex_compiler=latex_compiler or LatexMkCompiler(),
+            )
+            return
+        default_run_executor(repo, artifact_run, run, preparation)
+
+    return _executor
+
+
+def execute_code_homework_run(
+    repo: SQLiteRepository,
+    artifact_run: ArtifactRun,
+    run: dict[str, Any],
+    preparation: RunPreparation,
+    *,
+    model_provider: TextGenerationProvider,
+) -> None:
+    repo.update_run(run["id"], status="running", error_message=None)
+    try:
+        result = run_code_homework_pipeline(
+            artifact_run=artifact_run,
+            model_profile=preparation.model,
+            model_provider=model_provider,
+            task_text=run["task_text"],
+            context_bundle=preparation.context.context_bundle,
+            output_preference=preparation.routing.output_preference,
+            options=preparation.routing.options,
+            search=artifact_run.search,
+            max_output_tokens=preparation.context.estimate.estimated_output_tokens,
+        )
+    except PipelineError as exc:
+        repo.update_run(
+            run["id"],
+            status="failed",
+            error_message=f"{exc.code}: {exc.message}",
+        )
+        artifact_run.write_log("generation.log", exc.to_log_text())
+        artifact_run.write_manifest(status="failed")
+        return
+
+    repo.update_run(run["id"], status="succeeded", error_message=None)
+    artifact_run.write_log("generation.log", result.log_text)
+    artifact_run.write_manifest(status="succeeded")
+
+
+def execute_essay_latex_run(
+    repo: SQLiteRepository,
+    artifact_run: ArtifactRun,
+    run: dict[str, Any],
+    preparation: RunPreparation,
+    *,
+    model_provider: TextGenerationProvider,
+    latex_compiler: LatexCompiler,
+) -> None:
+    repo.update_run(run["id"], status="running", error_message=None)
+    try:
+        result = run_essay_latex_pipeline(
+            artifact_run=artifact_run,
+            model_profile=preparation.model,
+            model_provider=model_provider,
+            latex_compiler=latex_compiler,
+            task_text=run["task_text"],
+            context_bundle=preparation.context.context_bundle,
+            output_preference=preparation.routing.output_preference,
+            options=preparation.routing.options,
+            search=artifact_run.search,
+            max_output_tokens=preparation.context.estimate.estimated_output_tokens,
+        )
+    except PipelineError as exc:
+        repo.update_run(
+            run["id"],
+            status="failed",
+            error_message=f"{exc.code}: {exc.message}",
+        )
+        artifact_run.write_log("generation.log", exc.to_log_text())
+        artifact_run.write_manifest(status="failed")
+        return
+
+    repo.update_run(run["id"], status="succeeded", error_message=None)
+    artifact_run.write_log("generation.log", result.log_text)
+    artifact_run.write_manifest(status="succeeded")
 
 
 def prepare_run_request(
@@ -178,7 +325,7 @@ def create_run(
         run_id=run_id,
         intent=intent,
         task_text=task_text,
-        model=preparation.model,
+        model=_manifest_model(preparation.model),
         search={
             "mode": preparation.context.search_policy.mode,
             "decision": preparation.context.search_policy.decision,
@@ -266,15 +413,27 @@ def _resolve_model_for_run(
         return {
             "profile_id": "environment-default",
             "provider": defaults["provider"],
+            "base_url": defaults["base_url"],
             "model": defaults["model"],
+            "api_key_ref": MODEL_API_KEY_REF,
             "context_window_hint": defaults["context_window_hint"],
         }
 
     return {
         "profile_id": profile["id"],
         "provider": profile["provider"],
+        "base_url": profile["base_url"],
         "model": profile["model"],
+        "api_key_ref": profile.get("api_key_ref"),
         "context_window_hint": profile.get("context_window_hint"),
+    }
+
+
+def _manifest_model(model: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "profile_id": model.get("profile_id"),
+        "provider": model.get("provider"),
+        "model": model.get("model"),
     }
 
 

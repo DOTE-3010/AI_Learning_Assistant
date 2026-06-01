@@ -39,6 +39,8 @@ Route user intent to reliable artifact-specific generation instead of one generi
 
 `intent` is selected by the UI through an explicit artifact-type control. The backend must not infer the pipeline solely from `task_text` in phase 1.
 
+For `code_homework`, `output_preference` defaults to `py` and may be either `py` or `ipynb`. The backend may normalize UI-friendly aliases such as `.py`, `python`, `script`, `.ipynb`, `notebook`, or `jupyter` into those canonical values. Unsupported code output preferences fail request validation with `validation_error`.
+
 ## Run Lifecycle
 
 ```text
@@ -111,6 +113,7 @@ Search citations must be stored in metadata and manifest when used.
 
 - Pipelines produce source files first; compiled/rendered outputs are secondary.
 - Code generation should prefer runnable, complete files over snippets.
+- Code generation writes either `solution.py` or `solution.ipynb`; notebook output must validate as nbformat JSON.
 - LaTeX generation should produce full compilable documents for essay, slides, and cheat-sheet intents.
 - Cheat-sheet layout may use aggressive typography, columns, and small fonts, but must target the requested A4 page count.
 - Model calls must be mockable in tests.
@@ -122,6 +125,7 @@ Uses the canonical envelope (`errors.md`). `POST /api/runs` validation errors ar
 | Scenario | Surfaced as | Code |
 | --- | --- | --- |
 | Missing/unknown/unsupported `intent` | 400 sync | `unsupported_intent` |
+| Unsupported `code_homework.output_preference` | 400 sync | `validation_error` |
 | `cheat_sheet` without `options.target_pages` | 400 sync | `validation_error` |
 | Referenced `upload_ids` missing | 400 sync | `not_found` |
 | No usable model key | run `failed` | `missing_api_key` |
@@ -134,6 +138,7 @@ Uses the canonical envelope (`errors.md`). `POST /api/runs` validation errors ar
 
 - `intent` is one of `code_homework`, `essay_latex`, `beamer_slides`, `cheat_sheet`.
 - `search_mode` is one of `auto`, `on`, `off`.
+- `code_homework.output_preference` is `py` or `ipynb` after normalization.
 - `cheat_sheet` requires `options.target_pages` (positive integer).
 - Students and teachers can both create generation runs in phase 1.
 
