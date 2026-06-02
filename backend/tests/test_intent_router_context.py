@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from backend.context.budget import ContextSection, estimate_context_budget
@@ -160,6 +162,76 @@ def test_context_builder_marks_oversized_estimate_as_critical(tmp_path):
     assert prepared.search_policy.mode == "auto"
     assert prepared.search_policy.decision == "auto_use_search"
     assert prepared.search_policy.should_search is True
+
+
+def test_revision_context_budget_scales_with_profile_window(tmp_path):
+    repo = SQLiteRepository.from_path(tmp_path / "context.sqlite")
+    user = repo.create_user(
+        id="user-1",
+        email="teacher@cuhk.edu.hk",
+        role="teacher",
+        password_hash="hash",
+    )
+    run_root = tmp_path / "workspace" / "run-1"
+    output_dir = run_root / "output"
+    logs_dir = run_root / "logs"
+    output_dir.mkdir(parents=True)
+    logs_dir.mkdir(parents=True)
+    source_text = "print('prior line')\n" * 3000 + "\nLARGE_WINDOW_TAIL_MARKER\n"
+    (output_dir / "solution.py").write_text(source_text, encoding="utf-8")
+    (logs_dir / "generation.log").write_text(
+        "safe log line\n" * 2000 + "LARGE_LOG_TAIL_MARKER\n",
+        encoding="utf-8",
+    )
+    (run_root / "manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "run_id": "prior-run",
+                "intent": "code_homework",
+                "status": "succeeded",
+                "outputs": [{"path": "output/solution.py", "kind": "script"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    repo.create_run(
+        id="prior-run",
+        user_id=user["id"],
+        intent="code_homework",
+        task_text="Write a solution.",
+        search_mode="off",
+        status="succeeded",
+        output_root=str(run_root),
+    )
+
+    conservative = build_run_context(
+        repo,
+        task_text="Refine the solution.",
+        intent="code_homework",
+        search_mode="off",
+        revision_of_run_id="prior-run",
+        user_id=user["id"],
+        context_window_limit=128000,
+    )
+    expanded = build_run_context(
+        repo,
+        task_text="Refine the solution.",
+        intent="code_homework",
+        search_mode="off",
+        revision_of_run_id="prior-run",
+        user_id=user["id"],
+        context_window_limit=1000000,
+    )
+
+    assert "LARGE_WINDOW_TAIL_MARKER" not in conservative.context_bundle
+    assert "Truncated prior generated source to 12000 characters" in conservative.context_bundle
+    assert "LARGE_WINDOW_TAIL_MARKER" in expanded.context_bundle
+    assert "LARGE_LOG_TAIL_MARKER" not in expanded.context_bundle
+    assert expanded.estimate.context_window_limit == 1000000
+    assert expanded.estimate.section_breakdown["revision:prior-run"] > (
+        conservative.estimate.section_breakdown["revision:prior-run"]
+    )
 
 
 def _write_blank_pdf(path):

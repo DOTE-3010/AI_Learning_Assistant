@@ -43,9 +43,10 @@ Replace the old local runtime compose/launcher behavior with the SQLite-backed b
 
 ## Verification
 
-- `docker compose config`
-- `docker compose up --build -d`
+- `docker compose -p ai-learning-assistant config`
+- `docker compose -p ai-learning-assistant up --build -d`
 - `curl -fsS http://localhost:14242/health`
+- `docker compose -p ai-learning-assistant down`
 
 ## Risks
 

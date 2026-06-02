@@ -59,6 +59,7 @@ class ArtifactRun:
     run_dir: Path
     model: dict[str, Any]
     search: dict[str, Any]
+    revision_of_run_id: str | None = None
     repository: SQLiteRepository | None = None
     created_at: str = field(default_factory=_created_at)
     inputs: list[dict[str, str]] = field(default_factory=list)
@@ -109,6 +110,7 @@ class ArtifactRun:
         manifest = {
             "schema_version": MANIFEST_SCHEMA_VERSION,
             "run_id": self.run_id,
+            "revision_of_run_id": self.revision_of_run_id,
             "intent": self.intent,
             "created_at": self.created_at,
             "model": self.model,
@@ -153,6 +155,7 @@ class ArtifactWriter:
         task_text: str,
         model: dict[str, Any],
         search: dict[str, Any],
+        revision_of_run_id: str | None = None,
     ) -> ArtifactRun:
         run_dir = (
             self.root
@@ -172,6 +175,7 @@ class ArtifactWriter:
             run_dir=run_dir,
             model=model,
             search=search,
+            revision_of_run_id=revision_of_run_id,
             repository=self.repository,
         )
         artifact_run.write_task(task_text)

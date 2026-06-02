@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-05-31
+Last Reviewed: 2026-06-02
 Status: Active
 -->
 
@@ -31,6 +31,7 @@ Docker Desktop must be installed and running. Python, Node, LaTeX, Postgres, and
 - Serve the web workbench or allow Electron to load the local renderer bundle.
 - Mount a data volume for SQLite.
 - Mount a workspace volume for generated artifacts.
+- Store local model secret files under the mounted data volume, not in the container's ephemeral filesystem.
 - Include LaTeX/PDF runtime dependencies inside the container.
 
 ## Compose Requirements
@@ -42,6 +43,8 @@ First-phase compose should include:
 - persistent workspace volume/path
 
 It should not include Postgres or Mongo for the rebuilt local runtime.
+
+The root `compose.yml` is the canonical local runtime file for phase 1. Electron starts it with the Compose project name `ai-learning-assistant` so containers and networks do not depend on the checkout folder name. Development smoke scripts may override the host data/workspace mount paths with temporary folders, but the in-container paths stay `/app/data` and `/app/workspace`.
 
 ## Startup States
 
@@ -67,7 +70,9 @@ Shell errors are presented to the user and also written to the launching termina
 
 ## Launcher Scripts
 
-`.command` and `.bat` launchers may remain as quasi-double-click entry points. They should eventually call or launch the Electron app, not replace it.
+`.command` and `.bat` launchers may remain as quasi-double-click entry points. Their preferred path is to launch the Electron shell so Electron owns Docker detection, Compose startup, backend health polling, and window loading. Development launchers may start the rebuilt Docker runtime directly when local Electron dependencies are not installed, but they must not write real model credentials.
+
+When a development launcher falls back to direct Docker startup, it still waits for `/health` before opening `/ui/` so first builds and slower container starts do not show a dead browser page.
 
 ## Acceptance Checks
 
@@ -78,4 +83,4 @@ Shell errors are presented to the user and also written to the launching termina
 
 ## Open Questions
 
-- Whether the shell should pin a specific compose project name/version to avoid colliding with other local Docker projects.
+- None for the phase-1 Compose project name; it is pinned to `ai-learning-assistant`.

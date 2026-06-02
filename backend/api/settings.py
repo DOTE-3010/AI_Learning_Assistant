@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Annotated, Any, Callable
 
 from fastapi import APIRouter, Depends, Header, Request
@@ -14,11 +15,13 @@ from backend.core.model_settings import (
     save_default_profile,
 )
 from backend.core.weak_auth import current_user_from_authorization
+from backend.providers.mock import test_mock_provider
 from backend.providers.openai_compatible import test_openai_compatible_provider
 from backend.storage.sqlite import SQLiteRepository
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 ProviderTester = Callable[[dict[str, Any], str], dict[str, Any]]
+MOCK_MODEL_PROVIDER_ENV = "AILA_MOCK_MODEL_PROVIDER"
 
 
 class ModelProfileRequest(BaseModel):
@@ -57,6 +60,8 @@ def get_settings_repository() -> SQLiteRepository:
 
 
 def get_provider_tester() -> ProviderTester:
+    if os.getenv(MOCK_MODEL_PROVIDER_ENV, "").strip().lower() in {"1", "true", "yes", "on"}:
+        return test_mock_provider
     return test_openai_compatible_provider
 
 

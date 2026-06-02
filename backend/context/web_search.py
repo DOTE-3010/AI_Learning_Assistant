@@ -15,11 +15,12 @@ def _normalize_result(item: Dict) -> Dict[str, str]:
     }
 
 
-def perform_web_search(query: str, max_results: int = 3, retries: int = 2, timeout_s: int = 10) -> List[Dict[str, str]]:
-    """
-    Search with retries and normalized output.
-    Returns [] on failure so answer generation can continue safely.
-    """
+def perform_web_search(
+    query: str,
+    max_results: int = 3,
+    retries: int = 2,
+    timeout_s: int = 10,
+) -> List[Dict[str, str]]:
     last_error = None
     for attempt in range(retries + 1):
         try:
@@ -36,4 +37,3 @@ def perform_web_search(query: str, max_results: int = 3, retries: int = 2, timeo
     if last_error:
         logger.warning("Web search failed after retries: %s", last_error)
     return []
-

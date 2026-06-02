@@ -61,6 +61,7 @@ These are repo-specific rules. General programming hygiene and anything a linter
 - Never log raw API keys, uploaded private documents, or full prompts by default.
 - Persist only references and metadata in SQLite; do not store large uploaded files or generated PDFs in database rows.
 - Web search must be recorded in run metadata as `auto`, `on`, or `off`, with citations when used.
+- Revision/follow-up context must be ownership-checked, sanitized, and bounded by a policy tied to the selected model profile's `context_window_hint`; do not replace this with a fixed large prompt dump.
 - Any destructive filesystem cleanup must be scoped to generated runtime folders and described in the active task.
 - `.env`, `.env.*`, local settings containing secrets, Docker volumes, and generated workspaces remain untracked.
 

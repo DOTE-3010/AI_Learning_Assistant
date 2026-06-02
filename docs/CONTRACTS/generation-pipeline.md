@@ -111,6 +111,16 @@ The context dial and the `context` block in the status event are driven by an es
 - Guardrail: at `warning`, the builder may compress/summarize low-priority context before sending; at `critical`, it compresses aggressively and, if still over the window, fails the run with `context_overflow` rather than silently truncating required input.
 - The estimator backend (`provider` vs `heuristic`) is reported as `context.source` so the UI can label estimates honestly.
 
+## Revision Context Budgeting
+
+When `revision_of_run_id` is present, prior-run context is low-priority input. The builder may include prior manifest summary, output filenames, generated source, and sanitized logs, but must not use a single fixed prompt dump for every model.
+
+- The selected model profile's `context_window_hint` drives the revision budget. The budget should preserve room for the new task, current uploads/options, and the expected output tokens.
+- Prior generated source may scale upward for larger windows, but it remains bounded by a policy cap and is still included only from owned prior runs.
+- Logs remain much more tightly capped than generated source because they are higher-risk and lower-value; sanitization must run before truncation.
+- When the profile hint is missing or small, the current conservative fallback is acceptable. When the hint is large, the default revision source budget should be meaningfully larger than the legacy 24k-character cap while still keeping the context dial below warning thresholds for ordinary follow-ups.
+- The status/context estimate must count the revision text that is actually included.
+
 ## Web Search Policy
 
 - `off`: no search.

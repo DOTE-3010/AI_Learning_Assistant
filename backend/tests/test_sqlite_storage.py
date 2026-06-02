@@ -32,7 +32,12 @@ def test_initialize_database_creates_contract_tables(tmp_path):
                 "select name from sqlite_master where type = 'table'"
             ).scalars()
         )
+        run_columns = {
+            row._mapping["name"]
+            for row in connection.exec_driver_sql("PRAGMA table_info(runs)").all()
+        }
     assert EXPECTED_TABLES.issubset(table_names)
+    assert "revision_of_run_id" in run_columns
 
 
 def test_repository_inserts_and_reads_representative_metadata(tmp_path):
@@ -78,6 +83,18 @@ def test_repository_inserts_and_reads_representative_metadata(tmp_path):
         status="queued",
         output_root="workspace/project-1/run-1",
     )
+    revision_run = repo.create_run(
+        id="run-2",
+        project_id=project["id"],
+        user_id=user["id"],
+        model_profile_id=profile["id"],
+        intent="code_homework",
+        task_text="Refine the assignment.",
+        search_mode="auto",
+        status="queued",
+        revision_of_run_id=run["id"],
+        output_root="workspace/project-1/run-2",
+    )
     upload = repo.create_upload(
         id="upload-1",
         run_id=run["id"],
@@ -108,7 +125,44 @@ def test_repository_inserts_and_reads_representative_metadata(tmp_path):
     assert repo.get_model_profile(profile["id"])["api_key_ref"] == "env:MODEL_API_KEY"
     assert repo.get_project(project["id"])["root_path"] == "workspace/project-1"
     assert repo.get_run(run["id"])["status"] == "queued"
+    assert repo.get_run(run["id"])["revision_of_run_id"] is None
+    assert repo.get_run(revision_run["id"])["revision_of_run_id"] == run["id"]
     assert repo.get_upload(upload["id"])["stored_path"] == "workspace/uploads/brief.pdf"
     assert repo.get_artifact(artifact["id"])["kind"] == "manifest"
     assert repo.get_citation(citation["id"])["url"] == "https://example.edu/reference"
     assert repo.list_citations_for_run(run["id"])[0]["id"] == citation["id"]
+
+
+def test_initialize_database_migrates_v1_runs_with_revision_column(tmp_path):
+    db_path = tmp_path / "legacy.sqlite"
+    engine = create_sqlite_engine(db_path)
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            """
+            create table runs (
+                id text primary key,
+                project_id text nullable,
+                user_id text not null,
+                intent text not null,
+                task_text text not null,
+                search_mode text not null,
+                status text not null,
+                model_profile_id text nullable,
+                output_root text nullable,
+                error_message text nullable,
+                created_at text not null,
+                updated_at text not null
+            )
+            """
+        )
+        connection.exec_driver_sql("PRAGMA user_version = 1")
+
+    initialize_database(engine)
+
+    assert get_schema_version(engine) == SCHEMA_VERSION
+    with engine.connect() as connection:
+        run_columns = {
+            row._mapping["name"]
+            for row in connection.exec_driver_sql("PRAGMA table_info(runs)").all()
+        }
+    assert "revision_of_run_id" in run_columns

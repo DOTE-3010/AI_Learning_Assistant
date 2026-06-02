@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import uuid
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -40,11 +41,13 @@ from backend.pipelines.router import (
     route_intent,
 )
 from backend.providers.base import TextGenerationProvider
+from backend.providers.mock import MockTextGenerationProvider
 from backend.providers.openai_compatible import OpenAICompatibleTextProvider
 from backend.storage.sqlite import SQLiteRepository
 
 VALID_INTENTS = set(SUPPORTED_INTENTS)
 VALID_SEARCH_MODES = {"auto", "on", "off"}
+MOCK_MODEL_PROVIDER_ENV = "AILA_MOCK_MODEL_PROVIDER"
 
 
 @dataclass(frozen=True)
@@ -150,7 +153,7 @@ def default_run_executor(
     run: dict[str, Any],
     preparation: RunPreparation,
 ) -> None:
-    model_provider = OpenAICompatibleTextProvider()
+    model_provider = _default_model_provider()
     if preparation.routing.target.pipeline == "code_homework":
         execute_code_homework_run(
             repo,
@@ -487,6 +490,7 @@ def prepare_run_request(
     request: dict[str, Any],
 ) -> RunPreparation:
     validate_run_request(request)
+    revision_of_run_id = _clean_revision_of_run_id(request.get("revision_of_run_id"))
     try:
         routing = route_intent(
             request.get("intent"),
@@ -510,6 +514,8 @@ def prepare_run_request(
             upload_ids=request.get("upload_ids") or [],
             options=routing.options,
             context_window_limit=model.get("context_window_hint"),
+            revision_of_run_id=revision_of_run_id,
+            user_id=current_user["id"],
         )
     except ContextBuildError as exc:
         raise RunError(exc.status_code, exc.code, exc.message, exc.fields) from exc
@@ -532,6 +538,7 @@ def create_run(
     intent = preparation.routing.resolved_intent
     search_mode = request.get("search_mode", "auto")
     model_profile_id = request.get("model_profile_id")
+    revision_of_run_id = _clean_revision_of_run_id(request.get("revision_of_run_id"))
 
     run = repo.create_run(
         id=run_id,
@@ -541,6 +548,7 @@ def create_run(
         search_mode=search_mode,
         status="queued",
         model_profile_id=model_profile_id,
+        revision_of_run_id=revision_of_run_id,
     )
     _emit_run_event(
         run_id=run_id,
@@ -564,6 +572,7 @@ def create_run(
             "used": False,
             "citations": [],
         },
+        revision_of_run_id=revision_of_run_id,
     )
     run = repo.update_run(run_id, output_root=str(artifact_run.run_dir.resolve())) or run
     search_result = _run_search_policy(
@@ -639,6 +648,7 @@ def serialize_run(
         "task_text": run["task_text"],
         "search_mode": run["search_mode"],
         "model_profile_id": run.get("model_profile_id"),
+        "revision_of_run_id": run.get("revision_of_run_id"),
         "output_root": run.get("output_root"),
         "error_message": run.get("error_message"),
         "created_at": run["created_at"],
@@ -648,6 +658,19 @@ def serialize_run(
         body["routing"] = preparation.routing.to_dict()
         body["context"] = preparation.context.estimate.to_dict()
     return body
+
+
+def _clean_revision_of_run_id(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def _default_model_provider() -> TextGenerationProvider:
+    if os.getenv(MOCK_MODEL_PROVIDER_ENV, "").strip().lower() in {"1", "true", "yes", "on"}:
+        return MockTextGenerationProvider()
+    return OpenAICompatibleTextProvider()
 
 
 def _resolve_model_for_run(

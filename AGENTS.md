@@ -1,5 +1,5 @@
 Status: Active
-Last Reviewed: 2026-06-01
+Last Reviewed: 2026-06-02
 
 # Agent Instructions
 
@@ -31,8 +31,9 @@ Start with these files before implementing:
 - Backend tests: `.venv/bin/python -m pytest backend/tests -q`
 - Frontend build: `npm --prefix frontend run build`
 - Frontend dev: `npm --prefix frontend run dev`
-- Docker config check: `docker compose config`
-- Docker runtime smoke: `docker compose up --build -d && curl -fsS http://localhost:14242/health`
+- Docker config check: `docker compose -p ai-learning-assistant config`
+- Docker runtime smoke: `docker compose -p ai-learning-assistant up --build -d && curl -fsS http://localhost:14242/health`
+- End-to-end smoke: `./scripts/smoke_e2e.sh`
 - Governance check: `/Users/myron/Desktop/constitution/coding_agent_constitution/constitution-skill/scripts/check-governance.sh .`
 
 Commands may change during the rewrite. Update this file and the matching task when a command becomes stale.

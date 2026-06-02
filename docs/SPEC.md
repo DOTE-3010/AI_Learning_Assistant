@@ -61,6 +61,7 @@ The product should feel like a polished consumer creative tool, not a generic ad
 7. The backend runs the selected artifact pipeline and streams stage status to the UI.
 8. The right-side artifact panel moves from placeholder, to running preview state, to generated code/PDF/slides/cheat-sheet preview.
 9. User asks for follow-up refinements in the console; the app creates a new run or revision while preserving the previous output in history.
+   Revision runs should carry enough prior artifact context to support meaningful refinements, with the included prior source/log budget adapting to the selected model profile's context window rather than a fixed legacy cap.
 10. The app writes a structured output folder containing source files, PDFs when applicable, metadata, citations, and logs.
 11. User reviews, opens, copies, downloads, reveals, or regenerates the artifact. Direct in-app editing is out of scope for phase 1.
 

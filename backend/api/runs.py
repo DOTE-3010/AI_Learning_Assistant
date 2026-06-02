@@ -32,6 +32,7 @@ class RunCreateRequest(BaseModel):
     output_preference: str | None = None
     search_mode: str = "auto"
     model_profile_id: str | None = None
+    revision_of_run_id: str | None = None
     upload_ids: list[str] = Field(default_factory=list)
     options: dict[str, Any] = Field(default_factory=dict)
 

@@ -21,7 +21,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.engine import Engine
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 SQLITE_PATH_ENV = "APP_SQLITE_PATH"
 DEFAULT_SQLITE_PATH = Path("data/app.sqlite")
 
@@ -89,6 +89,7 @@ runs = Table(
     Column("search_mode", Text, nullable=False),
     Column("status", Text, nullable=False),
     Column("model_profile_id", Text, ForeignKey("model_profiles.id"), nullable=True),
+    Column("revision_of_run_id", Text, nullable=True),
     Column("output_root", Text, nullable=True),
     Column("error_message", Text, nullable=True),
     Column("created_at", Text, nullable=False),
@@ -174,9 +175,24 @@ def initialize_database(engine: Engine) -> None:
 
     metadata.create_all(engine)
 
-    if current_version < SCHEMA_VERSION:
+    if current_version == 0:
         with engine.begin() as connection:
             connection.exec_driver_sql(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        return
+
+    if current_version < 2:
+        with engine.begin() as connection:
+            _migrate_1_to_2(connection)
+            connection.exec_driver_sql("PRAGMA user_version = 2")
+
+
+def _migrate_1_to_2(connection: Any) -> None:
+    columns = {
+        row._mapping["name"]
+        for row in connection.exec_driver_sql("PRAGMA table_info(runs)").all()
+    }
+    if "revision_of_run_id" not in columns:
+        connection.exec_driver_sql("ALTER TABLE runs ADD COLUMN revision_of_run_id text")
 
 
 def _now() -> str:
@@ -428,6 +444,7 @@ class SQLiteRepository:
         status: str,
         project_id: str | None = None,
         model_profile_id: str | None = None,
+        revision_of_run_id: str | None = None,
         output_root: str | None = None,
         error_message: str | None = None,
         id: str | None = None,
@@ -446,6 +463,7 @@ class SQLiteRepository:
                 "search_mode": search_mode,
                 "status": status,
                 "model_profile_id": model_profile_id,
+                "revision_of_run_id": revision_of_run_id,
                 "output_root": output_root,
                 "error_message": error_message,
                 "created_at": created_at or now,

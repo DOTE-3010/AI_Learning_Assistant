@@ -53,7 +53,7 @@ Major versions below are the supported baseline; exact patch versions live in lo
 | Storage Layer | SQLite repositories, migrations, transactions for users/sessions/settings/runs/uploads/artifacts/citations | HTTP shapes, business rules, artifact bytes, prompt content | backend storage package | `sqlite-schema.md` |
 | Artifact Filesystem | Run/project folder creation, safe filenames, manifests, PDF/source persistence | Metadata-of-record (rows), HTTP concerns, model calls | backend artifact package | `artifact-filesystem.md` |
 | Model Provider | OpenAI-compatible client, profile validation, secret loading, redaction | Pipeline/business logic, HTTP routes, SQLite schema | backend provider package | `model-settings.md` |
-| Context Builder | File extraction, context-budget estimation, web-search policy decision | Artifact generation, model-call orchestration, UI rendering | backend context package | `generation-pipeline.md`, `uploads.md` |
+| Context Builder | File extraction, context-budget estimation, adaptive revision context budgeting, web-search policy decision | Artifact generation, model-call orchestration, UI rendering | backend context package | `generation-pipeline.md`, `uploads.md` |
 | Artifact Pipelines | Code/essay/Beamer/cheat-sheet generation + repair, intent routing | Secret loading, Electron internals, HTTP transport, raw SQL | backend pipeline package | `generation-pipeline.md`, `artifact-filesystem.md` |
 
 Legacy modules under `backend/` and `frontend/` are not authoritative if they conflict with these boundaries. They may be deleted, moved, or mined for useful parsing/LaTeX patterns during scoped tasks. For task 018, frontend UI modules, styling, placeholder assets, and layout code should be treated as replaceable rather than inherited design constraints.
@@ -127,6 +127,7 @@ The frontend rebuild boundary is intentionally asymmetric:
 - Model provider code must depend on an abstract provider profile, not hard-coded Bianxie/OpenAI/Qwen constants.
 - Pipeline code may call context builder, artifact writer, and model provider; it must not know Electron internals.
 - Context Builder may read uploads through the storage/filesystem layer; it must not generate final artifacts.
+- Revision context budgeting is profile-aware: the builder may include more prior generated source when the selected model profile advertises a larger context window, while keeping logs and secret-prone content tightly bounded and sanitized.
 
 ## Runtime Topology
 

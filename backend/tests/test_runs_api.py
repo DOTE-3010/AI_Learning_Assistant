@@ -111,6 +111,177 @@ def test_teacher_can_create_queued_run_and_fetch_status(run_client):
     assert status.json()["status"] == "queued"
 
 
+def test_revision_run_creates_new_row_folder_manifest_and_context(run_client):
+    client, repo, workspace_root = run_client
+    headers = _register_and_login(client, "teacher@cuhk.edu.hk")
+    revision_contexts = []
+
+    def fake_executor(_repo, artifact_run, run, preparation):
+        if run.get("revision_of_run_id"):
+            revision_contexts.append(preparation.context.context_bundle)
+            assert run["revision_of_run_id"] == prior_body["id"]
+            artifact_run.write_output(
+                "solution.py",
+                "print('after revision')\n",
+                kind="script",
+                media_type="text/x-python",
+            )
+        else:
+            artifact_run.write_output(
+                "solution.py",
+                "print('before revision')\n",
+                kind="script",
+                media_type="text/x-python",
+            )
+            artifact_run.write_log(
+                "generation.log",
+                "Stage: generate_source\n"
+                "Absolute path: /Users/myron/Desktop/secret.txt\n"
+                "Authorization: Bearer should-not-leak\n"
+                "Traceback (most recent call last):\n"
+                "  File \"/Users/myron/app.py\", line 1, in <module>\n"
+                "RuntimeError: sanitized\n",
+            )
+        artifact_run.write_manifest(status="queued")
+
+    app.dependency_overrides[get_run_executor] = lambda: fake_executor
+
+    prior_response = client.post(
+        "/api/runs",
+        headers=headers,
+        json={
+            "task_text": "Write the first Python solution.",
+            "intent": "code_homework",
+            "output_preference": "py",
+            "search_mode": "off",
+        },
+    )
+    assert prior_response.status_code == 202
+    prior_body = prior_response.json()
+    prior_root = Path(prior_body["output_root"])
+    prior_manifest_path = prior_root / "manifest.json"
+    prior_manifest_before = prior_manifest_path.read_text(encoding="utf-8")
+
+    revision_response = client.post(
+        "/api/runs",
+        headers=headers,
+        json={
+            "task_text": "Refine the code to print a clearer result.",
+            "intent": "code_homework",
+            "output_preference": "py",
+            "search_mode": "off",
+            "revision_of_run_id": prior_body["id"],
+        },
+    )
+
+    assert revision_response.status_code == 202
+    revision_body = revision_response.json()
+    revision_root = Path(revision_body["output_root"])
+    assert revision_body["revision_of_run_id"] == prior_body["id"]
+    assert revision_root != prior_root
+    assert revision_root.is_relative_to(workspace_root)
+    assert revision_root.exists()
+
+    prior_run = repo.get_run(prior_body["id"])
+    revision_run = repo.get_run(revision_body["id"])
+    assert prior_run["revision_of_run_id"] is None
+    assert revision_run["revision_of_run_id"] == prior_body["id"]
+    assert prior_run["output_root"] == str(prior_root.resolve())
+    assert prior_manifest_path.read_text(encoding="utf-8") == prior_manifest_before
+    assert (prior_root / "output" / "solution.py").read_text(encoding="utf-8") == (
+        "print('before revision')\n"
+    )
+
+    revision_manifest = json.loads(
+        (revision_root / "manifest.json").read_text(encoding="utf-8")
+    )
+    assert revision_manifest["run_id"] == revision_body["id"]
+    assert revision_manifest["revision_of_run_id"] == prior_body["id"]
+    assert {"path": "output/solution.py", "kind": "script"} in revision_manifest["outputs"]
+
+    assert len(revision_contexts) == 1
+    revision_context = revision_contexts[0]
+    assert prior_body["id"] in revision_context
+    assert "output/solution.py" in revision_context
+    assert "print('before revision')" in revision_context
+    assert "/Users/myron" not in revision_context
+    assert "Bearer should-not-leak" not in revision_context
+
+
+def test_revision_run_rejects_missing_prior_run_with_not_found(run_client):
+    client, _repo, workspace_root = run_client
+    headers = _register_and_login(client, "teacher@cuhk.edu.hk")
+    calls = []
+
+    def fake_executor(_repo, _artifact_run, run, _preparation):
+        calls.append(run["id"])
+
+    app.dependency_overrides[get_run_executor] = lambda: fake_executor
+
+    response = client.post(
+        "/api/runs",
+        headers=headers,
+        json={
+            "task_text": "Refine a missing run.",
+            "intent": "code_homework",
+            "output_preference": "py",
+            "search_mode": "off",
+            "revision_of_run_id": "missing-run",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"error": {"code": "not_found", "message": "Run was not found."}}
+    assert calls == []
+    assert not workspace_root.exists()
+
+
+def test_revision_run_rejects_prior_run_owned_by_another_user(run_client):
+    client, _repo, workspace_root = run_client
+    owner_headers = _register_and_login(client, "teacher@cuhk.edu.hk")
+    other_headers = _register_and_login(client, "other@cuhk.edu.hk")
+    calls = []
+
+    def fake_executor(_repo, artifact_run, run, _preparation):
+        calls.append(run["id"])
+        artifact_run.write_output("solution.py", "print('owner')\n", kind="script")
+        artifact_run.write_manifest(status="queued")
+
+    app.dependency_overrides[get_run_executor] = lambda: fake_executor
+
+    prior_response = client.post(
+        "/api/runs",
+        headers=owner_headers,
+        json={
+            "task_text": "Write the owner run.",
+            "intent": "code_homework",
+            "output_preference": "py",
+            "search_mode": "off",
+        },
+    )
+    assert prior_response.status_code == 202
+    prior_body = prior_response.json()
+
+    response = client.post(
+        "/api/runs",
+        headers=other_headers,
+        json={
+            "task_text": "Try to refine another user's run.",
+            "intent": "code_homework",
+            "output_preference": "py",
+            "search_mode": "off",
+            "revision_of_run_id": prior_body["id"],
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
+    assert calls == [prior_body["id"]]
+    manifests = list(workspace_root.rglob("manifest.json"))
+    assert len(manifests) == 1
+    assert json.loads(manifests[0].read_text(encoding="utf-8"))["run_id"] == prior_body["id"]
+
+
 def test_run_api_rejects_missing_token(run_client):
     client, _repo, _workspace_root = run_client
 

@@ -51,6 +51,8 @@ MODEL_SUPPORTS_STREAMING=true
 
 Legacy `BIANXIE_*` variables should not be the new canonical names.
 
+`context_window_hint` is an estimate used for backend and frontend budgeting. It must reflect the selected model profile when known instead of assuming all Qwen/OpenAI-compatible profiles are 128k. Modern provider profiles may advertise larger windows such as 256k or 1M; the backend still treats the value as a hint and keeps safety margins, output budgets, and privacy bounds.
+
 ## API Surface
 
 ### `GET /api/settings/model-profiles`
@@ -70,6 +72,7 @@ Runs a minimal provider connectivity check using the submitted or saved profile.
 - First implementation should use an OpenAI-compatible adapter for Qwen unless official docs require otherwise.
 - Exact Qwen default endpoint/model must be verified before code implementation.
 - Pipelines depend on the provider interface, not on environment variables directly.
+- Context budgeting, including revision-context inclusion, uses `context_window_hint` from the resolved profile. A missing or invalid hint falls back to the backend default, but code should not hard-code revision prompt size solely around that fallback.
 
 ## Errors
 

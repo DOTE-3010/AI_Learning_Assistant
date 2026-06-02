@@ -60,7 +60,7 @@ class DuckDuckGoSearchAdapter:
         self.max_results = max_results
 
     def search(self, query: str, *, max_results: int = 3) -> list[dict[str, Any]]:
-        from backend.app.web_search import perform_web_search
+        from backend.context.web_search import perform_web_search
 
         limit = max_results if max_results > 0 else self.max_results
         results = perform_web_search(query, max_results=limit)

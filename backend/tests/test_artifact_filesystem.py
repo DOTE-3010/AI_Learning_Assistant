@@ -33,6 +33,7 @@ def test_writer_creates_contract_folder_shape_and_manifest(tmp_path):
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["schema_version"] == 1
     assert manifest["run_id"] == "run-1"
+    assert manifest["revision_of_run_id"] is None
     assert manifest["intent"] == "essay_latex"
     assert manifest["inputs"] == [{"path": "input/task.md", "kind": "task"}]
     assert manifest["outputs"] == [{"path": "output/Main-Answer-.tex", "kind": "source"}]
@@ -101,3 +102,23 @@ def test_writer_records_sqlite_artifact_rows(tmp_path):
     kinds = {row["kind"] for row in rows}
     assert {"script", "manifest"} == kinds
     assert all(Path(row["path"]).exists() for row in rows)
+
+
+def test_writer_records_revision_id_in_manifest(tmp_path):
+    writer = ArtifactWriter(tmp_path / "workspace")
+
+    run = writer.start_run(
+        user_label="teacher@cuhk.edu.hk",
+        project_title="Project",
+        run_id="run-2",
+        intent="code_homework",
+        task_text="Refine the previous code.",
+        model={"provider": "openai_compatible", "model": "qwen-placeholder"},
+        search={"mode": "off", "used": False, "citations": []},
+        revision_of_run_id="run-1",
+    )
+    manifest_path = run.write_manifest(status="succeeded")
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["run_id"] == "run-2"
+    assert manifest["revision_of_run_id"] == "run-1"
