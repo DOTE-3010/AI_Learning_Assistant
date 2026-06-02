@@ -1,35 +1,42 @@
 :root {
     color-scheme: dark;
 
-    --studio-bg: #151411;
-    --studio-bg-2: #1d1b16;
-    --studio-graphite: #23231e;
-    --studio-graphite-2: #2b2a24;
-    --studio-graphite-3: #343228;
-    --studio-ink: #f2eee4;
-    --studio-ink-soft: #c8c0ae;
-    --studio-ink-muted: #938c7e;
-    --studio-ink-faint: #6f695f;
-    --studio-paper: #f3ecda;
-    --studio-paper-2: #fff8e8;
-    --studio-paper-ink: #262118;
+    --studio-bg: #161411;
+    --studio-bg-2: #211e18;
+    --studio-graphite: #27251f;
+    --studio-graphite-2: #312e27;
+    --studio-graphite-3: #3c372e;
+    --studio-ink: #f4ecdf;
+    --studio-ink-soft: #d5c9b6;
+    --studio-ink-muted: #a99d8b;
+    --studio-ink-faint: #7c7365;
+    --studio-paper: #efe3c9;
+    --studio-paper-2: #fbf1dd;
+    --studio-paper-ink: #282016;
 
-    --studio-line: #403d34;
-    --studio-line-soft: #333026;
-    --studio-line-bright: #635d4d;
+    --studio-line: #564c3d;
+    --studio-line-soft: #413a30;
+    --studio-line-bright: #756751;
 
-    --accent-teal: #58d6c7;
-    --accent-blue: #78a8ff;
-    --accent-amber: #e0b755;
-    --accent-coral: #ed746a;
-    --accent-violet: #ba94e6;
-    --accent-green: #89d98b;
+    --accent-clay: #bd744b;
+    --accent-terracotta: #c65f3e;
+    --accent-sage: #99a477;
+    --accent-olive: #6f7a55;
+    --accent-amber: #c89a4a;
+    --accent-coral: #d56f61;
 
-    --context-ok: var(--accent-teal);
+    /* Compatibility aliases for the existing component classes. */
+    --accent-teal: var(--accent-clay);
+    --accent-blue: var(--accent-sage);
+    --accent-green: var(--accent-sage);
+    --accent-violet: #b28a63;
+
+    --context-ok: var(--accent-sage);
     --context-warning: var(--accent-amber);
     --context-critical: var(--accent-coral);
 
-    --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Songti SC", "Noto Serif CJK SC", "Noto Serif CJK TC", "Source Han Serif SC", "Source Han Serif TC", serif;
+    --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "PingFang TC", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans CJK TC", sans-serif;
     --font-mono: "SFMono-Regular", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
 
     --radius-xs: 4px;
@@ -47,7 +54,15 @@
 
     --shadow-panel: 0 20px 54px rgb(0 0 0 / 28%);
     --shadow-paper: 0 22px 60px rgb(0 0 0 / 30%);
-    --shadow-focus: 0 0 0 3px rgb(88 214 199 / 22%);
+    --shadow-focus: 0 0 0 3px rgb(189 116 75 / 24%);
+}
+
+:lang(zh-Hans) {
+    --font-serif: "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", "Iowan Old Style", serif;
+}
+
+:lang(zh-Hant) {
+    --font-serif: "Songti TC", "Noto Serif CJK TC", "Source Han Serif TC", "Iowan Old Style", serif;
 }
 
 [data-context-state="ok"] {

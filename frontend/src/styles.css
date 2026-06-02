@@ -43,36 +43,15 @@ input {
 .studio-app {
     min-height: 100vh;
     background:
+        linear-gradient(180deg, rgb(22 20 17 / 44%), rgb(22 20 17 / 88)),
+        url("./assets/textures/workbench-background-texture.png") center / cover fixed,
         linear-gradient(90deg, rgb(255 248 232 / 4%) 1px, transparent 1px) 0 0 / 72px 72px,
         linear-gradient(0deg, rgb(255 248 232 / 3%) 1px, transparent 1px) 0 0 / 72px 72px,
-        linear-gradient(118deg, rgb(88 214 199 / 8%), transparent 38%, rgb(224 183 85 / 6%) 82%, transparent),
+        linear-gradient(118deg, rgb(189 116 75 / 10%), transparent 38%, rgb(153 164 119 / 7%) 82%, transparent),
         linear-gradient(135deg, var(--studio-bg), #201c16 58%, #191814);
 }
 
-.studio-app.is-locked .workbench-grid,
-.studio-app.is-locked .mobile-pane-switch {
-    filter: saturate(0.62) brightness(0.58);
-    pointer-events: none;
-}
-
-.studio-header {
-    min-height: 64px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-    padding: 12px clamp(14px, 3vw, 30px);
-    position: sticky;
-    top: 0;
-    z-index: 30;
-    border-bottom: 1px solid rgb(255 248 232 / 9%);
-    background: rgb(21 20 17 / 82%);
-    backdrop-filter: blur(18px);
-}
-
 .brand-lockup,
-.header-actions,
-.runtime-chip,
 .identity-chip,
 .pane-head,
 .preview-header,
@@ -92,6 +71,12 @@ input {
     align-items: center;
 }
 
+.pane-actions,
+.auth-head-actions {
+    display: flex;
+    align-items: center;
+}
+
 .brand-lockup {
     gap: 12px;
     min-width: 0;
@@ -103,24 +88,24 @@ input {
     display: grid;
     place-items: center;
     border-radius: var(--radius-md);
-    border: 1px solid rgb(88 214 199 / 36%);
+    border: 1px solid rgb(189 116 75 / 36%);
     background:
-        linear-gradient(135deg, rgb(88 214 199 / 18%), rgb(224 183 85 / 10%)),
+        linear-gradient(135deg, rgb(189 116 75 / 18%), rgb(224 183 85 / 10%)),
         var(--studio-graphite);
     color: var(--accent-teal);
     font: 800 12px / 1 var(--font-mono);
 }
 
 .brand-title {
-    font-size: 16px;
-    font-weight: 800;
+    font-family: var(--font-serif);
+    font-size: 18px;
+    font-weight: 700;
     line-height: 1.1;
 }
 
 .brand-subtitle,
 .pane-kicker,
 .field-label,
-.runtime-chip,
 .artifact-short,
 .status-capsule,
 .history-meta,
@@ -144,13 +129,6 @@ input {
     font-size: 11px;
 }
 
-.header-actions {
-    justify-content: flex-end;
-    gap: 10px;
-    min-width: 0;
-}
-
-.runtime-chip,
 .identity-chip {
     min-height: 34px;
     gap: 8px;
@@ -163,23 +141,40 @@ input {
     white-space: nowrap;
 }
 
-.runtime-chip {
-    font-size: 11px;
-    text-transform: uppercase;
+.locale-switch {
+    min-height: 34px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(34px, 1fr));
+    gap: 3px;
+    padding: 3px;
+    border: 1px solid var(--studio-line-soft);
+    border-radius: var(--radius-md);
+    background: rgb(35 35 30 / 74%);
 }
 
-.runtime-dot,
+.locale-switch button {
+    min-width: 34px;
+    min-height: 28px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--studio-ink-muted);
+    font: 800 11px / 1 var(--font-sans);
+}
+
+.locale-switch button.is-active {
+    border-color: rgb(189 116 75 / 44%);
+    background: rgb(189 116 75 / 13%);
+    color: var(--studio-ink);
+}
+
 .status-light {
     width: 8px;
     height: 8px;
     flex: 0 0 8px;
     border-radius: 50%;
     background: var(--accent-teal);
-    box-shadow: 0 0 0 4px rgb(88 214 199 / 16%);
-}
-
-.identity-chip {
-    border-color: rgb(255 248 232 / 13%);
+    box-shadow: 0 0 0 4px rgb(189 116 75 / 16%);
 }
 
 button.identity-chip {
@@ -198,12 +193,8 @@ button.identity-chip {
     text-transform: uppercase;
 }
 
-.identity-chip.is-muted {
-    color: var(--studio-ink-muted);
-}
-
 .studio-main {
-    min-height: calc(100vh - 64px);
+    min-height: 100vh;
 }
 
 .mobile-pane-switch {
@@ -211,7 +202,7 @@ button.identity-chip {
 }
 
 .workbench-grid {
-    min-height: calc(100vh - 64px);
+    min-height: 100vh;
     display: grid;
     grid-template-columns: minmax(380px, 0.92fr) minmax(520px, 1.36fr);
     gap: 14px;
@@ -248,7 +239,14 @@ button.identity-chip {
 .preview-header {
     justify-content: space-between;
     gap: 12px;
-    min-height: 46px;
+    min-height: 56px;
+}
+
+.pane-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
 }
 
 .pane-head h1,
@@ -257,12 +255,14 @@ button.identity-chip {
 .model-dialog-head h2 {
     margin: 0;
     letter-spacing: 0;
+    font-family: var(--font-serif);
+    font-weight: 700;
 }
 
 .pane-head h1,
 .preview-header h2 {
     font-size: clamp(21px, 2.2vw, 30px);
-    line-height: 1.02;
+    line-height: 1.22;
 }
 
 .pane-kicker,
@@ -335,8 +335,8 @@ button.identity-chip {
 
 .run-button {
     min-height: 44px;
-    border-color: rgb(88 214 199 / 42%);
-    background: linear-gradient(135deg, rgb(88 214 199 / 20%), rgb(224 183 85 / 10%));
+    border-color: rgb(189 116 75 / 42%);
+    background: linear-gradient(135deg, rgb(189 116 75 / 20%), rgb(224 183 85 / 10%));
     color: var(--studio-ink);
     font-weight: 800;
 }
@@ -393,6 +393,7 @@ button.identity-chip {
 
 .dial-ring {
     --context-ratio: 0%;
+    position: relative;
     width: 66px;
     height: 66px;
     display: grid;
@@ -403,7 +404,19 @@ button.identity-chip {
         conic-gradient(var(--context-state-color) var(--context-ratio), rgb(255 248 232 / 12%) 0);
 }
 
+.dial-ring img {
+    position: absolute;
+    inset: -12px;
+    width: calc(100% + 24px);
+    height: calc(100% + 24px);
+    object-fit: contain;
+    opacity: 0.72;
+    pointer-events: none;
+}
+
 .dial-ring span {
+    position: relative;
+    z-index: 1;
     color: var(--context-state-color);
     font: 800 10px / 1 var(--font-mono);
     text-transform: uppercase;
@@ -512,13 +525,14 @@ button.identity-chip {
 }
 
 .artifact-type.is-active {
-    border-color: rgb(88 214 199 / 52%);
-    background: rgb(88 214 199 / 9%);
+    border-color: rgb(189 116 75 / 52%);
+    background: rgb(189 116 75 / 9%);
 }
 
+.artifact-type[data-accent="sage"].is-active,
 .artifact-type[data-accent="blue"].is-active {
-    border-color: rgb(120 168 255 / 52%);
-    background: rgb(120 168 255 / 9%);
+    border-color: rgb(153 164 119 / 52%);
+    background: rgb(153 164 119 / 9%);
 }
 
 .artifact-type[data-accent="amber"].is-active {
@@ -550,6 +564,7 @@ button.identity-chip {
 
 .artifact-type strong {
     font-size: 13px;
+    line-height: 1.2;
 }
 
 .artifact-type small {
@@ -557,6 +572,7 @@ button.identity-chip {
     color: var(--studio-ink-muted);
     font-size: 11px;
     line-height: 1.25;
+    overflow-wrap: anywhere;
 }
 
 .command-composer,
@@ -674,12 +690,12 @@ button.identity-chip {
     width: 42px;
     height: 42px;
     flex: 0 0 42px;
-    border: 1px solid rgb(88 214 199 / 34%);
+    border: 1px solid rgb(189 116 75 / 34%);
     border-radius: var(--radius-md);
     background:
         linear-gradient(var(--accent-teal), var(--accent-teal)) center / 18px 2px no-repeat,
         linear-gradient(var(--accent-teal), var(--accent-teal)) center / 2px 18px no-repeat,
-        rgb(88 214 199 / 8%);
+        rgb(189 116 75 / 8%);
 }
 
 .upload-zone strong,
@@ -941,12 +957,13 @@ button.identity-chip {
 }
 
 .stage-track span.is-active {
-    border-color: rgb(88 214 199 / 42%);
+    border-color: rgb(189 116 75 / 42%);
     color: var(--accent-teal);
-    background: rgb(88 214 199 / 8%);
+    background: rgb(189 116 75 / 8%);
 }
 
 .preview-shell {
+    position: relative;
     min-height: 0;
     display: grid;
     grid-template-rows: auto minmax(0, 1fr);
@@ -954,6 +971,27 @@ button.identity-chip {
     border-radius: var(--radius-lg);
     overflow: hidden;
     background: rgb(13 13 11 / 84%);
+}
+
+.preview-shell::before {
+    content: "";
+    position: absolute;
+    inset: 42px 0 0;
+    z-index: 0;
+    background: var(--preview-empty-image) center / cover no-repeat;
+    opacity: 0;
+    filter: saturate(0.84) sepia(0.14);
+    pointer-events: none;
+    transition: opacity 220ms ease;
+}
+
+.preview-shell[data-run-status="idle"]::before {
+    opacity: 0.1;
+}
+
+.preview-shell > * {
+    position: relative;
+    z-index: 1;
 }
 
 .preview-tabs {
@@ -975,9 +1013,9 @@ button.identity-chip {
 }
 
 .preview-tabs button.is-active {
-    border-color: rgb(88 214 199 / 38%);
+    border-color: rgb(189 116 75 / 38%);
     color: var(--studio-ink);
-    background: rgb(88 214 199 / 9%);
+    background: rgb(189 116 75 / 9%);
 }
 
 .preview-body {
@@ -1011,8 +1049,8 @@ button.identity-chip {
 
 .code-tabs button.is-active {
     color: var(--accent-teal);
-    border-color: rgb(88 214 199 / 38%);
-    background: rgb(88 214 199 / 8%);
+    border-color: rgb(189 116 75 / 38%);
+    background: rgb(189 116 75 / 8%);
 }
 
 .copy-code-button {
@@ -1211,6 +1249,8 @@ button.identity-chip {
 
 .pdf-page h3 {
     margin: 10px 0 14px;
+    font-family: var(--font-serif);
+    font-weight: 700;
     font-size: clamp(24px, 4vw, 38px);
     line-height: 1.05;
 }
@@ -1223,6 +1263,7 @@ button.identity-chip {
 
 .pdf-page h4 {
     margin: 22px 0 10px;
+    font-family: var(--font-serif);
     font-size: 15px;
 }
 
@@ -1280,7 +1321,7 @@ button.identity-chip {
     padding: clamp(28px, 5vw, 56px);
     border-radius: var(--radius-sm);
     background:
-        linear-gradient(135deg, rgb(88 214 199 / 12%), transparent 44%),
+        linear-gradient(135deg, rgb(189 116 75 / 12%), transparent 44%),
         var(--studio-paper);
     color: var(--studio-paper-ink);
 }
@@ -1294,6 +1335,8 @@ button.identity-chip {
 .slide-page h3 {
     max-width: 70%;
     margin: 14px 0 32px;
+    font-family: var(--font-serif);
+    font-weight: 700;
     font-size: clamp(25px, 4.2vw, 54px);
     line-height: 1;
 }
@@ -1538,18 +1581,99 @@ button.identity-chip {
     font: 800 10px / 1.2 var(--font-mono);
 }
 
+.auth-entry {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: clamp(18px, 4vw, 56px);
+}
+
+.auth-entry-shell {
+    width: min(1080px, 100%);
+    min-height: min(720px, calc(100vh - 64px));
+    display: grid;
+    grid-template-columns: minmax(320px, 1fr) minmax(360px, 440px);
+    align-items: stretch;
+    overflow: hidden;
+    border: 1px solid rgb(255 248 232 / 13%);
+    border-radius: var(--radius-lg);
+    background: rgb(35 35 30 / 82%);
+    box-shadow: var(--shadow-panel);
+}
+
+.auth-entry-preview {
+    position: relative;
+    min-height: 560px;
+    overflow: hidden;
+    background:
+        linear-gradient(140deg, rgb(22 20 17 / 28%), rgb(22 20 17 / 76)),
+        var(--studio-graphite);
+}
+
+.auth-entry-preview img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.62;
+    filter: saturate(0.92) sepia(0.12);
+}
+
+.auth-preview-paper {
+    position: absolute;
+    inset: clamp(40px, 9vw, 96px) clamp(32px, 7vw, 84px);
+    display: grid;
+    align-content: start;
+    gap: 14px;
+    padding: clamp(26px, 5vw, 48px);
+    border: 1px solid rgb(40 32 22 / 16%);
+    border-radius: var(--radius-sm);
+    background: rgb(251 241 221 / 88%);
+    color: var(--studio-paper-ink);
+    box-shadow: var(--shadow-paper);
+}
+
+.auth-preview-rule {
+    width: 54px;
+    height: 2px;
+    background: rgb(189 116 75 / 58%);
+}
+
+.auth-preview-brand {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-size: clamp(30px, 4vw, 50px);
+    font-weight: 600;
+    line-height: 1.04;
+    letter-spacing: 0;
+    font-synthesis: none;
+    font-synthesis-weight: none;
+}
+
+.auth-preview-paper i {
+    width: 100%;
+    height: 9px;
+    border-radius: 999px;
+    background: rgb(40 32 22 / 14%);
+}
+
+.auth-preview-paper i:nth-child(4) {
+    width: 76%;
+}
+
+.auth-preview-paper i:nth-child(5) {
+    width: 52%;
+}
+
 .auth-panel {
-    position: fixed;
-    right: clamp(16px, 4vw, 58px);
-    top: 50%;
-    z-index: 50;
-    width: min(440px, calc(100vw - 32px));
-    transform: translateY(-50%);
+    align-self: center;
+    width: 100%;
     padding: 16px;
     border: 1px solid rgb(255 248 232 / 14%);
-    border-radius: var(--radius-lg);
+    border-width: 0 0 0 1px;
+    border-radius: 0;
     background: rgb(35 35 30 / 96%);
-    box-shadow: var(--shadow-panel);
+    overflow: hidden;
 }
 
 .auth-head {
@@ -1557,6 +1681,12 @@ button.identity-chip {
     grid-template-columns: 1fr auto;
     gap: 14px;
     align-items: start;
+}
+
+.auth-head-actions {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
 }
 
 .auth-tabs {
@@ -1675,7 +1805,7 @@ button.identity-chip {
 @media (hover: hover) {
     button:not(:disabled):hover,
     .upload-zone:hover {
-        border-color: rgb(88 214 199 / 36%);
+        border-color: rgb(189 116 75 / 36%);
     }
 }
 
@@ -1699,17 +1829,6 @@ button.identity-chip {
 }
 
 @media (max-width: 900px) {
-    .studio-header {
-        position: relative;
-        align-items: flex-start;
-        flex-direction: column;
-    }
-
-    .header-actions {
-        width: 100%;
-        justify-content: space-between;
-    }
-
     .mobile-pane-switch {
         position: sticky;
         top: 0;
@@ -1733,9 +1852,9 @@ button.identity-chip {
     }
 
     .mobile-pane-switch button.is-active {
-        border-color: rgb(88 214 199 / 42%);
+        border-color: rgb(189 116 75 / 42%);
         color: var(--studio-ink);
-        background: rgb(88 214 199 / 10%);
+        background: rgb(189 116 75 / 10%);
     }
 
     .workbench-grid {
@@ -1750,7 +1869,7 @@ button.identity-chip {
     }
 
     .preview-pane {
-        min-height: calc(100vh - 156px);
+        min-height: calc(100vh - 58px);
     }
 
     .history-list {
@@ -1766,6 +1885,19 @@ button.identity-chip {
     .slide-thumbs {
         grid-template-columns: repeat(4, auto);
         justify-content: start;
+    }
+
+    .auth-entry-shell {
+        grid-template-columns: 1fr;
+        min-height: auto;
+    }
+
+    .auth-entry-preview {
+        min-height: 260px;
+    }
+
+    .auth-panel {
+        border-width: 1px 0 0;
     }
 }
 
@@ -1791,10 +1923,17 @@ button.identity-chip {
     }
 
     .tool-button,
+    .identity-chip,
     .secondary-action,
     .run-button,
     .auth-tabs {
         width: 100%;
+    }
+
+    .pane-actions,
+    .auth-head-actions {
+        width: 100%;
+        align-items: stretch;
     }
 
     .auth-tabs {
@@ -1858,13 +1997,21 @@ button.identity-chip {
         margin-top: 12px;
     }
 
-    .auth-panel {
-        left: 12px;
-        right: 12px;
-        top: auto;
-        bottom: 12px;
-        width: auto;
-        transform: none;
+    .auth-entry {
+        padding: 12px;
+    }
+
+    .auth-entry-shell {
+        border-radius: var(--radius-md);
+    }
+
+    .auth-entry-preview {
+        min-height: 190px;
+    }
+
+    .auth-preview-paper {
+        inset: 24px;
+        padding: 22px;
     }
 }
 

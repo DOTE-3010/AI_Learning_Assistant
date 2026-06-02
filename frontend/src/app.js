@@ -1,11 +1,25 @@
 import "./styles.css";
+import { LOCALES, messages } from "./locales.js";
+import contextDialCriticalUrl from "./assets/previews/context-budget-dial-critical.png";
+import contextDialOkUrl from "./assets/previews/context-budget-dial-ok.png";
+import contextDialWarningUrl from "./assets/previews/context-budget-dial-warning.png";
+import authEntryPreviewUrl from "./assets/previews/auth-entry-preview.png";
+import emptyWorkbenchPreviewUrl from "./assets/previews/empty-workbench-preview.png";
 
 const API_URL = window.__AI_LEARNING_ASSISTANT_API_URL || window.location.origin;
 const TOKEN_KEY = "ai_learning_assistant_token";
 const USER_KEY = "ai_learning_assistant_user";
+const LOCALE_KEY = "ai_learning_assistant_locale";
 const CONTEXT_LIMIT = 128000;
 const RUN_POLL_INTERVAL_MS = 1200;
 const TERMINAL_RUN_STATUSES = new Set(["succeeded", "failed", "cancelled"]);
+const DEFAULT_LOCALE = "en";
+const contextDialAssets = {
+    ok: contextDialOkUrl,
+    warning: contextDialWarningUrl,
+    critical: contextDialCriticalUrl,
+};
+const initialLocale = getInitialLocale();
 const DEFAULT_MODEL_FORM = {
     displayName: "Qwen Default",
     provider: "openai_compatible",
@@ -17,66 +31,32 @@ const DEFAULT_MODEL_FORM = {
 const intents = [
     {
         id: "code_homework",
-        label: "Code",
-        short: "PY",
-        title: "Homework code",
-        description: "Script or notebook answer",
         outputs: ["solution.py", "solution.ipynb"],
         stages: ["route", "context", "generate", "validate"],
-        accent: "teal",
+        accent: "clay",
     },
     {
         id: "essay_latex",
-        label: "Essay",
-        short: "TEX",
-        title: "LaTeX essay",
-        description: "Source plus compiled PDF",
         outputs: ["main.pdf", "main.tex"],
         stages: ["route", "context", "write", "compile"],
-        accent: "blue",
+        accent: "sage",
     },
     {
         id: "beamer_slides",
-        label: "Slides",
-        short: "PDF",
-        title: "Beamer deck",
-        description: "Slide source plus PDF",
         outputs: ["slides.pdf", "slides.tex"],
         stages: ["route", "outline", "write", "compile"],
         accent: "amber",
     },
     {
         id: "cheat_sheet",
-        label: "Cheat sheet",
-        short: "A4",
-        title: "Dense A4 sheet",
-        description: "Course compression PDF",
         outputs: ["cheat-sheet.pdf", "cheat-sheet.tex"],
         stages: ["ingest", "compress", "layout", "compile"],
         accent: "coral",
     },
 ];
 
-const stageVocabulary = {
-    compose: "Compose",
-    choose_intent: "Select artifact",
-    validate_request: "Validate",
-    upload_inputs: "Upload inputs",
-    submit_run: "Submit run",
-    queued: "Queued",
-    running: "Running",
-    resolve_model: "Model",
-    extract_context: "Context",
-    decide_search: "Search",
-    generate_source: "Generate",
-    validate_source: "Validate",
-    compile_pdf: "Compile PDF",
-    write_manifest: "Manifest",
-    poll_status: "Refresh",
-    output_files: "Output files",
-};
-
 const state = {
+    locale: initialLocale,
     authMode: "login",
     token: localStorage.getItem(TOKEN_KEY) || "",
     user: readStoredUser(),
@@ -105,17 +85,8 @@ const state = {
     },
     authMessage: "",
     authTone: "neutral",
-    run: initialRunState(),
-    history: [
-        {
-            id: "session-ready",
-            kind: "system",
-            status: "idle",
-            title: "Console ready",
-            message: "Choose an artifact type, add source material, then run.",
-            timestamp: new Date().toISOString(),
-        },
-    ],
+    run: initialRunState(initialLocale),
+    history: [initialReadyHistory(initialLocale)],
 };
 
 const app = document.getElementById("app");
@@ -124,6 +95,7 @@ let runPollTimerId = null;
 init();
 
 function init() {
+    applyLocaleDocumentState();
     refreshLocalContext();
     normalizeActiveFile();
     render();
@@ -137,7 +109,7 @@ async function refreshCurrentUser() {
         const response = await fetch(`${API_URL}/api/auth/me`, {
             headers: { Authorization: `Bearer ${state.token}` },
         });
-        if (!response.ok) throw new Error("Session expired");
+        if (!response.ok) throw new Error(t("auth.expired"));
         const user = await response.json();
         setUser(user, state.token);
     } catch {
@@ -148,73 +120,72 @@ async function refreshCurrentUser() {
 
 function render() {
     const isAuthenticated = Boolean(state.user && state.token);
+    applyLocaleDocumentState();
+    // Runtime/session chrome stays out of the web workbench; Electron and auth surfaces own those states.
     app.innerHTML = `
-        <div class="studio-app ${isAuthenticated ? "" : "is-locked"}" data-mobile-pane="${escapeHtml(state.activePane)}">
-            ${renderHeader(isAuthenticated)}
+        <div class="studio-app ${isAuthenticated ? "" : "is-auth-entry"}" data-mobile-pane="${escapeHtml(state.activePane)}" lang="${escapeHtml(state.locale)}">
             <main class="studio-main">
-                ${renderMobilePaneSwitch()}
-                <section class="workbench-grid" aria-label="Conversational artifact workbench">
-                    ${renderConsolePane(isAuthenticated)}
-                    ${renderPreviewPane(isAuthenticated)}
-                </section>
-                ${isAuthenticated ? "" : renderAuthPanel()}
+                ${
+                    isAuthenticated
+                        ? `${renderMobilePaneSwitch()}
+                            <section class="workbench-grid" aria-label="${escapeHtml(t("app.title"))}">
+                                ${renderConsolePane(isAuthenticated)}
+                                ${renderPreviewPane(isAuthenticated)}
+                            </section>`
+                        : renderAuthEntry()
+                }
                 ${isAuthenticated && state.model.editorOpen ? renderModelSettingsPanel() : ""}
             </main>
         </div>
     `;
     bindEvents();
-    updateContextDial();
+    if (isAuthenticated) updateContextDial();
 }
 
-function renderHeader(isAuthenticated) {
+function renderLocaleSwitch() {
     return `
-        <header class="studio-header">
-            <div class="brand-lockup" aria-label="AI Learning Assistant">
-                <div class="brand-mark" aria-hidden="true">AL</div>
-                <div>
-                    <div class="brand-title">AI Learning Assistant</div>
-                    <div class="brand-subtitle">CUHK artifact studio</div>
-                </div>
-            </div>
-            <div class="header-actions">
-                <div class="runtime-chip">
-                    <span class="runtime-dot"></span>
-                    <span>Docker backend</span>
-                </div>
-                ${
-                    isAuthenticated
-                        ? `<button class="identity-chip" type="button" data-action="logout">
-                            <span>${escapeHtml(state.user.email)}</span>
-                            <strong>${escapeHtml(state.user.role)}</strong>
-                        </button>`
-                        : `<span class="identity-chip is-muted">CUHK session required</span>`
-                }
-            </div>
-        </header>
+        <div class="locale-switch" role="group" aria-label="${escapeHtml(t("locale.label"))}">
+            ${LOCALES.map((locale) => `
+                <button
+                    type="button"
+                    class="${state.locale === locale.id ? "is-active" : ""}"
+                    data-locale="${escapeHtml(locale.id)}"
+                    title="${escapeHtml(locale.name)}"
+                    aria-label="${escapeHtml(locale.name)}"
+                >${escapeHtml(locale.label)}</button>
+            `).join("")}
+        </div>
     `;
 }
 
 function renderMobilePaneSwitch() {
     return `
-        <nav class="mobile-pane-switch" aria-label="Workbench panes">
-            <button type="button" class="${state.activePane === "console" ? "is-active" : ""}" data-pane="console">Console</button>
-            <button type="button" class="${state.activePane === "preview" ? "is-active" : ""}" data-pane="preview">Preview</button>
+        <nav class="mobile-pane-switch" aria-label="${escapeHtml(t("app.title"))}">
+            <button type="button" class="${state.activePane === "console" ? "is-active" : ""}" data-pane="console">${escapeHtml(t("mobile.console"))}</button>
+            <button type="button" class="${state.activePane === "preview" ? "is-active" : ""}" data-pane="preview">${escapeHtml(t("mobile.preview"))}</button>
         </nav>
     `;
 }
 
 function renderConsolePane(isAuthenticated) {
     return `
-        <section class="console-pane workbench-pane" aria-label="Production console">
+        <section class="console-pane workbench-pane" aria-label="${escapeHtml(t("pane.consoleKicker"))}">
             <div class="pane-head">
                 <div>
-                    <div class="pane-kicker">Production console</div>
-                    <h1>Generate artifacts</h1>
+                    <div class="pane-kicker">${escapeHtml(t("pane.consoleKicker"))}</div>
+                    <h1>${escapeHtml(t("pane.consoleTitle"))}</h1>
                 </div>
-                <button class="tool-button" type="button" data-action="open-model-settings" ${isAuthenticated ? "" : "disabled"}>
-                    <span class="tool-glyph" aria-hidden="true"></span>
-                    <span>${escapeHtml(modelButtonLabel())}</span>
-                </button>
+                <div class="pane-actions">
+                    ${renderLocaleSwitch()}
+                    <button class="tool-button" type="button" data-action="open-model-settings" ${isAuthenticated ? "" : "disabled"}>
+                        <span class="tool-glyph" aria-hidden="true"></span>
+                        <span>${escapeHtml(modelButtonLabel())}</span>
+                    </button>
+                    <button class="identity-chip" type="button" data-action="logout">
+                        <span>${escapeHtml(state.user?.email || t("app.userFallback"))}</span>
+                        <strong>${escapeHtml(state.user?.role || "")}</strong>
+                    </button>
+                </div>
             </div>
 
             <div class="console-utility-row">
@@ -222,20 +193,20 @@ function renderConsolePane(isAuthenticated) {
                 ${renderSearchModeControl()}
             </div>
 
-            <div class="artifact-type-bar" role="radiogroup" aria-label="Artifact type">
+            <div class="artifact-type-bar" role="radiogroup" aria-label="${escapeHtml(t("controls.artifactType"))}">
                 ${intents.map(renderIntentButton).join("")}
             </div>
 
-            <section class="command-composer" aria-label="Generation command">
+            <section class="command-composer" aria-label="${escapeHtml(t("composer.brief"))}">
                 <div class="composer-head">
-                    <label class="field-label" for="task-text">Brief</label>
-                    <span>${escapeHtml(getSelectedIntent().description)}</span>
+                    <label class="field-label" for="task-text">${escapeHtml(t("composer.brief"))}</label>
+                    <span>${escapeHtml(intentText(getSelectedIntent().id, "description"))}</span>
                 </div>
                 <textarea
                     id="task-text"
                     class="task-input ${state.fieldErrors.task_text ? "has-error" : ""}"
                     rows="8"
-                    placeholder="Paste the assignment brief, constraints, marking expectations, and any output notes."
+                    placeholder="${escapeHtml(t("composer.briefPlaceholder"))}"
                 >${escapeHtml(state.taskText)}</textarea>
                 ${state.fieldErrors.task_text ? `<div class="field-error">${escapeHtml(state.fieldErrors.task_text)}</div>` : ""}
                 ${renderIntentOptions()}
@@ -243,9 +214,9 @@ function renderConsolePane(isAuthenticated) {
                 <div class="composer-actions">
                     <button class="run-button" type="button" data-action="run" ${canSubmitRun(isAuthenticated) ? "" : "disabled"}>
                         <span class="run-glyph" aria-hidden="true"></span>
-                        <span>${runButtonLabel()}</span>
+                        <span data-run-button-label>${runButtonLabel()}</span>
                     </button>
-                    <span class="run-note">${escapeHtml(runNote(isAuthenticated))}</span>
+                    <span class="run-note" data-run-note>${escapeHtml(runNote(isAuthenticated))}</span>
                 </div>
             </section>
 
@@ -266,10 +237,10 @@ function renderIntentButton(intent) {
             role="radio"
             aria-checked="${active}"
         >
-            <span class="artifact-short">${escapeHtml(intent.short)}</span>
+            <span class="artifact-short">${escapeHtml(intentText(intent.id, "short"))}</span>
             <span>
-                <strong>${escapeHtml(intent.label)}</strong>
-                <small>${escapeHtml(intent.title)}</small>
+                <strong>${escapeHtml(intentText(intent.id, "label"))}</strong>
+                <small>${escapeHtml(intentText(intent.id, "title"))}</small>
             </span>
         </button>
     `;
@@ -278,11 +249,11 @@ function renderIntentButton(intent) {
 function renderSearchModeControl() {
     return `
         <div class="search-control">
-            <span class="field-label">Search</span>
+            <span class="field-label">${escapeHtml(t("controls.search"))}</span>
             <div class="segmented-control" data-control="search-mode">
                 ${["auto", "on", "off"].map((mode) => `
                     <button type="button" class="${state.searchMode === mode ? "is-active" : ""}" data-search-mode="${mode}">
-                        ${mode}
+                        ${escapeHtml(t(`controls.searchMode.${mode}`))}
                     </button>
                 `).join("")}
             </div>
@@ -295,13 +266,13 @@ function renderIntentOptions() {
         return `
             <div class="option-row">
                 <div>
-                    <span class="field-label">Output</span>
+                    <span class="field-label">${escapeHtml(t("controls.output"))}</span>
                     <div class="segmented-control is-tight" data-control="code-output">
                         <button type="button" class="${state.outputPreference === "py" ? "is-active" : ""}" data-output-preference="py">.py</button>
                         <button type="button" class="${state.outputPreference === "ipynb" ? "is-active" : ""}" data-output-preference="ipynb">.ipynb</button>
                     </div>
                 </div>
-                <div class="status-capsule">Preview only</div>
+                <div class="status-capsule">${escapeHtml(t("controls.previewOnly"))}</div>
             </div>
         `;
     }
@@ -309,34 +280,34 @@ function renderIntentOptions() {
         return `
             <div class="option-row">
                 <label class="number-field">
-                    <span class="field-label">Target pages</span>
+                    <span class="field-label">${escapeHtml(t("controls.targetPages"))}</span>
                     <input id="target-pages" class="${state.fieldErrors.target_pages ? "has-error" : ""}" type="number" min="1" max="12" value="${state.targetPages}">
                 </label>
-                <div class="status-capsule">A4</div>
-                <div class="status-capsule">Dense</div>
+                <div class="status-capsule">${escapeHtml(t("controls.a4"))}</div>
+                <div class="status-capsule">${escapeHtml(t("controls.dense"))}</div>
             </div>
             ${state.fieldErrors.target_pages ? `<div class="field-error">${escapeHtml(state.fieldErrors.target_pages)}</div>` : ""}
         `;
     }
     return `
         <div class="option-row">
-            <div class="status-capsule">PDF first</div>
-            <div class="status-capsule">Source kept</div>
+            <div class="status-capsule">${escapeHtml(t("controls.pdfFirst"))}</div>
+            <div class="status-capsule">${escapeHtml(t("controls.sourceKept"))}</div>
         </div>
     `;
 }
 
 function renderUploadArea() {
     const selectedText = state.files.length
-        ? `${state.files.length} reference file${state.files.length === 1 ? "" : "s"} selected`
-        : "Drop or choose reference files";
+        ? t(state.files.length === 1 ? "uploads.selected" : "uploads.selectedPlural", { count: state.files.length })
+        : t("uploads.choose");
     return `
-        <section class="upload-module" aria-label="Reference files">
+        <section class="upload-module" aria-label="${escapeHtml(t("uploads.label"))}">
             <div class="upload-zone" data-action="open-file-picker" role="button" tabindex="0">
                 <input id="file-input" type="file" multiple>
                 <span class="upload-mark" aria-hidden="true"></span>
                 <div>
-                    <strong>Reference files</strong>
+                    <strong>${escapeHtml(t("uploads.label"))}</strong>
                     <span>${escapeHtml(selectedText)}</span>
                 </div>
             </div>
@@ -354,32 +325,50 @@ function renderSelectedFiles() {
                     <span class="file-kind">${escapeHtml(fileKind(item.name))}</span>
                     <span class="file-name">${escapeHtml(item.name)}</span>
                     <small>${escapeHtml(uploadStatusLabel(item))}</small>
-                    <button class="icon-action" type="button" data-remove-file="${escapeHtml(item.key)}" aria-label="Remove ${escapeHtml(item.name)}">x</button>
+                    <button class="icon-action" type="button" data-remove-file="${escapeHtml(item.key)}" aria-label="${escapeHtml(t("actions.removeFile", { name: item.name }))}">x</button>
                 </div>
             `).join("")}
         </div>
     `;
 }
 
+function renderAuthEntry() {
+    return `
+        <section class="auth-entry" aria-label="${escapeHtml(t("auth.kicker"))}">
+            <div class="auth-entry-shell">
+                <div class="auth-entry-preview" aria-hidden="true">
+                    <img src="${escapeHtml(authEntryPreviewUrl)}" alt="">
+                    <div class="auth-preview-paper">
+                        <span class="auth-preview-rule"></span>
+                        <div class="auth-preview-brand">${escapeHtml(t("app.brand"))}</div>
+                        <i></i><i></i><i></i>
+                    </div>
+                </div>
+                ${renderAuthPanel()}
+            </div>
+        </section>
+    `;
+}
+
 function renderRefinementComposer(isAuthenticated) {
     const disabled = !isAuthenticated || !state.run.id || state.run.status === "queued" || state.run.status === "running";
     return `
-        <section class="refinement-composer" aria-label="Follow-up refinement">
+        <section class="refinement-composer" aria-label="${escapeHtml(t("refinement.label"))}">
             <div class="composer-head">
-                <label class="field-label" for="refinement-text">Follow-up</label>
-                <span>${state.run.id ? `Revision source ${shortRunId(state.run.id)}` : "Available after first run"}</span>
+                <label class="field-label" for="refinement-text">${escapeHtml(t("refinement.label"))}</label>
+                <span>${escapeHtml(state.run.id ? t("refinement.revisionSource", { id: shortRunId(state.run.id) }) : t("refinement.availableAfterRun"))}</span>
             </div>
             <textarea
                 id="refinement-text"
                 rows="3"
-                placeholder="Ask for a tighter proof, more comments, fewer slides, or a different structure."
+                placeholder="${escapeHtml(t("refinement.placeholder"))}"
                 ${disabled ? "disabled" : ""}
             >${escapeHtml(state.refinementText)}</textarea>
             <div class="composer-actions">
                 <button class="secondary-action" type="button" data-action="run-refinement" ${disabled || !state.refinementText.trim() ? "disabled" : ""}>
-                    New revision run
+                    ${escapeHtml(t("actions.newRevisionRun"))}
                 </button>
-                <span class="run-note">Creates a new run; generated files stay source-of-truth on disk.</span>
+                <span class="run-note" data-refinement-note>${escapeHtml(t("refinement.note"))}</span>
             </div>
         </section>
     `;
@@ -387,10 +376,10 @@ function renderRefinementComposer(isAuthenticated) {
 
 function renderCommandHistory() {
     return `
-        <section class="history-stream" aria-label="Run history">
+        <section class="history-stream" aria-label="${escapeHtml(t("history.label"))}">
             <div class="history-head">
-                <span>Run history</span>
-                <small>${state.history.length} entries</small>
+                <span>${escapeHtml(t("history.label"))}</span>
+                <small>${escapeHtml(t("history.entries", { count: state.history.length }))}</small>
             </div>
             <div class="history-list">
                 ${state.history.slice().reverse().map(renderHistoryItem).join("")}
@@ -422,16 +411,16 @@ function renderHistoryItem(item) {
 function renderPreviewPane(isAuthenticated) {
     const intent = getSelectedIntent();
     return `
-        <section class="preview-pane workbench-pane" aria-label="Artifact preview">
+        <section class="preview-pane workbench-pane" aria-label="${escapeHtml(t("pane.previewKicker"))}">
             <div class="preview-header">
                 <div>
-                    <div class="pane-kicker">Artifact preview</div>
-                    <h2>${escapeHtml(intent.title)}</h2>
+                    <div class="pane-kicker">${escapeHtml(t("pane.previewKicker"))}</div>
+                    <h2>${escapeHtml(intentText(intent.id, "title"))}</h2>
                 </div>
                 <div class="preview-actions">
-                    <button class="secondary-action" type="button" data-action="copy-current-path" ${state.run.outputRoot ? "" : "disabled"}>Copy path</button>
-                    <button class="secondary-action" type="button" data-action="reveal-run" ${state.run.outputRoot ? "" : "disabled"}>Reveal</button>
-                    <button class="secondary-action" type="button" data-action="regenerate" ${canSubmitRun(isAuthenticated) ? "" : "disabled"}>Regenerate</button>
+                    <button class="secondary-action" type="button" data-action="copy-current-path" ${state.run.outputRoot ? "" : "disabled"}>${escapeHtml(t("actions.copyPath"))}</button>
+                    <button class="secondary-action" type="button" data-action="reveal-run" ${state.run.outputRoot ? "" : "disabled"}>${escapeHtml(t("actions.reveal"))}</button>
+                    <button class="secondary-action" type="button" data-action="regenerate" ${canSubmitRun(isAuthenticated) ? "" : "disabled"}>${escapeHtml(t("actions.regenerate"))}</button>
                 </div>
             </div>
 
@@ -440,7 +429,7 @@ function renderPreviewPane(isAuthenticated) {
                 ${renderStageTrack(intent)}
             </div>
 
-            <div class="preview-shell" data-intent="${escapeHtml(state.intent)}" data-run-status="${escapeHtml(state.run.status)}">
+            <div class="preview-shell" data-intent="${escapeHtml(state.intent)}" data-run-status="${escapeHtml(state.run.status)}" style="--preview-empty-image: url('${escapeHtml(emptyWorkbenchPreviewUrl)}')">
                 ${renderPreviewTabs()}
                 <div class="preview-body">
                     ${renderPreviewBody()}
@@ -457,7 +446,7 @@ function renderRunStatusPill() {
         <div class="run-status-pill" data-status="${escapeHtml(state.run.status)}">
             <span class="status-light"></span>
             <div>
-                <strong>${escapeHtml(state.run.status)}</strong>
+                <strong>${escapeHtml(statusLabel(state.run.status))}</strong>
                 <span>${escapeHtml(stageLabel(state.run.stage))}</span>
             </div>
         </div>
@@ -468,9 +457,9 @@ function renderRunStatusPill() {
 function renderStageTrack(intent) {
     const current = normalizedStageBucket(state.run.stage, state.run.status);
     return `
-        <div class="stage-track" aria-label="Generation stages">
+        <div class="stage-track" aria-label="${escapeHtml(t("preview.statusMessage"))}">
             ${intent.stages.map((stage) => `
-                <span class="${stage === current ? "is-active" : ""}">${escapeHtml(stage)}</span>
+                <span class="${stage === current ? "is-active" : ""}">${escapeHtml(stageLabel(stage))}</span>
             `).join("")}
         </div>
     `;
@@ -479,7 +468,7 @@ function renderStageTrack(intent) {
 function renderPreviewTabs() {
     const tabs = getPreviewTabs();
     return `
-        <div class="preview-tabs" role="tablist" aria-label="Preview tabs">
+        <div class="preview-tabs" role="tablist" aria-label="${escapeHtml(t("pane.previewKicker"))}">
             ${tabs.map((tab) => `
                 <button type="button" role="tab" class="${state.previewTab === tab.id ? "is-active" : ""}" data-preview-tab="${tab.id}">
                     ${escapeHtml(tab.label)}
@@ -512,9 +501,9 @@ function renderCodePreview() {
                         ${escapeHtml(file)}
                     </button>
                 `).join("")}
-                <button class="copy-code-button" type="button" data-action="copy-visible-preview">Copy visible</button>
+                <button class="copy-code-button" type="button" data-action="copy-visible-preview">${escapeHtml(t("actions.copyVisible"))}</button>
             </div>
-            <div class="code-editor" aria-label="Syntax highlighted code preview">
+            <div class="code-editor" aria-label="${escapeHtml(t("preview.code"))}">
                 ${renderHighlightedCode(codePreviewText(state.activeFile))}
             </div>
             <div class="terminal-strip" data-status="${escapeHtml(state.run.status)}">
@@ -530,20 +519,20 @@ function renderNotebookPreview() {
         <div class="notebook-product">
             <div class="notebook-toolbar">
                 <span>solution.ipynb</span>
-                <button class="copy-code-button" type="button" data-action="copy-visible-preview">Copy visible</button>
+                <button class="copy-code-button" type="button" data-action="copy-visible-preview">${escapeHtml(t("actions.copyVisible"))}</button>
             </div>
             <div class="notebook-cell is-markdown">
-                <span class="cell-label">Markdown</span>
-                <h3>Approach</h3>
-                <p>State the algorithm, edge cases, and complexity before the implementation cell.</p>
+                <span class="cell-label">${escapeHtml(t("preview.markdown"))}</span>
+                <h3>${escapeHtml(t("preview.notebookApproach"))}</h3>
+                <p>${escapeHtml(t("preview.notebookApproachBody"))}</p>
             </div>
             <div class="notebook-cell">
-                <span class="cell-label">Code</span>
+                <span class="cell-label">${escapeHtml(t("preview.code"))}</span>
                 <div class="code-editor is-compact">${renderHighlightedCode(notebookCodeText())}</div>
             </div>
             <div class="terminal-strip" data-status="${escapeHtml(state.run.status)}">
-                <span>Notebook validation</span>
-                <strong>${state.run.status === "failed" ? "Preserved for inspection" : "Preview-only, no execution"}</strong>
+                <span>${escapeHtml(t("preview.notebookValidation"))}</span>
+                <strong>${escapeHtml(state.run.status === "failed" ? t("preview.preservedForInspection") : t("preview.noExecution"))}</strong>
             </div>
         </div>
     `;
@@ -559,20 +548,20 @@ function renderEssayPreview() {
             </div>
             <article class="pdf-page essay-page">
                 <header>
-                    <span class="paper-overline">LaTeX report</span>
-                    <h3>${escapeHtml(briefTitle("Generated Essay"))}</h3>
+                    <span class="paper-overline">${escapeHtml(t("preview.latexReport"))}</span>
+                    <h3>${escapeHtml(briefTitle(t("preview.generatedEssay")))}</h3>
                     <div class="paper-rule"></div>
                 </header>
                 <section>
-                    <h4>Introduction</h4>
+                    <h4>${escapeHtml(t("preview.introduction"))}</h4>
                     <p></p><p class="short"></p>
-                    <h4>Argument</h4>
+                    <h4>${escapeHtml(t("preview.argument"))}</h4>
                     <p></p><p></p><p class="shorter"></p>
-                    <h4>References</h4>
+                    <h4>${escapeHtml(t("preview.references"))}</h4>
                     <p class="short"></p>
                 </section>
             </article>
-            ${renderPreviewOverlay("PDF renderer", "Pages are shown as PDF-like preview until artifact bytes are exposed.")}
+            ${renderPreviewOverlay(t("preview.emptyPdfTitle"), t("preview.emptyPdfMessage"))}
         </div>
     `;
 }
@@ -580,7 +569,7 @@ function renderEssayPreview() {
 function renderSlidesPreview() {
     return `
         <div class="slide-product">
-            <aside class="slide-thumbs" aria-label="Slide thumbnails">
+            <aside class="slide-thumbs" aria-label="${escapeHtml(t("preview.deckTitle"))}">
                 <span class="is-active"></span>
                 <span></span>
                 <span></span>
@@ -588,15 +577,15 @@ function renderSlidesPreview() {
             </aside>
             <div class="slide-canvas">
                 <div class="slide-page">
-                    <span class="slide-kicker">Beamer deck</span>
-                    <h3>${escapeHtml(briefTitle("Course Presentation"))}</h3>
+                    <span class="slide-kicker">${escapeHtml(intentText("beamer_slides", "title"))}</span>
+                    <h3>${escapeHtml(briefTitle(t("preview.generatedSlides")))}</h3>
                     <div class="slide-columns">
                         <span></span><span></span><span></span><span></span>
                     </div>
-                    <div class="slide-footer">Slide 1 / 12</div>
+                    <div class="slide-footer">${escapeHtml(t("preview.pageLabel"))}</div>
                 </div>
             </div>
-            ${renderPreviewOverlay("Deck preview", "Compiled PDF pages will replace this deck skeleton when a file endpoint is available.")}
+            ${renderPreviewOverlay(t("preview.deckTitle"), t("preview.deckMessage"))}
         </div>
     `;
 }
@@ -606,8 +595,8 @@ function renderCheatSheetPreview() {
     return `
         <div class="cheat-product">
             <div class="cheat-toolbar">
-                <span>A4 dense layout</span>
-                <strong>${pageCount} page${pageCount === 1 ? "" : "s"}</strong>
+                <span>${escapeHtml(t("preview.a4DenseLayout"))}</span>
+                <strong>${escapeHtml(t(pageCount === 1 ? "preview.onePage" : "preview.manyPages", { count: pageCount }))}</strong>
             </div>
             <div class="cheat-pages">
                 ${Array.from({ length: Math.min(pageCount, 4) }, (_, pageIndex) => `
@@ -623,7 +612,7 @@ function renderCheatSheetPreview() {
                     </article>
                 `).join("")}
             </div>
-            ${renderPreviewOverlay("Sheet preview", "Dense PDF-like pages stay visible while generation runs.")}
+            ${renderPreviewOverlay(t("preview.sheetTitle"), t("preview.sheetMessage"))}
         </div>
     `;
 }
@@ -633,8 +622,8 @@ function renderPreviewOverlay(title, message) {
     if (state.run.status === "failed") {
         return `
             <div class="preview-overlay is-error">
-                <strong>${escapeHtml(state.run.errorCode || "Run failed")}</strong>
-                <span>${escapeHtml(state.run.error || "Any preserved source or logs remain available from the run folder.")}</span>
+                <strong>${escapeHtml(state.run.errorCode || t("preview.failedTitle"))}</strong>
+                <span>${escapeHtml(state.run.error || t("preview.failedMessage"))}</span>
             </div>
         `;
     }
@@ -661,7 +650,7 @@ function renderSourceInspection() {
         <div class="inspection-product">
             <div class="inspection-head">
                 <span>${escapeHtml(filename)}</span>
-                <button class="copy-code-button" type="button" data-action="copy-visible-preview">Copy visible</button>
+                <button class="copy-code-button" type="button" data-action="copy-visible-preview">${escapeHtml(t("actions.copyVisible"))}</button>
             </div>
             <div class="code-editor">${renderHighlightedCode(sourcePreviewText(), language)}</div>
             <div class="inspection-note">${escapeHtml(artifactAccessNote())}</div>
@@ -673,14 +662,14 @@ function renderLogInspection() {
     return `
         <div class="inspection-product">
             <div class="inspection-head">
-                <span>generation.log</span>
-                <button class="copy-code-button" type="button" data-action="copy-visible-preview">Copy visible</button>
+                <span>${escapeHtml(t("source.generationLog"))}</span>
+                <button class="copy-code-button" type="button" data-action="copy-visible-preview">${escapeHtml(t("actions.copyVisible"))}</button>
             </div>
             <div class="log-view">
                 <p><span>${escapeHtml(timestampLabel())}</span> ${escapeHtml(stageLabel(state.run.stage))}: ${escapeHtml(state.run.message)}</p>
-                <p><span>run</span> ${state.run.id ? escapeHtml(state.run.id) : "not-started"}</p>
-                <p><span>status</span> ${escapeHtml(state.run.status)}</p>
-                ${state.run.error ? `<p class="is-error"><span>error</span> ${escapeHtml(state.run.error)}</p>` : ""}
+                <p><span>run</span> ${state.run.id ? escapeHtml(state.run.id) : escapeHtml(t("source.notStarted"))}</p>
+                <p><span>${escapeHtml(t("source.status"))}</span> ${escapeHtml(statusLabel(state.run.status))}</p>
+                ${state.run.error ? `<p class="is-error"><span>${escapeHtml(t("source.error"))}</span> ${escapeHtml(state.run.error)}</p>` : ""}
             </div>
             <div class="inspection-note">${escapeHtml(artifactAccessNote())}</div>
         </div>
@@ -701,7 +690,7 @@ function renderManifestInspection() {
         <div class="inspection-product">
             <div class="inspection-head">
                 <span>manifest.json</span>
-                <button class="copy-code-button" type="button" data-action="copy-visible-preview">Copy visible</button>
+                <button class="copy-code-button" type="button" data-action="copy-visible-preview">${escapeHtml(t("actions.copyVisible"))}</button>
             </div>
             <div class="code-editor">${renderHighlightedCode(JSON.stringify(manifest, null, 2), "json")}</div>
             <div class="inspection-note">${escapeHtml(artifactAccessNote())}</div>
@@ -712,10 +701,10 @@ function renderManifestInspection() {
 function renderOutputFiles() {
     const files = getExpectedFiles();
     return `
-        <section class="output-dock" aria-label="Output files">
+        <section class="output-dock" aria-label="${escapeHtml(t("preview.files"))}">
             <div class="output-head">
-                <span>Files</span>
-                <small>${state.run.outputRoot ? escapeHtml(truncatePath(state.run.outputRoot)) : "Run folder pending"}</small>
+                <span>${escapeHtml(t("preview.files"))}</span>
+                <small>${state.run.outputRoot ? escapeHtml(truncatePath(state.run.outputRoot)) : escapeHtml(t("preview.runFolderPending"))}</small>
             </div>
             <div class="output-grid">
                 ${files.map((file) => renderOutputFile(file)).join("")}
@@ -735,8 +724,8 @@ function renderOutputFile(file) {
                 <small>${escapeHtml(isReady ? file.readyLabel : file.pendingLabel)}</small>
             </div>
             <div class="file-actions">
-                <button type="button" data-copy-file="${escapeHtml(path || file.relativePath)}" ${path ? "" : "disabled"}>Copy</button>
-                <button type="button" data-open-file="${escapeHtml(path || "")}" ${path ? "" : "disabled"}>Open</button>
+                <button type="button" data-copy-file="${escapeHtml(path || file.relativePath)}" ${path ? "" : "disabled"}>${escapeHtml(t("actions.copy"))}</button>
+                <button type="button" data-open-file="${escapeHtml(path || "")}" ${path ? "" : "disabled"}>${escapeHtml(t("actions.open"))}</button>
             </div>
         </div>
     `;
@@ -747,6 +736,7 @@ function renderContextDial() {
     return `
         <div class="context-widget" tabindex="0" data-context-state="${escapeHtml(estimate.warning_level)}" aria-label="${escapeHtml(contextAriaLabel(estimate))}">
             <div class="dial-ring" aria-hidden="true">
+                <img src="${escapeHtml(contextDialAssets[estimate.warning_level] || contextDialAssets.ok)}" alt="">
                 <span data-context-field="state">${escapeHtml(contextStateLabel(estimate.warning_level))}</span>
             </div>
             <div class="context-copy">
@@ -754,13 +744,13 @@ function renderContextDial() {
                 <span data-context-field="summary">${escapeHtml(contextSummary(estimate))}</span>
             </div>
             <div class="context-popover" role="tooltip">
-                <div><span>Input</span><strong data-context-field="input">${formatInt(estimate.estimated_input_tokens)}</strong></div>
-                <div><span>Output</span><strong data-context-field="output">${formatInt(estimate.estimated_output_tokens)}</strong></div>
-                <div><span>Total</span><strong data-context-field="total">${formatInt(estimate.estimated_total_tokens)}</strong></div>
-                <div><span>Limit</span><strong data-context-field="limit">${formatInt(estimate.context_window_limit)}</strong></div>
-                <div><span>Use</span><strong data-context-field="utilization">${formatPercent(estimate.utilization_ratio)}</strong></div>
-                <div><span>Warning</span><strong data-context-field="warning">${escapeHtml(contextStateLabel(estimate.warning_level))}</strong></div>
-                <div><span>Source</span><strong data-context-field="source">${escapeHtml(contextSourceLabel(estimate.source))}</strong></div>
+                <div><span>${escapeHtml(t("context.input"))}</span><strong data-context-field="input">${formatInt(estimate.estimated_input_tokens)}</strong></div>
+                <div><span>${escapeHtml(t("context.output"))}</span><strong data-context-field="output">${formatInt(estimate.estimated_output_tokens)}</strong></div>
+                <div><span>${escapeHtml(t("context.total"))}</span><strong data-context-field="total">${formatInt(estimate.estimated_total_tokens)}</strong></div>
+                <div><span>${escapeHtml(t("context.limit"))}</span><strong data-context-field="limit">${formatInt(estimate.context_window_limit)}</strong></div>
+                <div><span>${escapeHtml(t("context.use"))}</span><strong data-context-field="utilization">${formatPercent(estimate.utilization_ratio)}</strong></div>
+                <div><span>${escapeHtml(t("context.warningLabel"))}</span><strong data-context-field="warning">${escapeHtml(contextStateLabel(estimate.warning_level))}</strong></div>
+                <div><span>${escapeHtml(t("context.source"))}</span><strong data-context-field="source">${escapeHtml(contextSourceLabel(estimate.source))}</strong></div>
             </div>
         </div>
     `;
@@ -768,35 +758,38 @@ function renderContextDial() {
 
 function renderAuthPanel() {
     return `
-        <section class="auth-panel" aria-label="Authentication">
+        <section class="auth-panel" aria-label="${escapeHtml(t("auth.kicker"))}">
             <div class="auth-head">
                 <div>
-                    <div class="pane-kicker">CUHK weak auth</div>
-                    <h2>${state.authMode === "login" ? "Login" : "Register"}</h2>
+                    <div class="pane-kicker">${escapeHtml(t("auth.kicker"))}</div>
+                    <h2>${escapeHtml(state.authMode === "login" ? t("auth.loginTitle") : t("auth.registerTitle"))}</h2>
                 </div>
-                <div class="auth-tabs">
-                    <button type="button" class="${state.authMode === "login" ? "is-active" : ""}" data-auth-mode="login">Login</button>
-                    <button type="button" class="${state.authMode === "register" ? "is-active" : ""}" data-auth-mode="register">Register</button>
+                <div class="auth-head-actions">
+                    ${renderLocaleSwitch()}
+                    <div class="auth-tabs">
+                        <button type="button" class="${state.authMode === "login" ? "is-active" : ""}" data-auth-mode="login">${escapeHtml(t("actions.login"))}</button>
+                        <button type="button" class="${state.authMode === "register" ? "is-active" : ""}" data-auth-mode="register">${escapeHtml(t("auth.registerTitle"))}</button>
+                    </div>
                 </div>
             </div>
             <form id="auth-form" class="auth-form">
                 <label>
-                    <span class="field-label">CUHK email</span>
+                    <span class="field-label">${escapeHtml(t("auth.email"))}</span>
                     <input id="auth-email" type="email" autocomplete="email" placeholder="name@cuhk.edu.hk">
                 </label>
                 <label>
-                    <span class="field-label">Password</span>
+                    <span class="field-label">${escapeHtml(t("auth.password"))}</span>
                     <input id="auth-password" type="password" autocomplete="${state.authMode === "login" ? "current-password" : "new-password"}">
                 </label>
                 ${
                     state.authMode === "register"
                         ? `<label>
-                            <span class="field-label">Confirm password</span>
+                            <span class="field-label">${escapeHtml(t("auth.confirmPassword"))}</span>
                             <input id="auth-confirm" type="password" autocomplete="new-password">
                         </label>`
                         : ""
                 }
-                <button class="run-button is-full" type="submit">${state.authMode === "login" ? "Login" : "Create account"}</button>
+                <button class="run-button is-full" type="submit">${escapeHtml(state.authMode === "login" ? t("actions.login") : t("actions.createAccount"))}</button>
                 <div class="inline-notice is-${state.authTone}">${escapeHtml(state.authMessage)}</div>
             </form>
         </section>
@@ -806,30 +799,30 @@ function renderAuthPanel() {
 function renderModelSettingsPanel() {
     const form = state.model.form;
     const profile = state.model.profile;
-    const keyState = profile?.api_key_ref ? "Saved key configured" : "No saved key";
+    const keyState = profile?.api_key_ref ? t("model.savedKey") : t("model.noSavedKey");
     const isBusy = Boolean(state.model.busy);
     return `
-        <section class="model-modal" role="dialog" aria-modal="true" aria-label="Model settings">
+        <section class="model-modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(t("model.settingsKicker"))}">
             <div class="model-dialog">
                 <div class="model-dialog-head">
                     <div>
-                        <div class="pane-kicker">Model settings</div>
-                        <h2>${escapeHtml(form.displayName || "Qwen Default")}</h2>
+                        <div class="pane-kicker">${escapeHtml(t("model.settingsKicker"))}</div>
+                        <h2>${escapeHtml(form.displayName || t("model.defaultName"))}</h2>
                     </div>
-                    <button class="icon-action is-large" type="button" data-action="close-model-settings" aria-label="Close model settings">x</button>
+                    <button class="icon-action is-large" type="button" data-action="close-model-settings" aria-label="${escapeHtml(t("actions.closeModel"))}">x</button>
                 </div>
                 <form id="model-settings-form" class="model-form" novalidate>
-                    ${renderModelField("displayName", "Display name", "text", form.displayName, "Qwen Default", false)}
-                    ${renderModelField("baseUrl", "Base URL", "url", form.baseUrl, "https://example-compatible-endpoint/v1", true)}
-                    ${renderModelField("model", "Model", "text", form.model, "qwen-model-name", true)}
-                    ${renderModelField("apiKey", "API key", "password", form.apiKey, profile?.api_key_ref ? "New key" : "API key", false, "new-password")}
+                    ${renderModelField("displayName", t("model.displayName"), "text", form.displayName, t("model.defaultName"), false)}
+                    ${renderModelField("baseUrl", t("model.baseUrl"), "url", form.baseUrl, "https://example-compatible-endpoint/v1", true)}
+                    ${renderModelField("model", t("model.model"), "text", form.model, "qwen-model-name", true)}
+                    ${renderModelField("apiKey", t("model.apiKey"), "password", form.apiKey, profile?.api_key_ref ? t("model.newKey") : t("model.apiKey"), false, "new-password")}
                     <div class="model-secret-row">
                         <span class="key-state ${profile?.api_key_ref ? "is-ready" : ""}">${escapeHtml(keyState)}</span>
-                        <span class="profile-id">${escapeHtml(profile?.id || "environment-default")}</span>
+                        <span class="profile-id">${escapeHtml(profile?.id || t("model.environmentDefault"))}</span>
                     </div>
                     <div class="model-actions">
-                        <button class="secondary-action" type="button" data-action="test-model-settings" ${isBusy ? "disabled" : ""}>Test</button>
-                        <button class="run-button" type="submit" ${isBusy ? "disabled" : ""}>${state.model.busy === "save" ? "Saving" : "Save"}</button>
+                        <button class="secondary-action" type="button" data-action="test-model-settings" ${isBusy ? "disabled" : ""}>${escapeHtml(t("actions.test"))}</button>
+                        <button class="run-button" type="submit" ${isBusy ? "disabled" : ""}>${escapeHtml(state.model.busy === "save" ? t("actions.saving") : t("actions.save"))}</button>
                     </div>
                     <div class="inline-notice is-${state.model.statusTone}">${escapeHtml(state.model.statusMessage)}</div>
                 </form>
@@ -857,30 +850,28 @@ function renderModelField(field, label, type, value, placeholder, required, auto
 }
 
 function bindEvents() {
+    bindLocaleControls();
+    bindAuthPanelEvents();
     document.querySelectorAll("[data-pane]").forEach((button) => {
         button.addEventListener("click", () => {
             state.activePane = button.dataset.pane;
             render();
         });
     });
-    document.querySelectorAll("[data-auth-mode]").forEach((button) => {
-        button.addEventListener("click", () => {
-            state.authMode = button.dataset.authMode;
-            state.authMessage = "";
-            render();
-        });
-    });
-    document.getElementById("auth-form")?.addEventListener("submit", handleAuthSubmit);
     document.getElementById("task-text")?.addEventListener("input", (event) => {
         state.taskText = event.target.value;
         delete state.fieldErrors.task_text;
+        event.target.classList.remove("has-error");
+        event.target.closest(".command-composer")?.querySelector(".field-error")?.remove();
         refreshLocalContext();
         updateContextDial();
+        updateComposerActionState();
     });
     document.getElementById("refinement-text")?.addEventListener("input", (event) => {
         state.refinementText = event.target.value;
         refreshLocalContext();
         updateContextDial();
+        updateComposerActionState();
     });
     document.querySelectorAll("[data-intent]").forEach((button) => {
         button.addEventListener("click", () => {
@@ -965,15 +956,56 @@ function bindEvents() {
         });
     });
     document.querySelector("[data-action='copy-visible-preview']")?.addEventListener("click", copyVisiblePreview);
-    document.querySelector("[data-action='copy-current-path']")?.addEventListener("click", () => copyText(state.run.outputRoot || "", "Run folder path copied."));
+    document.querySelector("[data-action='copy-current-path']")?.addEventListener("click", () => copyText(state.run.outputRoot || "", t("run.pathCopied")));
     document.querySelector("[data-action='reveal-run']")?.addEventListener("click", revealRunFolder);
     document.querySelectorAll("[data-copy-file]").forEach((button) => {
-        button.addEventListener("click", () => copyText(button.dataset.copyFile || "", "Artifact path copied."));
+        button.addEventListener("click", () => copyText(button.dataset.copyFile || "", t("run.artifactPathCopied")));
     });
     document.querySelectorAll("[data-open-file]").forEach((button) => {
         button.addEventListener("click", () => openLocalPath(button.dataset.openFile || ""));
     });
     document.onkeydown = handleGlobalKeydown;
+}
+
+function bindLocaleControls(root = document) {
+    root.querySelectorAll("[data-locale]").forEach((button) => {
+        button.addEventListener("click", () => {
+            setLocale(button.dataset.locale);
+        });
+    });
+}
+
+function bindAuthPanelEvents(root = document) {
+    root.querySelectorAll("[data-auth-mode]").forEach((button) => {
+        button.addEventListener("click", () => {
+            setAuthMode(button.dataset.authMode);
+        });
+    });
+    root.querySelector("#auth-form")?.addEventListener("submit", handleAuthSubmit);
+}
+
+function setAuthMode(authMode) {
+    state.authMode = authMode === "register" ? "register" : "login";
+    state.authMessage = "";
+    state.authTone = "neutral";
+    updateAuthPanel();
+}
+
+function updateAuthPanel() {
+    const currentPanel = document.querySelector(".auth-panel");
+    if (!currentPanel) {
+        render();
+        return;
+    }
+    const fragment = document.createRange().createContextualFragment(renderAuthPanel());
+    const nextPanel = fragment.querySelector(".auth-panel");
+    if (!nextPanel) {
+        render();
+        return;
+    }
+    currentPanel.replaceWith(nextPanel);
+    bindLocaleControls(nextPanel);
+    bindAuthPanelEvents(nextPanel);
 }
 
 async function handleAuthSubmit(event) {
@@ -986,9 +1018,9 @@ async function handleAuthSubmit(event) {
         ? { email, password }
         : { email, password, confirm_password: confirm };
 
-    state.authMessage = "Contacting local backend...";
+    state.authMessage = t("auth.contacting");
     state.authTone = "neutral";
-    render();
+    updateAuthPanel();
 
     try {
         const response = await fetch(`${API_URL}${endpoint}`, {
@@ -997,19 +1029,19 @@ async function handleAuthSubmit(event) {
             body: JSON.stringify(payload),
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(errorMessage(data, "Authentication failed."));
+        if (!response.ok) throw new Error(errorMessage(data, t("auth.failed")));
         if (state.authMode === "register") {
             state.authMode = "login";
-            state.authMessage = "Account created. Login is ready.";
+            state.authMessage = t("auth.created");
             state.authTone = "success";
-            render();
+            updateAuthPanel();
             return;
         }
         setUser({ email: data.email, role: data.role }, data.token);
     } catch (error) {
         state.authMessage = safeDisplayMessage(error.message);
         state.authTone = "error";
-        render();
+        updateAuthPanel();
     }
 }
 
@@ -1019,12 +1051,12 @@ async function handleRun({ isRevision, isRegenerate = false }) {
     const revisionOfRunId = isRevision ? state.run.id : null;
 
     if (!promptText) {
-        state.fieldErrors.task_text = isRevision ? "" : "Required";
+        state.fieldErrors.task_text = isRevision ? "" : t("run.required");
         state.run = {
             ...initialRunState(),
             status: "idle",
             stage: "validate_request",
-            message: isRevision ? "Add a follow-up request before starting a revision." : "Add a task brief before running.",
+            message: isRevision ? t("refinement.missing") : t("run.addBrief"),
         };
         render();
         return;
@@ -1038,22 +1070,22 @@ async function handleRun({ isRevision, isRegenerate = false }) {
         ...initialRunState(),
         status: "queued",
         stage: state.files.some((file) => !file.uploadId) ? "upload_inputs" : "submit_run",
-        message: state.files.some((file) => !file.uploadId) ? "Preparing reference uploads." : "Submitting run to local backend.",
+        message: state.files.some((file) => !file.uploadId) ? t("run.preparingUploads") : t("run.submitting"),
         revisionOfRunId,
     };
     addHistory({
         kind: isRevision ? "revision" : "command",
         status: "queued",
-        title: isRevision ? "Follow-up request" : isRegenerate ? "Regenerate request" : "Generation request",
+        title: isRevision ? t("history.followUpTitle") : isRegenerate ? t("history.regenerateTitle") : t("history.generationTitle"),
         message: promptText,
-        meta: `${getSelectedIntent().label} / search ${state.searchMode}`,
+        meta: `${intentText(getSelectedIntent().id, "label")} / ${t("controls.search")} ${t(`controls.searchMode.${state.searchMode}`)}`,
     });
     state.activePane = "preview";
     render();
 
     try {
         const uploadIds = await uploadFilesIfNeeded();
-        state.run = { ...state.run, stage: "submit_run", message: "Submitting run to local backend." };
+        state.run = { ...state.run, stage: "submit_run", message: t("run.submitting") };
         render();
         const response = await fetch(`${API_URL}/api/runs`, {
             method: "POST",
@@ -1065,7 +1097,7 @@ async function handleRun({ isRevision, isRegenerate = false }) {
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            applyRunApiError(data, "Run request failed.");
+            applyRunApiError(data, t("run.requestFailed"));
             render();
             return;
         }
@@ -1082,7 +1114,7 @@ async function handleRun({ isRevision, isRegenerate = false }) {
             ...state.run,
             status: "failed",
             stage: state.run.stage || "submit_run",
-            message: "Run request failed.",
+            message: t("run.requestFailed"),
             error: safeDisplayMessage(error.message),
             errorCode: "frontend_request_failed",
         };
@@ -1113,8 +1145,8 @@ async function uploadFilesIfNeeded() {
             file.status = "failed";
         });
         const fallback = response.status === 404
-            ? "Upload API is unavailable in this backend build."
-            : "Upload failed.";
+            ? t("uploads.unavailable")
+            : t("uploads.failedGeneric");
         throw new Error(errorMessage(data, fallback));
     }
 
@@ -1125,7 +1157,7 @@ async function uploadFilesIfNeeded() {
         file.status = file.uploadId ? "uploaded" : "failed";
     });
     if (pending.some((file) => !file.uploadId)) {
-        throw new Error("Upload response did not include every upload id.");
+        throw new Error(t("uploads.missingIds"));
     }
     return state.files.map((file) => file.uploadId).filter(Boolean);
 }
@@ -1166,14 +1198,14 @@ function resetModelState() {
 function modelButtonLabel() {
     const profile = state.model.profile;
     if (profile?.model) return profile.model;
-    if (state.model.statusTone === "error") return "Model needs attention";
-    return "Default Qwen profile";
+    if (state.model.statusTone === "error") return t("model.needsAttention");
+    return t("model.defaultButton");
 }
 
 function openModelSettings() {
     hydrateModelFormFromProfile();
     state.model.editorOpen = true;
-    state.model.statusMessage = state.model.profile ? "Saved profile loaded." : "Local defaults loaded.";
+    state.model.statusMessage = state.model.profile ? t("model.savedLoaded") : t("model.defaultsLoaded");
     state.model.statusTone = "neutral";
     state.model.fieldErrors = {};
     render();
@@ -1198,13 +1230,13 @@ async function loadModelProfiles() {
             headers: { Authorization: `Bearer ${state.token}` },
         });
         const data = await response.json().catch(() => []);
-        if (!response.ok) throw new Error(errorMessage(data, "Model profile load failed."));
+        if (!response.ok) throw new Error(errorMessage(data, t("model.loadFailed")));
         const profiles = Array.isArray(data) ? data.map(sanitizeModelProfile) : [];
         state.model.profiles = profiles;
         state.model.profile = profiles.find((profile) => profile.is_default) || profiles[0] || null;
         hydrateModelFormFromProfile();
         if (state.model.editorOpen) {
-            state.model.statusMessage = state.model.profile ? "Saved profile loaded." : "Local defaults loaded.";
+            state.model.statusMessage = state.model.profile ? t("model.savedLoaded") : t("model.defaultsLoaded");
             state.model.statusTone = "neutral";
         }
         render();
@@ -1218,7 +1250,7 @@ async function loadModelProfiles() {
 function sanitizeModelProfile(profile) {
     return {
         id: String(profile?.id || "default-qwen"),
-        display_name: String(profile?.display_name || "Qwen Default"),
+        display_name: String(profile?.display_name || t("model.defaultName")),
         provider: String(profile?.provider || "openai_compatible"),
         base_url: String(profile?.base_url || DEFAULT_MODEL_FORM.baseUrl),
         model: String(profile?.model || DEFAULT_MODEL_FORM.model),
@@ -1232,7 +1264,7 @@ function sanitizeModelProfile(profile) {
 function hydrateModelFormFromProfile() {
     const profile = state.model.profile;
     state.model.form = {
-        displayName: profile?.display_name || DEFAULT_MODEL_FORM.displayName,
+        displayName: profile?.display_name || t("model.defaultName"),
         provider: profile?.provider || DEFAULT_MODEL_FORM.provider,
         baseUrl: profile?.base_url || DEFAULT_MODEL_FORM.baseUrl,
         model: profile?.model || DEFAULT_MODEL_FORM.model,
@@ -1243,7 +1275,7 @@ function hydrateModelFormFromProfile() {
 async function handleModelSettingsSave(event) {
     event.preventDefault();
     state.model.busy = "save";
-    state.model.statusMessage = "Saving model profile.";
+    state.model.statusMessage = t("model.saving");
     state.model.statusTone = "neutral";
     state.model.fieldErrors = {};
     render();
@@ -1259,13 +1291,13 @@ async function handleModelSettingsSave(event) {
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            applyModelApiError(data, "Model profile save failed.");
+            applyModelApiError(data, t("model.saveFailed"));
             return;
         }
         state.model.profile = sanitizeModelProfile(data);
         state.model.profiles = [state.model.profile];
         hydrateModelFormFromProfile();
-        state.model.statusMessage = "Model profile saved.";
+        state.model.statusMessage = t("model.saved");
         state.model.statusTone = "success";
         state.model.fieldErrors = {};
     } catch (error) {
@@ -1280,7 +1312,7 @@ async function handleModelSettingsSave(event) {
 
 async function handleModelSettingsTest() {
     state.model.busy = "test";
-    state.model.statusMessage = "Testing provider connection.";
+    state.model.statusMessage = t("model.testing");
     state.model.statusTone = "neutral";
     state.model.fieldErrors = {};
     render();
@@ -1297,10 +1329,10 @@ async function handleModelSettingsTest() {
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            applyModelApiError(data, "Provider connectivity test failed.");
+            applyModelApiError(data, t("model.testFailed"));
             return;
         }
-        state.model.statusMessage = `Connection OK for ${data.model || state.model.form.model}.`;
+        state.model.statusMessage = t("model.connectionOk", { model: data.model || state.model.form.model });
         state.model.statusTone = "success";
         state.model.fieldErrors = {};
     } catch (error) {
@@ -1315,7 +1347,7 @@ async function handleModelSettingsTest() {
 function buildModelProfilePayload({ includeApiKey }) {
     const form = state.model.form;
     const payload = {
-        display_name: form.displayName.trim() || "Qwen Default",
+        display_name: form.displayName.trim() || t("model.defaultName"),
         provider: form.provider || "openai_compatible",
         base_url: form.baseUrl.trim(),
         model: form.model.trim(),
@@ -1352,18 +1384,19 @@ function modelFieldKey(field) {
 }
 
 function fieldErrorText(rule) {
-    if (rule === "required") return "Required";
-    if (rule === "absolute_http_url") return "Use an absolute http or https URL";
-    if (rule === "enum") return "Choose a supported value";
-    return rule || "Invalid value";
+    if (rule === "required") return t("errors.required");
+    if (rule === "absolute_http_url") return t("errors.absoluteHttpUrl");
+    if (rule === "enum") return t("errors.enum");
+    return rule || t("errors.invalid");
 }
 
-function initialRunState() {
+function initialRunState(locale) {
+    const runLocale = locale || state.locale;
     return {
         id: "",
         status: "idle",
         stage: "compose",
-        message: "Ready",
+        message: translate(runLocale, "run.ready"),
         error: null,
         errorCode: "",
         outputRoot: "",
@@ -1410,7 +1443,7 @@ function applyRunApiError(data, fallback) {
         ...state.run,
         status: "failed",
         stage: "submit_run",
-        message: "Run request failed.",
+        message: t("run.requestFailed"),
         error: errorMessage(data, fallback),
         errorCode: String(error.code || "request_failed"),
     };
@@ -1444,10 +1477,10 @@ function runMessageFromPayload(payload) {
     if (payload.message) return safeDisplayMessage(payload.message);
     if (payload.error?.message) return safeDisplayMessage(payload.error.message);
     if (payload.error_message) return safeDisplayMessage(payload.error_message);
-    if (payload.status === "succeeded") return "Run succeeded.";
-    if (payload.status === "failed") return "Run failed.";
-    if (payload.status === "running") return "Run is running.";
-    return "Run queued.";
+    if (payload.status === "succeeded") return t("run.succeeded");
+    if (payload.status === "failed") return t("run.failed");
+    if (payload.status === "running") return t("run.running");
+    return t("run.queued");
 }
 
 function errorFromPayload(payload) {
@@ -1473,7 +1506,7 @@ function startRunPolling(runId) {
                 ...state.run,
                 status: "failed",
                 stage: "poll_status",
-                message: "Could not refresh run status.",
+                message: t("run.refreshFailed"),
                 error: safeDisplayMessage(error.message),
                 errorCode: "status_refresh_failed",
             };
@@ -1495,7 +1528,7 @@ async function pollRunEvent(runId) {
         headers: { Authorization: `Bearer ${state.token}` },
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(errorMessage(data, "Run status refresh failed."));
+    if (!response.ok) throw new Error(errorMessage(data, t("run.statusRefreshFailed")));
     applyRunPayload(data);
     upsertRunHistory();
     render();
@@ -1508,6 +1541,8 @@ function updateContextDial() {
     const widget = document.querySelector(".context-widget");
     if (!dial || !widget) return;
     dial.style.setProperty("--context-ratio", `${Math.min(100, estimate.utilization_ratio * 100)}%`);
+    const dialImage = dial.querySelector("img");
+    if (dialImage) dialImage.src = contextDialAssets[estimate.warning_level] || contextDialAssets.ok;
     widget.dataset.contextState = estimate.warning_level;
     widget.setAttribute("aria-label", contextAriaLabel(estimate));
     setContextText("state", contextStateLabel(estimate.warning_level));
@@ -1520,6 +1555,22 @@ function updateContextDial() {
     setContextText("utilization", formatPercent(estimate.utilization_ratio));
     setContextText("warning", contextStateLabel(estimate.warning_level));
     setContextText("source", contextSourceLabel(estimate.source));
+}
+
+function updateComposerActionState() {
+    const authenticated = Boolean(state.user && state.token);
+    const runButton = document.querySelector("[data-action='run']");
+    if (runButton) {
+        runButton.disabled = !canSubmitRun(authenticated);
+        const label = runButton.querySelector("[data-run-button-label]");
+        if (label) label.textContent = runButtonLabel();
+    }
+    const runNoteElement = document.querySelector("[data-run-note]");
+    if (runNoteElement) runNoteElement.textContent = runNote(authenticated);
+
+    const refinementDisabled = !authenticated || !state.run.id || state.run.status === "queued" || state.run.status === "running";
+    const refinementButton = document.querySelector("[data-action='run-refinement']");
+    if (refinementButton) refinementButton.disabled = refinementDisabled || !state.refinementText.trim();
 }
 
 function setContextText(field, text) {
@@ -1609,8 +1660,8 @@ function addLocalFiles(files) {
     })).filter((file) => !existingKeys.has(file.key));
     state.files = [...state.files, ...additions];
     state.notice = additions.length
-        ? { message: "Files will upload before the next run.", tone: "neutral" }
-        : { message: "Those files are already selected.", tone: "neutral" };
+        ? { message: t("uploads.willUpload"), tone: "neutral" }
+        : { message: t("uploads.duplicates"), tone: "neutral" };
     refreshLocalContext();
 }
 
@@ -1630,9 +1681,9 @@ function upsertRunHistory() {
         id,
         kind: "run",
         status: state.run.status,
-        title: `Run ${shortRunId(state.run.id)}`,
+        title: t("history.runTitle", { id: shortRunId(state.run.id) }),
         message: state.run.error || state.run.message,
-        meta: `${stageLabel(state.run.stage)} / ${state.run.outputRoot ? truncatePath(state.run.outputRoot) : "folder pending"}`,
+        meta: `${stageLabel(state.run.stage)} / ${state.run.outputRoot ? truncatePath(state.run.outputRoot) : t("history.folderPending")}`,
         timestamp: new Date().toISOString(),
     };
     if (existing) Object.assign(existing, entry);
@@ -1655,45 +1706,45 @@ function getCodeFiles() {
 
 function getPreviewTabs() {
     return [
-        { id: "primary", label: state.intent === "code_homework" ? "Code" : "Rendered" },
-        { id: "source", label: state.intent === "code_homework" ? "Source" : "LaTeX" },
-        { id: "logs", label: "Logs" },
-        { id: "manifest", label: "Manifest" },
+        { id: "primary", label: intentText(state.intent, "primaryTab") },
+        { id: "source", label: intentText(state.intent, "sourceTab") },
+        { id: "logs", label: t("preview.tabs.logs") },
+        { id: "manifest", label: t("preview.tabs.manifest") },
     ];
 }
 
 function getExpectedFiles() {
     if (state.intent === "code_homework") {
         const main = state.outputPreference === "ipynb"
-            ? { name: "solution.ipynb", relativePath: "output/solution.ipynb", kind: "notebook", badge: "NB", readyLabel: "notebook output", pendingLabel: "pending" }
-            : { name: "solution.py", relativePath: "output/solution.py", kind: "script", badge: "PY", readyLabel: "script output", pendingLabel: "pending" };
+            ? { name: "solution.ipynb", relativePath: "output/solution.ipynb", kind: "notebook", badge: "NB", readyLabel: t("files.notebookReady"), pendingLabel: t("files.pending") }
+            : { name: "solution.py", relativePath: "output/solution.py", kind: "script", badge: "PY", readyLabel: t("files.scriptReady"), pendingLabel: t("files.pending") };
         return [
             main,
-            { name: "generation.log", relativePath: "logs/generation.log", kind: "log", badge: "LOG", readyLabel: "run log", pendingLabel: "pending" },
-            { name: "manifest.json", relativePath: "manifest.json", kind: "manifest", badge: "JS", readyLabel: "metadata", pendingLabel: "pending" },
+            { name: "generation.log", relativePath: "logs/generation.log", kind: "log", badge: "LOG", readyLabel: t("files.logReady"), pendingLabel: t("files.pending") },
+            { name: "manifest.json", relativePath: "manifest.json", kind: "manifest", badge: "JS", readyLabel: t("files.metadataReady"), pendingLabel: t("files.pending") },
         ];
     }
     if (state.intent === "essay_latex") {
         return [
-            { name: "main.pdf", relativePath: "output/main.pdf", kind: "pdf", badge: "PDF", readyLabel: "compiled PDF", pendingLabel: "compile pending" },
-            { name: "main.tex", relativePath: "output/main.tex", kind: "source", badge: "TEX", readyLabel: "source preserved", pendingLabel: "pending" },
-            { name: "latex.log", relativePath: "logs/latex.log", kind: "log", badge: "LOG", readyLabel: "compile log", pendingLabel: "pending" },
-            { name: "manifest.json", relativePath: "manifest.json", kind: "manifest", badge: "JS", readyLabel: "metadata", pendingLabel: "pending" },
+            { name: "main.pdf", relativePath: "output/main.pdf", kind: "pdf", badge: "PDF", readyLabel: t("files.pdfReady"), pendingLabel: t("files.compilePending") },
+            { name: "main.tex", relativePath: "output/main.tex", kind: "source", badge: "TEX", readyLabel: t("files.sourceReady"), pendingLabel: t("files.pending") },
+            { name: "latex.log", relativePath: "logs/latex.log", kind: "log", badge: "LOG", readyLabel: t("files.compileLogReady"), pendingLabel: t("files.pending") },
+            { name: "manifest.json", relativePath: "manifest.json", kind: "manifest", badge: "JS", readyLabel: t("files.metadataReady"), pendingLabel: t("files.pending") },
         ];
     }
     if (state.intent === "beamer_slides") {
         return [
-            { name: "slides.pdf", relativePath: "output/slides.pdf", kind: "pdf", badge: "PDF", readyLabel: "compiled deck", pendingLabel: "compile pending" },
-            { name: "slides.tex", relativePath: "output/slides.tex", kind: "source", badge: "TEX", readyLabel: "source preserved", pendingLabel: "pending" },
-            { name: "latex.log", relativePath: "logs/latex.log", kind: "log", badge: "LOG", readyLabel: "compile log", pendingLabel: "pending" },
-            { name: "manifest.json", relativePath: "manifest.json", kind: "manifest", badge: "JS", readyLabel: "metadata", pendingLabel: "pending" },
+            { name: "slides.pdf", relativePath: "output/slides.pdf", kind: "pdf", badge: "PDF", readyLabel: t("files.deckReady"), pendingLabel: t("files.compilePending") },
+            { name: "slides.tex", relativePath: "output/slides.tex", kind: "source", badge: "TEX", readyLabel: t("files.sourceReady"), pendingLabel: t("files.pending") },
+            { name: "latex.log", relativePath: "logs/latex.log", kind: "log", badge: "LOG", readyLabel: t("files.compileLogReady"), pendingLabel: t("files.pending") },
+            { name: "manifest.json", relativePath: "manifest.json", kind: "manifest", badge: "JS", readyLabel: t("files.metadataReady"), pendingLabel: t("files.pending") },
         ];
     }
     return [
-        { name: "cheat-sheet.pdf", relativePath: "output/cheat-sheet.pdf", kind: "pdf", badge: "PDF", readyLabel: "compiled sheet", pendingLabel: "compile pending" },
-        { name: "cheat-sheet.tex", relativePath: "output/cheat-sheet.tex", kind: "source", badge: "TEX", readyLabel: "source preserved", pendingLabel: "pending" },
-        { name: "latex.log", relativePath: "logs/latex.log", kind: "log", badge: "LOG", readyLabel: "compile log", pendingLabel: "pending" },
-        { name: "manifest.json", relativePath: "manifest.json", kind: "manifest", badge: "JS", readyLabel: "metadata", pendingLabel: "pending" },
+        { name: "cheat-sheet.pdf", relativePath: "output/cheat-sheet.pdf", kind: "pdf", badge: "PDF", readyLabel: t("files.sheetReady"), pendingLabel: t("files.compilePending") },
+        { name: "cheat-sheet.tex", relativePath: "output/cheat-sheet.tex", kind: "source", badge: "TEX", readyLabel: t("files.sourceReady"), pendingLabel: t("files.pending") },
+        { name: "latex.log", relativePath: "logs/latex.log", kind: "log", badge: "LOG", readyLabel: t("files.compileLogReady"), pendingLabel: t("files.pending") },
+        { name: "manifest.json", relativePath: "manifest.json", kind: "manifest", badge: "JS", readyLabel: t("files.metadataReady"), pendingLabel: t("files.pending") },
     ];
 }
 
@@ -1721,12 +1772,12 @@ function notebookCodeText() {
 function sourcePreviewText() {
     if (state.intent === "code_homework") return codePreviewText("solution.py");
     if (state.intent === "beamer_slides") {
-        return `\\documentclass{beamer}\n\\title{${briefTitle("Generated Slides")}}\n\\begin{document}\n\\begin{frame}{Overview}\n  \\begin{itemize}\n    \\item Motivation\n    \\item Method\n    \\item Result\n  \\end{itemize}\n\\end{frame}\n\\end{document}\n`;
+        return `\\documentclass{beamer}\n\\title{${briefTitle(t("preview.generatedSlidesSource"))}}\n\\begin{document}\n\\begin{frame}{Overview}\n  \\begin{itemize}\n    \\item Motivation\n    \\item Method\n    \\item Result\n  \\end{itemize}\n\\end{frame}\n\\end{document}\n`;
     }
     if (state.intent === "cheat_sheet") {
         return `\\documentclass[a4paper]{article}\n\\usepackage[margin=0.45cm]{geometry}\n\\usepackage{multicol}\n\\begin{document}\n\\begin{multicols}{4}\n\\section*{Dense Review}\nKey definitions, formulas, and proof templates.\n\\end{multicols}\n\\end{document}\n`;
     }
-    return `\\documentclass{article}\n\\title{${briefTitle("Generated Essay")}}\n\\begin{document}\n\\maketitle\n\\section{Introduction}\nThe generated source is preserved even if PDF compilation fails.\n\\section{Discussion}\nEvidence and citations are recorded in the run manifest.\n\\end{document}\n`;
+    return `\\documentclass{article}\n\\title{${briefTitle(t("preview.generatedEssay"))}}\n\\begin{document}\n\\maketitle\n\\section{Introduction}\nThe generated source is preserved even if PDF compilation fails.\n\\section{Discussion}\nEvidence and citations are recorded in the run manifest.\n\\end{document}\n`;
 }
 
 function renderHighlightedCode(text, language = "python") {
@@ -1809,7 +1860,7 @@ async function copyVisiblePreview() {
                 : state.intent === "code_homework"
                     ? state.outputPreference === "ipynb" ? notebookCodeText() : codePreviewText(state.activeFile)
                     : state.run.outputRoot || artifactAccessNote();
-    await copyText(text, "Visible preview copied.");
+    await copyText(text, t("run.previewCopied"));
 }
 
 async function copyText(text, message) {
@@ -1818,14 +1869,14 @@ async function copyText(text, message) {
         await navigator.clipboard.writeText(text);
         state.notice = { message, tone: "success" };
     } catch {
-        state.notice = { message: "Clipboard is not available in this browser context.", tone: "error" };
+        state.notice = { message: t("run.clipboardUnavailable"), tone: "error" };
     }
     render();
 }
 
 function revealRunFolder() {
     if (!state.run.outputRoot) return;
-    copyText(state.run.outputRoot, "Run folder path copied for reveal.");
+    copyText(state.run.outputRoot, t("run.pathRevealCopied"));
 }
 
 function openLocalPath(path) {
@@ -1840,36 +1891,36 @@ function artifactAbsolutePath(relativePath) {
 }
 
 function artifactAccessNote() {
-    if (state.run.outputRoot) return "Artifact bytes are in the run folder; browser byte rendering awaits an artifact file endpoint.";
-    return "Run folder appears after a run is accepted by the backend.";
+    if (state.run.outputRoot) return t("source.artifactNoteReady");
+    return t("source.artifactNotePending");
 }
 
 function runButtonLabel() {
-    if (state.run.status === "queued" || state.run.status === "running") return "Running";
-    if (state.run.status === "failed") return "Run again";
-    return "Run artifact";
+    if (state.run.status === "queued" || state.run.status === "running") return t("actions.running");
+    if (state.run.status === "failed") return t("actions.runAgain");
+    return t("actions.runArtifact");
 }
 
 function runNote(isAuthenticated) {
-    if (!isAuthenticated) return "Login activates generation controls.";
-    if (!state.taskText.trim()) return "Add a task brief to enable generation.";
-    if (state.files.some((file) => !file.uploadId)) return "Selected files upload before run creation.";
-    if (state.run.status === "queued" || state.run.status === "running") return "Context and stage events update as the backend reports.";
-    return "Ready for a local generation run.";
+    if (!isAuthenticated) return t("composer.runNoteLogin");
+    if (!state.taskText.trim()) return t("composer.runNoteBrief");
+    if (state.files.some((file) => !file.uploadId)) return t("composer.runNoteUploads");
+    if (state.run.status === "queued" || state.run.status === "running") return t("composer.runNoteRunning");
+    return t("composer.runNoteReady");
 }
 
 function codeStatusTitle() {
-    if (state.run.status === "failed") return "Validation issue";
-    if (state.run.status === "succeeded") return "Artifact ready";
-    if (state.run.status === "queued" || state.run.status === "running") return "Generating";
-    return "Renderer armed";
+    if (state.run.status === "failed") return t("run.validationIssue");
+    if (state.run.status === "succeeded") return t("run.artifactReady");
+    if (state.run.status === "queued" || state.run.status === "running") return t("run.generating");
+    return t("run.rendererArmed");
 }
 
 function codeStatusDetail() {
-    if (state.run.status === "failed") return state.run.errorCode || "source preserved if available";
-    if (state.run.status === "succeeded") return state.run.outputRoot ? "copy/open paths available" : "completed";
+    if (state.run.status === "failed") return state.run.errorCode || t("run.sourcePreserved");
+    if (state.run.status === "succeeded") return state.run.outputRoot ? t("run.copyOpenAvailable") : t("run.completed");
     if (state.run.status === "queued" || state.run.status === "running") return stageLabel(state.run.stage);
-    return "syntax preview, no execution";
+    return t("run.syntaxPreview");
 }
 
 function normalizedStageBucket(stage, status) {
@@ -1890,19 +1941,102 @@ function normalizedStageBucket(stage, status) {
 }
 
 function stageLabel(stage) {
-    return stageVocabulary[stage] || String(stage || "compose").replaceAll("_", " ");
+    const key = String(stage || "compose");
+    const translated = t(`stages.${key}`);
+    return translated === `stages.${key}` ? key.replaceAll("_", " ") : translated;
 }
 
 function uploadStatusLabel(item) {
-    if (item.status === "uploaded") return "uploaded";
-    if (item.status === "uploading") return "uploading";
-    if (item.status === "failed") return "upload failed";
+    if (item.status === "uploaded") return t("uploads.uploaded");
+    if (item.status === "uploading") return t("uploads.uploading");
+    if (item.status === "failed") return t("uploads.failed");
     return formatBytes(item.size);
 }
 
 function fileKind(filename) {
     const ext = String(filename).split(".").pop()?.slice(0, 3).toUpperCase();
     return ext || "FILE";
+}
+
+function getInitialLocale() {
+    const stored = localStorage.getItem(LOCALE_KEY);
+    if (isSupportedLocale(stored)) return stored;
+    const browserLocale = navigator.language || "";
+    if (browserLocale.toLowerCase().startsWith("zh")) {
+        return browserLocale.toLowerCase().includes("tw") || browserLocale.toLowerCase().includes("hk")
+            ? "zh-Hant"
+            : "zh-Hans";
+    }
+    return DEFAULT_LOCALE;
+}
+
+function setLocale(locale) {
+    const nextLocale = isSupportedLocale(locale) ? locale : DEFAULT_LOCALE;
+    if (state.locale === nextLocale) return;
+    state.locale = nextLocale;
+    localStorage.setItem(LOCALE_KEY, nextLocale);
+    refreshLocalizedHistory();
+    if (state.run.status === "idle" && state.run.stage === "compose") {
+        state.run.message = t("run.ready");
+    }
+    render();
+}
+
+function isSupportedLocale(locale) {
+    return LOCALES.some((item) => item.id === locale);
+}
+
+function applyLocaleDocumentState() {
+    document.documentElement.lang = state.locale;
+    document.title = t("app.title");
+}
+
+function initialReadyHistory(locale) {
+    return {
+        id: "session-ready",
+        kind: "system",
+        status: "idle",
+        title: translate(locale, "history.readyTitle"),
+        message: translate(locale, "history.readyMessage"),
+        timestamp: new Date().toISOString(),
+    };
+}
+
+function refreshLocalizedHistory() {
+    const ready = state.history.find((item) => item.id === "session-ready");
+    if (!ready) return;
+    ready.title = t("history.readyTitle");
+    ready.message = t("history.readyMessage");
+}
+
+function intentText(intentId, key) {
+    return t(`intents.${intentId}.${key}`);
+}
+
+function statusLabel(status) {
+    const key = String(status || "idle");
+    const translated = t(`status.${key}`);
+    return translated === `status.${key}` ? key : translated;
+}
+
+function t(path, values = {}) {
+    return translate(state.locale, path, values);
+}
+
+function translate(locale, path, values = {}) {
+    const fallbackCatalog = messages[DEFAULT_LOCALE] || {};
+    const catalog = messages[locale] || fallbackCatalog;
+    const fallback = getMessageValue(fallbackCatalog, path);
+    const raw = getMessageValue(catalog, path) ?? fallback ?? path;
+    if (typeof raw !== "string") return path;
+    return raw.replace(/\{([A-Za-z0-9_]+)\}/g, (_, key) => String(values[key] ?? ""));
+}
+
+function getMessageValue(catalog, path) {
+    return String(path).split(".").reduce((value, segment) => {
+        if (value && Object.prototype.hasOwnProperty.call(value, segment)) return value[segment];
+        return undefined;
+    }, catalog);
 }
 
 function readStoredUser() {
@@ -1947,27 +2081,31 @@ function formatBytes(value) {
 }
 
 function contextStateLabel(level) {
-    if (level === "critical") return "Critical";
-    if (level === "warning") return "Warning";
-    return "OK";
+    if (level === "critical") return t("context.critical");
+    if (level === "warning") return t("context.warning");
+    return t("context.ok");
 }
 
 function contextSourceLabel(source) {
     const normalized = String(source || "local").toLowerCase();
-    if (normalized === "local") return "Local estimate";
-    if (normalized === "heuristic") return "Backend heuristic";
-    if (normalized === "provider") return "Provider estimate";
+    if (normalized === "local") return t("context.local");
+    if (normalized === "heuristic") return t("context.heuristic");
+    if (normalized === "provider") return t("context.provider");
     return source;
 }
 
 function contextSummary(estimate) {
-    if (estimate.warning_level === "critical") return "Aggressive compression likely";
-    if (estimate.warning_level === "warning") return "Compression may be needed";
-    return `${formatPercent(estimate.utilization_ratio)} of context`;
+    if (estimate.warning_level === "critical") return t("context.criticalSummary");
+    if (estimate.warning_level === "warning") return t("context.warningSummary");
+    return t("context.ratioSummary", { percent: formatPercent(estimate.utilization_ratio) });
 }
 
 function contextAriaLabel(estimate) {
-    return `Context budget ${contextStateLabel(estimate.warning_level)}, ${formatPercent(estimate.utilization_ratio)} utilized, ${contextSourceLabel(estimate.source)}`;
+    return t("context.aria", {
+        state: contextStateLabel(estimate.warning_level),
+        percent: formatPercent(estimate.utilization_ratio),
+        source: contextSourceLabel(estimate.source),
+    });
 }
 
 function briefTitle(fallback) {
