@@ -34,8 +34,12 @@ Start with these files before implementing or testing:
 
 - Backend dev env bootstrap: `python3 -m venv .venv && .venv/bin/python -m pip install --upgrade pip && .venv/bin/python -m pip install -r backend/requirements-dev.txt`
 - Backend tests: `.venv/bin/python -m pytest backend/tests -q`
+- Frontend tests: `npm --prefix frontend run test`
 - Frontend build: `npm --prefix frontend run build`
 - Frontend dev: `npm --prefix frontend run dev`
+- Desktop checks: `npm --prefix apps/desktop run build && npm --prefix apps/desktop run smoke`
+- Desktop launch smoke: `npm --prefix apps/desktop run launch-smoke`
+- Desktop dependency audit: `npm --prefix apps/desktop audit --json`
 - Docker config check: `docker compose -p ai-learning-assistant config`
 - Docker runtime smoke: `docker compose -p ai-learning-assistant up --build -d && curl -fsS http://localhost:14242/health`
 - End-to-end smoke: `./scripts/smoke_e2e.sh`

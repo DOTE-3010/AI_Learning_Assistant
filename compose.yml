@@ -10,11 +10,11 @@ services:
       APP_SQLITE_PATH: /app/data/app.sqlite
       WORKSPACE_ROOT: /app/workspace
       MODEL_PROVIDER: ${MODEL_PROVIDER:-openai_compatible}
-      MODEL_BASE_URL: ${MODEL_BASE_URL:-https://example-compatible-endpoint/v1}
-      MODEL_NAME: ${MODEL_NAME:-qwen-model-name}
+      MODEL_BASE_URL: ${MODEL_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      MODEL_NAME: ${MODEL_NAME:-qwen-plus}
       MODEL_API_KEY: ${MODEL_API_KEY:-}
       MODEL_SECRET_FILE: ${MODEL_SECRET_FILE:-/app/data/model-secrets.env}
-      MODEL_CONTEXT_WINDOW: ${MODEL_CONTEXT_WINDOW:-128000}
+      MODEL_CONTEXT_WINDOW: ${MODEL_CONTEXT_WINDOW:-1000000}
       MODEL_SUPPORTS_STREAMING: ${MODEL_SUPPORTS_STREAMING:-true}
       AILA_MOCK_MODEL_PROVIDER: ${AILA_MOCK_MODEL_PROVIDER:-}
     volumes:

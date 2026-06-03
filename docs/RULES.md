@@ -14,6 +14,7 @@ These are repo-specific rules. General programming hygiene and anything a linter
 - Keep module boundaries from `docs/ARCH.md` intact.
 - Prefer small repository/service interfaces over direct cross-module imports.
 - Do not add hard-coded API keys, default personal credentials, or real secrets.
+- Model settings defaults may include only documented non-secret provider values. The API key must remain empty by default, and missing-key states must be clear to non-expert users.
 - Preserve `.tex` source even when PDF compilation fails.
 - Use structured parsers for PDFs, notebooks, JSON, and LaTeX manifests when available.
 - Do not keep new product behavior only in chat; update SPEC, ARCH, RULES, or CONTRACTS when durable knowledge changes.
@@ -37,6 +38,8 @@ These are repo-specific rules. General programming hygiene and anything a linter
 - Motion is allowed when it clarifies generation state, panel focus, preview replacement, or refinement flow. Respect reduced-motion settings and keep animations from blocking task completion.
 - Do not execute generated JavaScript, notebooks, shell commands, or arbitrary HTML in the frontend renderer unless a later sandbox contract explicitly allows it.
 - Avoid UI text that explains the product in marketing language. The interface should show the workbench through controls, status, previews, and artifacts.
+- Do not present backend stage/status codes as a bare unexplained word strip. Localize human-readable stage labels and make status surfaces clearly non-interactive or genuinely interactive.
+- Do not ship enabled tabs, chips, or buttons that silently do nothing. Preview controls must change visible content, show an intentional empty/running/demo state, or be disabled with clear affordance.
 
 ## Architecture Rules
 

@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-05-31
+Last Reviewed: 2026-06-03
 Status: Active
 -->
 
@@ -10,6 +10,8 @@ Status: Active
 
 Allow users to bring their own Qwen/OpenAI-compatible API credentials while keeping local development credentials untracked.
 
+The model settings experience must prefill every non-secret default needed for a first successful setup. The API key is the only field that remains empty by default.
+
 ## Model Profile
 
 ```json
@@ -17,14 +19,35 @@ Allow users to bring their own Qwen/OpenAI-compatible API credentials while keep
   "id": "default-qwen",
   "display_name": "Qwen Default",
   "provider": "openai_compatible",
-  "base_url": "https://example-compatible-endpoint/v1",
-  "model": "qwen-model-name",
+  "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  "model": "qwen-plus",
   "api_key_ref": "local-secret-reference",
-  "context_window_hint": 128000,
+  "context_window_hint": 1000000,
   "supports_streaming": true,
   "is_default": true
 }
 ```
+
+## Default Qwen Values
+
+Verified on 2026-06-03 against Alibaba Cloud Model Studio OpenAI-compatible Qwen documentation and the human-confirmed release API-key region:
+
+| Field | Default | Notes |
+| --- | --- | --- |
+| `provider` | `openai_compatible` | Canonical provider adapter for phase 1. |
+| `base_url` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | China (Beijing) OpenAI-compatible endpoint. This matches the human-confirmed phase-1 Qwen API key region. Users with international/Singapore keys may change this to `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`. |
+| `model` | `qwen-plus` | Stable balanced Qwen model used in Alibaba Cloud OpenAI-compatible examples. |
+| `context_window_hint` | `1000000` | Qwen-Plus currently advertises a 1M-token context window in the model list. Treat this as a hint, not exact billing/accounting. |
+| `supports_streaming` | `true` | The OpenAI-compatible Chat API documents streaming examples for `qwen-plus`. |
+| API key | none | Never default, guess, store in tracked source, or display after save. |
+
+Reference URLs:
+
+- `https://www.alibabacloud.com/help/en/model-studio/use-qwen-by-calling-api`
+- `https://www.alibabacloud.com/help/en/model-studio/getting-started/quick-start/`
+- `https://www.alibabacloud.com/help/en/model-studio/models`
+
+The UI and backend default-profile creation path must use these values whenever no saved local profile or untracked environment override exists. A user-supplied profile or `MODEL_*` environment value takes precedence.
 
 ## Secret Handling
 
@@ -42,10 +65,10 @@ Supported local development variables:
 
 ```text
 MODEL_PROVIDER=openai_compatible
-MODEL_BASE_URL=<provider endpoint>
-MODEL_NAME=<model name>
+MODEL_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+MODEL_NAME=qwen-plus
 MODEL_API_KEY=<secret>
-MODEL_CONTEXT_WINDOW=128000
+MODEL_CONTEXT_WINDOW=1000000
 MODEL_SUPPORTS_STREAMING=true
 ```
 
@@ -70,7 +93,7 @@ Runs a minimal provider connectivity check using the submitted or saved profile.
 ## Provider Rules
 
 - First implementation should use an OpenAI-compatible adapter for Qwen unless official docs require otherwise.
-- Exact Qwen default endpoint/model must be verified before code implementation.
+- Default Qwen endpoint/model/context values are pinned in `## Default Qwen Values`; future changes must be re-verified against current official documentation before editing tracked defaults.
 - Pipelines depend on the provider interface, not on environment variables directly.
 - Context budgeting, including revision-context inclusion, uses `context_window_hint` from the resolved profile. A missing or invalid hint falls back to the backend default, but code should not hard-code revision prompt size solely around that fallback.
 
@@ -88,6 +111,7 @@ Uses the canonical envelope (`errors.md`). Failure cases:
 ## Validation Rules
 
 - `base_url` must be an absolute `https`/`http` URL; `model` must be non-empty.
+- Empty model/base URL fields in the settings editor should reset to the documented non-secret defaults rather than saving blank values.
 - Exactly one profile may have `is_default = true`.
 - The `test` endpoint performs a single minimal completion/models call and must time out quickly.
 
@@ -103,6 +127,7 @@ Uses the canonical envelope (`errors.md`). Failure cases:
 ## Acceptance Checks
 
 - A user can set base URL, model, and API key.
+- A new user sees non-secret defaults for provider, base URL, model, context window, and streaming support before entering an API key.
 - The API key is not returned by any settings endpoint.
 - A missing key gives a clear `missing_api_key` error.
 - Provider calls can be mocked in tests.

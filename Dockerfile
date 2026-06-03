@@ -13,6 +13,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         fonts-lmodern \
+        lmodern \
         latexmk \
         texlive-fonts-recommended \
         texlive-latex-base \

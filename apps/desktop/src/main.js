@@ -8,9 +8,12 @@ const {
     runStartupSequence,
 } = require("./runtime");
 
+const launchSmoke = process.env.AILA_DESKTOP_LAUNCH_SMOKE === "1";
+const skipRuntimeStartup = process.env.AILA_DESKTOP_SKIP_RUNTIME === "1";
 let mainWindow = null;
 let latestRuntimeState = null;
 let runtimeInFlight = false;
+let launchSmokeFinished = false;
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -29,13 +32,19 @@ function createWindow() {
         },
     });
 
+    installLaunchSmokeHooks(mainWindow);
     mainWindow.once("ready-to-show", () => {
         mainWindow.show();
     });
     mainWindow.on("closed", () => {
         mainWindow = null;
     });
-    mainWindow.loadFile(path.join(__dirname, "shell.html"));
+    mainWindow.loadFile(path.join(__dirname, "shell.html")).catch((error) => {
+        console.error("[desktop-launch]", error.message);
+        if (launchSmoke) {
+            app.exit(1);
+        }
+    });
 }
 
 async function startRuntime() {
@@ -45,6 +54,20 @@ async function startRuntime() {
     runtimeInFlight = true;
     const backendUrl = process.env.AILA_BACKEND_URL || DEFAULT_BACKEND_URL;
     const workbenchUrl = process.env.AILA_WORKBENCH_URL || buildWorkbenchUrl(backendUrl);
+
+    if (skipRuntimeStartup) {
+        const event = {
+            state: "ready",
+            message: "Runtime startup skipped for Electron launch smoke.",
+            details: { backendUrl, workbenchUrl, launchSmoke: true },
+            timestamp: new Date().toISOString(),
+            backendUrl,
+            workbenchUrl,
+        };
+        publishRuntimeState(event);
+        runtimeInFlight = false;
+        return event;
+    }
 
     const result = await runStartupSequence({
         projectRoot: projectRootFromDesktopDir(__dirname),
@@ -58,6 +81,41 @@ async function startRuntime() {
         await mainWindow.loadURL(result.workbenchUrl);
     }
     return result;
+}
+
+function installLaunchSmokeHooks(window) {
+    if (!launchSmoke) return;
+    let shellLoaded = false;
+    let windowReady = false;
+
+    const timeout = setTimeout(() => {
+        if (launchSmokeFinished) return;
+        console.error("[desktop-launch-smoke] Window did not finish loading in time.");
+        app.exit(1);
+    }, 15_000);
+
+    const finishIfReady = () => {
+        if (!shellLoaded || !windowReady || launchSmokeFinished) return;
+        launchSmokeFinished = true;
+        clearTimeout(timeout);
+        console.log("[desktop-launch-smoke] BrowserWindow displayed shell page.");
+        setTimeout(() => app.quit(), 50);
+    };
+
+    window.once("ready-to-show", () => {
+        windowReady = true;
+        finishIfReady();
+    });
+    window.webContents.once("did-finish-load", () => {
+        shellLoaded = true;
+        finishIfReady();
+    });
+    window.webContents.once("did-fail-load", (_event, errorCode, errorDescription) => {
+        launchSmokeFinished = true;
+        clearTimeout(timeout);
+        console.error(`[desktop-launch-smoke] ${errorCode}: ${errorDescription}`);
+        app.exit(1);
+    });
 }
 
 function publishRuntimeState(event) {

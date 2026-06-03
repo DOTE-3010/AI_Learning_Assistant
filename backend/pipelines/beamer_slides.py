@@ -11,7 +11,11 @@ from backend.pipelines.common import (
     format_citations,
     format_log,
 )
-from backend.pipelines.essay_latex import LatexCompileError, LatexCompiler
+from backend.pipelines.essay_latex import (
+    LatexCompileError,
+    LatexCompiler,
+    compile_latex_with_repair,
+)
 from backend.providers.base import (
     ModelProviderError,
     TextGenerationProvider,
@@ -88,10 +92,17 @@ def run_beamer_slides_pipeline(
         emit_event("compile_pdf", "Compiling Beamer PDF")
 
     try:
-        compile_result = latex_compiler.compile(
+        compile_result = compile_latex_with_repair(
             tex_path=artifact_run.run_dir / "output" / "slides.tex",
             output_dir=artifact_run.run_dir / "output",
             job_name="slides",
+            document_kind="beamer_slides deck",
+            model_profile=model_profile,
+            model_provider=model_provider,
+            latex_compiler=latex_compiler,
+            max_output_tokens=max_output_tokens,
+            accepted_languages={"beamer", "latex", "tex"},
+            emit_event=emit_event,
         )
     except LatexCompileError as exc:
         artifact_run.write_log("latex.log", exc.log_text)
@@ -114,6 +125,8 @@ def run_beamer_slides_pipeline(
         ) from exc
 
     artifact_run.write_log("latex.log", compile_result.log_text)
+    if compile_result.repaired:
+        log_lines.append("Repair: source_repaired")
     artifact_run.write_output(
         "slides.pdf",
         compile_result.pdf_path.read_bytes(),

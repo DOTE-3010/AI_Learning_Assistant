@@ -29,7 +29,7 @@ Keep the active task queue focused on the resolved pre-QA upload gate and whole-
 ### Do Not Touch
 
 - Do not restore the old implementation tasks into the active queue.
-- Do not add new implementation tasks except the human-approved pre-QA upload blocker.
+- Do not add new implementation tasks except human-approved QA blockers/risks that are converted into bounded follow-up fix tasks.
 - Do not mark a QA task complete without verification results and human risk disposition.
 
 ## Queue Status
@@ -37,10 +37,11 @@ Keep the active task queue focused on the resolved pre-QA upload gate and whole-
 | State | Tasks | Owner | Notes |
 | --- | --- | --- | --- |
 | Resolved pre-QA gate | `000-resolve-upload-api-pre-qa-blocker` | Agent | Verified on 2026-06-03; upload API blocker no longer prevents QA start. |
-| Current QA phase | `001-qa-agent-module-smoke-tests` | Agent | Establish that modules/build/runtime config can start. |
-| Next | `002-qa-agent-module-functional-tests` | Agent | Run after smoke blockers are fixed or waived. |
-| Next | `003-qa-agent-integration-tests` | Agent | Run after module functional blockers are fixed or waived. |
-| Final QA gate | `004-qa-human-e2e-functional-tests` | Human | Human executes product workflows; agents only prepare checklist and fix reported issues. |
+| Completed QA phase | `001-qa-agent-module-smoke-tests` | Agent | Verified on 2026-06-03 with no blockers; report saved under `docs/QA_REPORTS/2026-06-03-agent-module-smoke.md`. |
+| Completed QA phase | `002-qa-agent-module-functional-tests` | Agent | Verified on 2026-06-03 with no blockers; human-approved risk fixes, including the Electron 42 security upgrade, are complete. |
+| Completed QA phase | `003-qa-agent-integration-tests` | Agent | Verified on 2026-06-03 with no blockers; report saved under `docs/QA_REPORTS/2026-06-03-agent-integration.md`. |
+| Current QA phase | `004-qa-human-e2e-functional-tests` | Human | Human executes product workflows; agents only prepare checklist and fix reported issues. |
+| QA fix pending human retest | `005-fix-human-e2e-workbench-usability-findings` | Agent/Human | Agent fix applied on 2026-06-03 for China-site Qwen defaults/provider auth, stage/status clarity, non-inert preview tabs, Docker LaTeX `lmodern` runtime dependency, and one-pass LaTeX source repair. Human E2E should retest these before phase exit. |
 
 ## Acceptance Criteria
 

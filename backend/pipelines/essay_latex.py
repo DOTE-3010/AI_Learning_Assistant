@@ -26,6 +26,7 @@ from backend.providers.base import (
 class LatexCompileResult:
     pdf_path: Path
     log_text: str
+    repaired: bool = False
 
 
 class LatexCompileError(Exception):
@@ -114,6 +115,129 @@ class LatexMkCompiler:
         return LatexCompileResult(pdf_path=pdf_path, log_text=log_text)
 
 
+def compile_latex_with_repair(
+    *,
+    tex_path: Path,
+    output_dir: Path,
+    job_name: str,
+    document_kind: str,
+    model_profile: dict[str, Any],
+    model_provider: TextGenerationProvider,
+    latex_compiler: LatexCompiler,
+    max_output_tokens: int,
+    accepted_languages: set[str],
+    emit_event: Callable[[str, str], None] | None = None,
+) -> LatexCompileResult:
+    try:
+        return latex_compiler.compile(
+            tex_path=tex_path,
+            output_dir=output_dir,
+            job_name=job_name,
+        )
+    except LatexCompileError as initial_error:
+        if emit_event:
+            emit_event("repair_source", "Repairing LaTeX source after compile failure")
+
+        try:
+            repaired_source = repair_latex_source(
+                tex_path=tex_path,
+                compile_log=initial_error.log_text,
+                document_kind=document_kind,
+                model_profile=model_profile,
+                model_provider=model_provider,
+                max_output_tokens=max_output_tokens,
+                accepted_languages=accepted_languages,
+            )
+        except ModelProviderError as exc:
+            raise LatexCompileError(
+                initial_error.message,
+                log_text=_repair_log(
+                    initial_error.log_text,
+                    f"Repair model request failed: {exc.code}: {exc.message}\n",
+                ),
+            ) from exc
+        except Exception as exc:
+            raise LatexCompileError(
+                initial_error.message,
+                log_text=_repair_log(
+                    initial_error.log_text,
+                    "Repair model request failed unexpectedly.\n",
+                ),
+            ) from exc
+
+        tex_path.write_text(repaired_source, encoding="utf-8")
+        if emit_event:
+            emit_event("compile_pdf", "Compiling repaired LaTeX PDF")
+
+        try:
+            repaired_result = latex_compiler.compile(
+                tex_path=tex_path,
+                output_dir=output_dir,
+                job_name=job_name,
+            )
+        except LatexCompileError as repaired_error:
+            raise LatexCompileError(
+                repaired_error.message,
+                log_text=_repair_log(
+                    initial_error.log_text,
+                    "Repair source written; repaired compile still failed.\n",
+                    repaired_error.log_text,
+                ),
+            ) from repaired_error
+
+        return LatexCompileResult(
+            pdf_path=repaired_result.pdf_path,
+            log_text=_repair_log(
+                initial_error.log_text,
+                "Repair source written; repaired compile succeeded.\n",
+                repaired_result.log_text,
+            ),
+            repaired=True,
+        )
+
+
+def repair_latex_source(
+    *,
+    tex_path: Path,
+    compile_log: str,
+    document_kind: str,
+    model_profile: dict[str, Any],
+    model_provider: TextGenerationProvider,
+    max_output_tokens: int,
+    accepted_languages: set[str],
+) -> str:
+    source = tex_path.read_text(encoding="utf-8", errors="replace")
+    system_prompt = (
+        "You are an expert LaTeX repair assistant. Return only a complete, "
+        "corrected LaTeX source file with no Markdown fences or explanation."
+    )
+    user_prompt = "\n\n".join(
+        [
+            f"[Document Kind]\n{document_kind}",
+            "[Broken LaTeX Source]\n" + source.strip(),
+            "[Compiler Log]\n" + _clip_for_repair_prompt(compile_log),
+            "[Repair Contract]\n"
+            "Fix the smallest set of LaTeX issues needed for pdflatex/latexmk "
+            "to compile successfully. Preserve the user's substantive content, "
+            "sectioning, and citations where possible. Common fixes include "
+            "table column alignment mismatches, unescaped special characters, "
+            "missing package declarations, malformed environments, and broken "
+            "math delimiters. Return the full corrected source, not a patch.",
+        ]
+    )
+    raw_output = model_provider.generate_text(
+        TextGenerationRequest(
+            profile=model_profile,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_output_tokens=max(1000, max_output_tokens),
+            temperature=0.0,
+        )
+    )
+    repaired_source = extract_fenced_or_raw(raw_output, accepted_languages=accepted_languages)
+    return repaired_source.strip() + "\n"
+
+
 def run_essay_latex_pipeline(
     *,
     artifact_run: ArtifactRun,
@@ -180,10 +304,17 @@ def run_essay_latex_pipeline(
         emit_event("compile_pdf", "Compiling LaTeX PDF")
 
     try:
-        compile_result = latex_compiler.compile(
+        compile_result = compile_latex_with_repair(
             tex_path=artifact_run.run_dir / "output" / "main.tex",
             output_dir=artifact_run.run_dir / "output",
             job_name="main",
+            document_kind="essay_latex article",
+            model_profile=model_profile,
+            model_provider=model_provider,
+            latex_compiler=latex_compiler,
+            max_output_tokens=max_output_tokens,
+            accepted_languages={"latex", "tex"},
+            emit_event=emit_event,
         )
     except LatexCompileError as exc:
         artifact_run.write_log("latex.log", exc.log_text)
@@ -206,6 +337,8 @@ def run_essay_latex_pipeline(
         ) from exc
 
     artifact_run.write_log("latex.log", compile_result.log_text)
+    if compile_result.repaired:
+        log_lines.append("Repair: source_repaired")
     artifact_run.write_output(
         "main.pdf",
         compile_result.pdf_path.read_bytes(),
@@ -268,6 +401,31 @@ def _compiler_log(
             ]
         )
     return format_log(lines)
+
+
+def _repair_log(
+    initial_log: str,
+    repair_note: str,
+    repaired_log: str | None = None,
+) -> str:
+    lines = [
+        "[initial compile failure]",
+        initial_log.strip() or "(empty)",
+        "[repair]",
+        repair_note.strip() or "(empty)",
+    ]
+    if repaired_log is not None:
+        lines.extend(["[recompile]", repaired_log.strip() or "(empty)"])
+    return format_log(lines)
+
+
+def _clip_for_repair_prompt(text: str, *, limit: int = 12000) -> str:
+    stripped = text.strip()
+    if len(stripped) <= limit:
+        return stripped
+    head = stripped[: limit // 2]
+    tail = stripped[-limit // 2 :]
+    return head + "\n\n[...compiler log truncated...]\n\n" + tail
 
 
 def _coerce_text(value: str | bytes | None) -> str:

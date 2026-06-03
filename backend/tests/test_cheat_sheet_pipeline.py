@@ -156,9 +156,12 @@ def test_cheat_sheet_pipeline_failure_preserves_source_log_and_manifest(tmp_path
     output_root = Path(body["output_root"])
     assert (output_root / "output" / "cheat-sheet.tex").exists()
     assert not (output_root / "output" / "cheat-sheet.pdf").exists()
-    assert (output_root / "logs" / "latex.log").read_text(encoding="utf-8") == (
-        "! Undefined control sequence.\n"
-    )
+    latex_log = (output_root / "logs" / "latex.log").read_text(encoding="utf-8")
+    assert "[initial compile failure]" in latex_log
+    assert "Repair source written; repaired compile still failed." in latex_log
+    assert "! Undefined control sequence." in latex_log
+    assert len(provider.requests) == 2
+    assert len(compiler.calls) == 2
     assert "PDF contained no extractable text." in (
         output_root / "logs" / "extraction.log"
     ).read_text(encoding="utf-8")

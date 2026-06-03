@@ -59,7 +59,7 @@ Only files relevant to a run need to exist.
   "created_at": "2026-05-31T00:00:00Z",
   "model": {
     "provider": "openai_compatible",
-    "model": "qwen-model-name"
+    "model": "qwen-plus"
   },
   "search": {
     "mode": "auto",

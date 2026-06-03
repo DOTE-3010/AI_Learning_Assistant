@@ -55,11 +55,13 @@ Run unit and module-level functional tests for the completed backend, frontend, 
 ## Verification
 
 - `.venv/bin/python -m pytest backend/tests -q`
+- `npm --prefix frontend run test`
 - `npm --prefix frontend run build`
 - `npm --prefix apps/desktop run build && npm --prefix apps/desktop run smoke`
+- `npm --prefix apps/desktop run launch-smoke`
+- `npm --prefix apps/desktop audit --json`
 
 ## Handoff Notes
 
 - Cursor should review: whether fixes respect `docs/ARCH.md` module ownership and whether backend contracts still match tests.
-- Human should decide: whether to require frontend interaction/visual unit coverage before integration QA.
-
+- Human should decide: none remaining for task002 after approving frontend coverage, backend warning cleanup, desktop launch smoke, and Electron 42 security upgrade.

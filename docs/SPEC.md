@@ -77,6 +77,7 @@ The upload blocker was resolved on 2026-06-03 by `docs/TASKS/000-resolve-upload-
 - Teacher and student roles both have full artifact generation capability in phase 1.
 - Model settings must allow user-supplied API key, base URL, and model name.
 - Default model settings must target Qwen-compatible usage and be overridable by untracked local config.
+- Model settings must prefill every non-secret Qwen default before the user enters an API key, so first-time users are not required to know the provider endpoint, model id, context window, or streaming capability.
 - File upload parsing must support text, Markdown, Python, notebooks, and PDF text extraction as first-class inputs.
 - Cheat-sheet generation must accept multiple slide PDFs and a target A4 page count.
 - LaTeX pipelines must save `.tex` even when PDF compilation fails.
@@ -96,9 +97,11 @@ The upload blocker was resolved on 2026-06-03 by `docs/TASKS/000-resolve-upload-
 - The artifact side panel should always show the current output state, not only a file list after generation.
 - Artifact type must be selected through an explicit UI control such as a dropdown, segmented selector, or tabs; the backend must not infer the pipeline solely from prompt text.
 - The context/token indicator should be graphical and compact by default, with exact numbers shown on hover or focused inspection.
+- Run status/stage indicators should be immediately legible as progress, not as an unlabeled row of technical values or inert navigation controls.
 - Avoid course-management-heavy navigation in the primary flow.
 - Output should be visible as files and as an in-app preview wherever feasible.
 - Code and notebook previews should have editor-grade presentation: syntax highlighting, file tabs, line numbers when useful, copy affordances, run/test/status panels, and error cards. They are renderers, not editable source editors in phase 1.
+- Preview tabs and file views must never be silent no-ops; before real output exists they should show useful empty, running, demo, or skeleton content, or be visibly disabled.
 - PDF-producing artifacts should show a PDF-like preview inside the workbench. Essay, Beamer, and cheat-sheet outputs should not degrade to plain text unless PDF rendering fails.
 - Slide previews should communicate deck structure and current page/slide position.
 - Cheat-sheet previews should emphasize dense A4 pagination and scale, including target page count.
@@ -145,11 +148,10 @@ Process outcomes that make the rebuild safe for rotating agents (verified by `sc
 - Phase-1 code stays in `backend/`, `frontend/`, and `apps/desktop/`.
 - Student accounts have the same phase-1 artifact generation capability as teacher accounts.
 - Generated artifacts default to `workspace/`.
-- If Qwen defaults are not yet verified, implementation should ship placeholder defaults plus a clear setup error rather than guessing a live endpoint.
+- Qwen defaults are pinned in `docs/CONTRACTS/model-settings.md` as of 2026-06-03. The phase-1 default base URL targets the China (Beijing) DashScope endpoint because the human-confirmed release API key belongs to the China site. Future changes should be re-verified against current official provider documentation before tracked defaults are edited.
 
 ## Open Questions
 
-- Exact default Qwen model and endpoint should be verified against current official documentation before implementation.
 - None for first-phase student generation; students have full generation capability.
 
 ## Changelog
@@ -162,3 +164,4 @@ Process outcomes that make the rebuild safe for rotating agents (verified by `sc
 - 2026-06-03: Marked the implementation queue complete, moved active work to whole-product QA, and added implementation-summary and QA-plan governance assets.
 - 2026-06-03: Promoted missing backend upload API from QA risk to pre-QA blocker by human decision.
 - 2026-06-03: Resolved the upload pre-QA blocker and moved the active queue to agent module smoke QA.
+- 2026-06-03: Pinned documented Qwen non-secret defaults for the China-site API and added human E2E usability requirements for legible run stages and non-inert preview tabs.

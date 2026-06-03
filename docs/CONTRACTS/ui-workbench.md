@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-01
+Last Reviewed: 2026-06-03
 Status: Active
 -->
 
@@ -99,6 +99,27 @@ Fallback order for PDF-producing artifacts:
 
 Raw LaTeX is an advanced inspection view, not the default preview for essay, slides, or cheat-sheet artifacts.
 
+## Run Status Presentation
+
+The workbench may consume canonical backend stage values such as `queued`, `compose`, `route`, `context`, `generate`, `validate`, and `manifest`, but it must not present them as an unexplained row of bare technical words.
+
+- Stage status must have a visible label or structure that makes it read as progress/status, not as unlabeled navigation.
+- User-facing stage names must come from the locale catalog and use human-readable copy in English, Simplified Chinese, and Traditional Chinese.
+- Canonical stage identifiers may appear as secondary technical detail, but the primary label should explain the work being performed.
+- If a stage item is clickable, it must reveal a real detail panel, log excerpt, or status explanation. If it is not interactive, it must not use visual treatment that implies tabs or buttons.
+- Status labels such as `Idle`, `Ready`, and `Running` must be visually grouped with their meaning and localized; they must not float near unrelated stages in a way that suggests a broken control strip.
+
+## Preview Tabs And File Views
+
+Preview tabs or file-view controls such as Code, Source, Logs, and Manifest must never be silent no-ops.
+
+- Selecting an enabled tab must visibly change the preview surface.
+- Before generated files exist, each enabled tab must show useful purpose-specific placeholder content, a short demo/skeleton, or a running-state message that matches the selected artifact type.
+- A tab with no possible content for the current artifact/run state may be disabled, but the disabled state must be visually clear and explainable through tooltip or accessible description.
+- Manifest views should show a compact manifest skeleton or metadata summary before real `manifest.json` content is available.
+- Logs views should show pending/run log state before logs exist, and real sanitized logs or a clear empty-log message after a run.
+- Source/code views should show generated content when available; otherwise they should show a demo snippet, expected output description, or waiting state rather than leaving the old panel unchanged.
+
 ## Visual Direction
 
 - Polished, modern, and artifact-focused rather than generic SaaS dashboard.
@@ -158,6 +179,7 @@ Hover/focus state:
 - Auth/register/login views for CUHK weak auth.
 - Locale switch or settings control for English, Simplified Chinese, and Traditional Chinese.
 - Model settings editor for base URL, model, and API key.
+- Model settings editor must prefill all non-secret defaults from `model-settings.md`; the API key is the only required field that starts empty.
 - Explicit artifact type control: `code_homework`, `essay_latex`, `beamer_slides`, `cheat_sheet`.
 - Code output preference control for `.py` vs `.ipynb` when `code_homework` is selected.
 - Search mode: `auto`, `on`, `off`.
@@ -208,6 +230,8 @@ The UI must not:
 - UI sends an explicit canonical artifact `intent` and never relies on backend prompt-only inference.
 - Context dial updates from local estimate before run and backend events during run.
 - Exact context numbers are hidden until hover/focus.
+- Run status/stage presentation is clearly status or clearly interactive, with localized human-readable labels instead of an unexplained bare technical word strip.
+- Code/Source/Logs/Manifest controls either render meaningful selected content or are visibly disabled; no enabled preview control is inert.
 - Code output previews with syntax highlighting, file affordances, copy action, and status/error treatment.
 - PDF-producing outputs preview as rendered/PDF-like pages when possible and keep source/log/file access visible when rendering fails.
 - Follow-up requests create a visible revision/run history and refresh the preview without losing access to the previous output.

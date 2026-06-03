@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-01
+Last Reviewed: 2026-06-03
 Status: Active
 -->
 
@@ -80,8 +80,8 @@ For SSE or polling responses:
     "estimated_input_tokens": 12000,
     "estimated_output_tokens": 4000,
     "estimated_total_tokens": 16000,
-    "context_window_limit": 128000,
-    "utilization_ratio": 0.125,
+    "context_window_limit": 1000000,
+    "utilization_ratio": 0.016,
     "warning_level": "ok",
     "source": "heuristic"
   }
@@ -135,6 +135,8 @@ Search citations must be stored in metadata and manifest when used.
 - Code generation should prefer runnable, complete files over snippets.
 - Code generation writes either `solution.py` or `solution.ipynb`; notebook output must validate as nbformat JSON.
 - LaTeX generation should produce full compilable documents for essay, slides, and cheat-sheet intents.
+- When LaTeX compilation fails after source generation, the pipeline may run one bounded model-assisted repair pass using the generated source and sanitized compiler log, then recompile. It must overwrite the generated `.tex` with the repaired source only when a repair is attempted, must not change the external run API shape, and must still fail as `compile_failed` if the repaired source does not compile.
+- The Docker LaTeX runtime must include common article/Beamer dependencies used by phase-1 prompts and real model output, including `lmodern.sty`; missing runtime packages that make ordinary generated LaTeX fail are QA blockers, not accepted model-output risks.
 - Cheat-sheet layout may use aggressive typography, columns, and small fonts, but must target the requested A4 page count.
 - Revision runs must be independent persisted runs. They may reference prior run metadata and files, but must not overwrite the prior run folder.
 - Model calls must be mockable in tests.
@@ -180,6 +182,8 @@ Uses the canonical envelope (`errors.md`). `POST /api/runs` validation errors ar
 - Each intent has a pipeline entrypoint with mocked model tests.
 - Failed generation records sanitized error metadata and any partial source/logs.
 - Context stats can be consumed by the UI context dial.
+- The Docker runtime resolves common LaTeX dependencies required by phase-1 PDF outputs, including `kpsewhich lmodern.sty`.
+- A LaTeX source-level compile error can be repaired once without adding duplicate source entries to the manifest or changing the run response contract.
 
 ## Open Questions
 

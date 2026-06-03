@@ -8,6 +8,7 @@ const filesToCheck = [
     "src/preload.js",
     "src/runtime.js",
     "src/shell-renderer.js",
+    "scripts/launch-smoke.js",
     "scripts/smoke.js",
 ];
 

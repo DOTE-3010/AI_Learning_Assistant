@@ -10,6 +10,9 @@ from backend.storage.sqlite import SQLiteRepository
 MODEL_API_KEY_REF = "env:MODEL_API_KEY"
 SECRET_FILE_ENV = "MODEL_SECRET_FILE"
 DEFAULT_SECRET_FILE = Path(".env.local")
+DEFAULT_QWEN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+DEFAULT_QWEN_MODEL = "qwen-plus"
+DEFAULT_QWEN_CONTEXT_WINDOW = 1000000
 
 
 class SettingsError(Exception):
@@ -31,9 +34,9 @@ def default_profile_values() -> dict[str, Any]:
     return {
         "display_name": os.getenv("MODEL_DISPLAY_NAME", "Qwen Default"),
         "provider": os.getenv("MODEL_PROVIDER", "openai_compatible"),
-        "base_url": os.getenv("MODEL_BASE_URL", "https://example-compatible-endpoint/v1"),
-        "model": os.getenv("MODEL_NAME", "qwen-model-name"),
-        "context_window_hint": int(os.getenv("MODEL_CONTEXT_WINDOW", "128000")),
+        "base_url": os.getenv("MODEL_BASE_URL", DEFAULT_QWEN_BASE_URL),
+        "model": os.getenv("MODEL_NAME", DEFAULT_QWEN_MODEL),
+        "context_window_hint": int(os.getenv("MODEL_CONTEXT_WINDOW", str(DEFAULT_QWEN_CONTEXT_WINDOW))),
         "supports_streaming": os.getenv("MODEL_SUPPORTS_STREAMING", "true").lower()
         in {"1", "true", "yes", "on"},
     }

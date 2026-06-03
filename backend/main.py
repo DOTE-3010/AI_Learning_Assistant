@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,7 +17,17 @@ from backend.core.uploads import UploadError
 from backend.core.weak_auth import AuthError
 from backend.storage.sqlite import SQLiteRepository
 
-app = FastAPI(title="AI Learning Assistant Backend")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    if not os.getenv("TESTING"):
+        validate_config()
+        SQLiteRepository.from_path()
+        print("SQLite metadata store is ready.")
+    yield
+
+
+app = FastAPI(title="AI Learning Assistant Backend", lifespan=lifespan)
 app.add_exception_handler(AuthError, auth_error_handler)
 app.add_exception_handler(RunError, run_error_handler)
 app.add_exception_handler(SettingsError, settings_error_handler)
@@ -44,17 +55,6 @@ app.mount("/ui", StaticFiles(directory=static_path, html=True), name="ui")
 @app.get("/")
 def root():
     return RedirectResponse(url="/ui")
-
-
-@app.on_event("startup")
-async def startup_event():
-    # Check if we are in testing mode
-    if os.getenv("TESTING"):
-        return
-
-    validate_config()
-    SQLiteRepository.from_path()
-    print("SQLite metadata store is ready.")
 
 
 @app.get("/health")

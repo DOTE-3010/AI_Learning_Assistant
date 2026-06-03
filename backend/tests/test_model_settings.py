@@ -2,8 +2,12 @@ import pytest
 
 from backend.api.auth import get_auth_repository
 from backend.api.settings import get_provider_tester, get_settings_repository
+from backend.core.model_settings import default_profile_values
 from backend.main import app
 from backend.storage.sqlite import SQLiteRepository
+
+
+DEFAULT_QWEN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 
 @pytest.fixture()
@@ -47,10 +51,10 @@ def test_create_update_and_list_default_model_profile_redacts_secret(settings_cl
         json={
             "display_name": "Qwen",
             "provider": "openai_compatible",
-            "base_url": "https://example-compatible-endpoint/v1",
-            "model": "qwen-placeholder",
+            "base_url": DEFAULT_QWEN_BASE_URL,
+            "model": "qwen-plus",
             "api_key": raw_key,
-            "context_window_hint": 128000,
+            "context_window_hint": 1000000,
             "supports_streaming": True,
         },
     )
@@ -66,7 +70,7 @@ def test_create_update_and_list_default_model_profile_redacts_secret(settings_cl
         json={
             "display_name": "Qwen Updated",
             "provider": "openai_compatible",
-            "base_url": "https://example-compatible-endpoint/v1",
+            "base_url": DEFAULT_QWEN_BASE_URL,
             "model": "qwen-updated",
         },
     )
@@ -88,8 +92,8 @@ def test_missing_credentials_return_clear_error(settings_client):
         "/api/settings/model-profiles/default",
         headers=headers,
         json={
-            "base_url": "https://example-compatible-endpoint/v1",
-            "model": "qwen-placeholder",
+            "base_url": DEFAULT_QWEN_BASE_URL,
+            "model": "qwen-plus",
         },
     )
     assert save.status_code == 200
@@ -115,8 +119,8 @@ def test_provider_connectivity_is_mockable(settings_client):
         "/api/settings/model-profiles/default",
         headers=headers,
         json={
-            "base_url": "https://example-compatible-endpoint/v1",
-            "model": "qwen-placeholder",
+            "base_url": DEFAULT_QWEN_BASE_URL,
+            "model": "qwen-plus",
             "api_key": "sk-connectivity-test",
         },
     )
@@ -128,9 +132,23 @@ def test_provider_connectivity_is_mockable(settings_client):
     assert response.json() == {
         "ok": True,
         "provider": "openai_compatible",
-        "model": "qwen-placeholder",
+        "model": "qwen-plus",
     }
     assert seen["api_key"] == "sk-connectivity-test"
+
+
+def test_environment_default_profile_uses_documented_qwen_defaults(monkeypatch):
+    monkeypatch.delenv("MODEL_BASE_URL", raising=False)
+    monkeypatch.delenv("MODEL_NAME", raising=False)
+    monkeypatch.delenv("MODEL_CONTEXT_WINDOW", raising=False)
+
+    defaults = default_profile_values()
+
+    assert defaults["provider"] == "openai_compatible"
+    assert defaults["base_url"] == DEFAULT_QWEN_BASE_URL
+    assert defaults["model"] == "qwen-plus"
+    assert defaults["context_window_hint"] == 1000000
+    assert defaults["supports_streaming"] is True
 
 
 def test_malformed_profile_uses_validation_envelope(settings_client):

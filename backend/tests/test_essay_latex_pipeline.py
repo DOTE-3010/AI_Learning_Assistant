@@ -7,13 +7,14 @@ from backend.storage.sqlite import SQLiteRepository
 
 
 class FakeModelProvider:
-    def __init__(self, output: str):
-        self.output = output
+    def __init__(self, output: str | list[str]):
+        self.outputs = output if isinstance(output, list) else [output]
         self.requests = []
 
     def generate_text(self, request):
         self.requests.append(request)
-        return self.output
+        output_index = min(len(self.requests) - 1, len(self.outputs) - 1)
+        return self.outputs[output_index]
 
 
 class FakeLatexCompiler:
@@ -21,9 +22,10 @@ class FakeLatexCompiler:
         self,
         *,
         error: LatexCompileError | None = None,
+        errors: list[LatexCompileError | None] | None = None,
         log_text: str = "latex compile ok\n",
     ):
-        self.error = error
+        self.errors = errors if errors is not None else [error]
         self.log_text = log_text
         self.calls = []
 
@@ -32,8 +34,9 @@ class FakeLatexCompiler:
             {"tex_path": tex_path, "output_dir": output_dir, "job_name": job_name}
         )
         assert tex_path.exists()
-        if self.error:
-            raise self.error
+        error_index = min(len(self.calls) - 1, len(self.errors) - 1)
+        if self.errors[error_index]:
+            raise self.errors[error_index]
         pdf_path = output_dir / f"{job_name}.pdf"
         pdf_path.write_bytes(b"%PDF-1.4\n% fake test pdf\n")
         return LatexCompileResult(pdf_path=pdf_path, log_text=self.log_text)
@@ -91,6 +94,66 @@ def test_essay_latex_pipeline_writes_source_and_compiled_pdf(tmp_path):
     assert {"source", "pdf", "log", "manifest"}.issubset(artifact_kinds)
 
 
+def test_essay_latex_pipeline_repairs_source_after_compile_failure(tmp_path):
+    repo, user = _repo_with_user(tmp_path)
+    provider = FakeModelProvider(
+        [
+            "\\documentclass{article}\n"
+            "\\begin{document}\n"
+            "\\begin{tabular}{ll}\n"
+            "A & B & C \\\\\n"
+            "\\end{tabular}\n"
+            "\\end{document}\n",
+            "\\documentclass{article}\n"
+            "\\begin{document}\n"
+            "\\begin{tabular}{lll}\n"
+            "A & B & C \\\\\n"
+            "\\end{tabular}\n"
+            "\\end{document}\n",
+        ]
+    )
+    compiler = FakeLatexCompiler(
+        errors=[
+            LatexCompileError(
+                "LaTeX PDF compilation failed.",
+                log_text="./main.tex:4: Extra alignment tab has been changed to \\cr.\n",
+            ),
+            None,
+        ],
+        log_text="repaired latex compile ok\n",
+    )
+
+    body = create_run(
+        repo,
+        current_user=user,
+        request={
+            "task_text": "Write a short essay with a table.",
+            "intent": "essay_latex",
+            "search_mode": "off",
+        },
+        workspace_root=str(tmp_path / "workspace"),
+        executor=make_run_executor(provider, latex_compiler=compiler),
+        search_adapter=NoopSearchAdapter(),
+    )
+
+    assert body["status"] == "succeeded"
+    output_root = Path(body["output_root"])
+    assert "\\begin{tabular}{lll}" in (output_root / "output" / "main.tex").read_text(
+        encoding="utf-8"
+    )
+    assert (output_root / "output" / "main.pdf").read_bytes().startswith(b"%PDF")
+    latex_log = (output_root / "logs" / "latex.log").read_text(encoding="utf-8")
+    assert "[initial compile failure]" in latex_log
+    assert "Repair source written; repaired compile succeeded." in latex_log
+    generation_log = (output_root / "logs" / "generation.log").read_text(
+        encoding="utf-8"
+    )
+    assert "Repair: source_repaired" in generation_log
+    assert len(provider.requests) == 2
+    assert "[Repair Contract]" in provider.requests[1].user_prompt
+    assert len(compiler.calls) == 2
+
+
 def test_essay_latex_pipeline_failure_preserves_source_log_and_manifest(tmp_path):
     repo, user = _repo_with_user(tmp_path)
     provider = FakeModelProvider(
@@ -124,9 +187,12 @@ def test_essay_latex_pipeline_failure_preserves_source_log_and_manifest(tmp_path
     output_root = Path(body["output_root"])
     assert (output_root / "output" / "main.tex").exists()
     assert not (output_root / "output" / "main.pdf").exists()
-    assert (output_root / "logs" / "latex.log").read_text(encoding="utf-8") == (
-        "! Undefined control sequence.\n"
-    )
+    latex_log = (output_root / "logs" / "latex.log").read_text(encoding="utf-8")
+    assert "[initial compile failure]" in latex_log
+    assert "Repair source written; repaired compile still failed." in latex_log
+    assert "! Undefined control sequence." in latex_log
+    assert len(provider.requests) == 2
+    assert len(compiler.calls) == 2
 
     manifest = json.loads((output_root / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["status"] == "failed"

@@ -5,12 +5,21 @@ import contextDialOkUrl from "./assets/previews/context-budget-dial-ok.png";
 import contextDialWarningUrl from "./assets/previews/context-budget-dial-warning.png";
 import authEntryPreviewUrl from "./assets/previews/auth-entry-preview.png";
 import emptyWorkbenchPreviewUrl from "./assets/previews/empty-workbench-preview.png";
+import {
+    DEFAULT_MODEL_PROFILE,
+    applyWorkbenchInteraction,
+    buildRunRequest,
+    canSubmitRun as canSubmitRunCore,
+    normalizeActiveCodeFile,
+    optionsForIntent as optionsForIntentCore,
+    outputPreferenceForIntent as outputPreferenceForIntentCore,
+} from "./workbench-core.js";
 
 const API_URL = window.__AI_LEARNING_ASSISTANT_API_URL || window.location.origin;
 const TOKEN_KEY = "ai_learning_assistant_token";
 const USER_KEY = "ai_learning_assistant_user";
 const LOCALE_KEY = "ai_learning_assistant_locale";
-const CONTEXT_LIMIT = 128000;
+const CONTEXT_LIMIT = DEFAULT_MODEL_PROFILE.contextWindowHint;
 const RUN_POLL_INTERVAL_MS = 1200;
 const TERMINAL_RUN_STATUSES = new Set(["succeeded", "failed", "cancelled"]);
 const DEFAULT_LOCALE = "en";
@@ -21,10 +30,12 @@ const contextDialAssets = {
 };
 const initialLocale = getInitialLocale();
 const DEFAULT_MODEL_FORM = {
-    displayName: "Qwen Default",
-    provider: "openai_compatible",
-    baseUrl: "https://example-compatible-endpoint/v1",
-    model: "qwen-model-name",
+    displayName: DEFAULT_MODEL_PROFILE.displayName,
+    provider: DEFAULT_MODEL_PROFILE.provider,
+    baseUrl: DEFAULT_MODEL_PROFILE.baseUrl,
+    model: DEFAULT_MODEL_PROFILE.model,
+    contextWindowHint: DEFAULT_MODEL_PROFILE.contextWindowHint,
+    supportsStreaming: DEFAULT_MODEL_PROFILE.supportsStreaming,
     apiKey: "",
 };
 
@@ -447,7 +458,7 @@ function renderRunStatusPill() {
             <span class="status-light"></span>
             <div>
                 <strong>${escapeHtml(statusLabel(state.run.status))}</strong>
-                <span>${escapeHtml(stageLabel(state.run.stage))}</span>
+                <span>${escapeHtml(t("preview.currentStage", { stage: stageLabel(state.run.stage) }))}</span>
             </div>
         </div>
         <p class="run-message">${escapeHtml(state.run.error || state.run.message)}</p>
@@ -457,10 +468,19 @@ function renderRunStatusPill() {
 function renderStageTrack(intent) {
     const current = normalizedStageBucket(state.run.stage, state.run.status);
     return `
-        <div class="stage-track" aria-label="${escapeHtml(t("preview.statusMessage"))}">
-            ${intent.stages.map((stage) => `
-                <span class="${stage === current ? "is-active" : ""}">${escapeHtml(stageLabel(stage))}</span>
-            `).join("")}
+        <div class="stage-track-shell" aria-label="${escapeHtml(t("preview.statusMessage"))}">
+            <div class="stage-track-head">
+                <span>${escapeHtml(t("preview.stageProgress"))}</span>
+                <small>${escapeHtml(t("preview.currentStage", { stage: stageLabel(state.run.stage) }))}</small>
+            </div>
+            <div class="stage-track" role="list">
+                ${intent.stages.map((stage, index) => `
+                    <span class="stage-step ${stage === current ? "is-active" : ""}" role="listitem" ${stage === current ? 'aria-current="step"' : ""}>
+                        <small>${index + 1}</small>
+                        <strong>${escapeHtml(stageLabel(stage))}</strong>
+                    </span>
+                `).join("")}
+            </div>
         </div>
     `;
 }
@@ -470,7 +490,13 @@ function renderPreviewTabs() {
     return `
         <div class="preview-tabs" role="tablist" aria-label="${escapeHtml(t("pane.previewKicker"))}">
             ${tabs.map((tab) => `
-                <button type="button" role="tab" class="${state.previewTab === tab.id ? "is-active" : ""}" data-preview-tab="${tab.id}">
+                <button
+                    type="button"
+                    role="tab"
+                    class="${state.previewTab === tab.id ? "is-active" : ""}"
+                    data-preview-tab="${tab.id}"
+                    aria-selected="${state.previewTab === tab.id}"
+                >
                     ${escapeHtml(tab.label)}
                 </button>
             `).join("")}
@@ -648,6 +674,7 @@ function renderSourceInspection() {
     const language = filename.endsWith(".tex") ? "latex" : filename.endsWith(".json") ? "json" : "python";
     return `
         <div class="inspection-product">
+            ${renderInspectionIntro(t("preview.sourceTitle"), t("preview.sourceMessage"))}
             <div class="inspection-head">
                 <span>${escapeHtml(filename)}</span>
                 <button class="copy-code-button" type="button" data-action="copy-visible-preview">${escapeHtml(t("actions.copyVisible"))}</button>
@@ -661,6 +688,7 @@ function renderSourceInspection() {
 function renderLogInspection() {
     return `
         <div class="inspection-product">
+            ${renderInspectionIntro(t("preview.logsTitle"), t("preview.logsMessage"))}
             <div class="inspection-head">
                 <span>${escapeHtml(t("source.generationLog"))}</span>
                 <button class="copy-code-button" type="button" data-action="copy-visible-preview">${escapeHtml(t("actions.copyVisible"))}</button>
@@ -688,12 +716,22 @@ function renderManifestInspection() {
     };
     return `
         <div class="inspection-product">
+            ${renderInspectionIntro(t("preview.manifestTitle"), t("preview.manifestMessage"))}
             <div class="inspection-head">
                 <span>manifest.json</span>
                 <button class="copy-code-button" type="button" data-action="copy-visible-preview">${escapeHtml(t("actions.copyVisible"))}</button>
             </div>
             <div class="code-editor">${renderHighlightedCode(JSON.stringify(manifest, null, 2), "json")}</div>
             <div class="inspection-note">${escapeHtml(artifactAccessNote())}</div>
+        </div>
+    `;
+}
+
+function renderInspectionIntro(title, message) {
+    return `
+        <div class="inspection-intro">
+            <strong>${escapeHtml(title)}</strong>
+            <span>${escapeHtml(message)}</span>
         </div>
     `;
 }
@@ -812,9 +850,11 @@ function renderModelSettingsPanel() {
                     <button class="icon-action is-large" type="button" data-action="close-model-settings" aria-label="${escapeHtml(t("actions.closeModel"))}">x</button>
                 </div>
                 <form id="model-settings-form" class="model-form" novalidate>
+                    <p class="model-helper">${escapeHtml(t("model.defaultHelp"))}</p>
                     ${renderModelField("displayName", t("model.displayName"), "text", form.displayName, t("model.defaultName"), false)}
-                    ${renderModelField("baseUrl", t("model.baseUrl"), "url", form.baseUrl, "https://example-compatible-endpoint/v1", true)}
-                    ${renderModelField("model", t("model.model"), "text", form.model, "qwen-model-name", true)}
+                    ${renderModelField("baseUrl", t("model.baseUrl"), "url", form.baseUrl, DEFAULT_MODEL_FORM.baseUrl, true)}
+                    ${renderModelField("model", t("model.model"), "text", form.model, DEFAULT_MODEL_FORM.model, true)}
+                    ${renderModelDefaultSummary(form)}
                     ${renderModelField("apiKey", t("model.apiKey"), "password", form.apiKey, profile?.api_key_ref ? t("model.newKey") : t("model.apiKey"), false, "new-password")}
                     <div class="model-secret-row">
                         <span class="key-state ${profile?.api_key_ref ? "is-ready" : ""}">${escapeHtml(keyState)}</span>
@@ -828,6 +868,25 @@ function renderModelSettingsPanel() {
                 </form>
             </div>
         </section>
+    `;
+}
+
+function renderModelDefaultSummary(form) {
+    return `
+        <div class="model-default-grid" aria-label="${escapeHtml(t("model.defaultsSummary"))}">
+            <div>
+                <span>${escapeHtml(t("model.provider"))}</span>
+                <strong>${escapeHtml(form.provider || DEFAULT_MODEL_FORM.provider)}</strong>
+            </div>
+            <div>
+                <span>${escapeHtml(t("model.contextWindow"))}</span>
+                <strong>${escapeHtml(formatInt(form.contextWindowHint || DEFAULT_MODEL_FORM.contextWindowHint))}</strong>
+            </div>
+            <div>
+                <span>${escapeHtml(t("model.streaming"))}</span>
+                <strong>${escapeHtml(form.supportsStreaming ? t("model.streamingOn") : t("model.streamingOff"))}</strong>
+            </div>
+        </div>
     `;
 }
 
@@ -873,34 +932,31 @@ function bindEvents() {
         updateContextDial();
         updateComposerActionState();
     });
-    document.querySelectorAll("[data-intent]").forEach((button) => {
+    document.querySelectorAll("button[data-intent]").forEach((button) => {
         button.addEventListener("click", () => {
-            state.intent = button.dataset.intent;
-            state.previewTab = "primary";
-            state.fieldErrors = {};
-            normalizeActiveFile();
+            applyInteraction({ type: "selectIntent", intent: button.dataset.intent });
             refreshLocalContext();
             render();
         });
     });
     document.querySelectorAll("[data-search-mode]").forEach((button) => {
         button.addEventListener("click", () => {
-            state.searchMode = button.dataset.searchMode;
+            applyInteraction({ type: "selectSearchMode", searchMode: button.dataset.searchMode });
             render();
         });
     });
     document.querySelectorAll("[data-output-preference]").forEach((button) => {
         button.addEventListener("click", () => {
-            state.outputPreference = button.dataset.outputPreference;
-            normalizeActiveFile();
+            applyInteraction({
+                type: "selectOutputPreference",
+                outputPreference: button.dataset.outputPreference,
+            });
             refreshLocalContext();
             render();
         });
     });
     document.getElementById("target-pages")?.addEventListener("input", (event) => {
-        const value = Number(event.target.value);
-        state.targetPages = Number.isFinite(value) && value > 0 ? Math.round(value) : 1;
-        delete state.fieldErrors.target_pages;
+        applyInteraction({ type: "setTargetPages", targetPages: event.target.value });
         refreshLocalContext();
         updateContextDial();
     });
@@ -943,11 +999,11 @@ function bindEvents() {
             if (error) error.textContent = "";
         });
     });
-    document.querySelectorAll("[data-preview-tab]").forEach((button) => {
-        button.addEventListener("click", () => {
-            state.previewTab = button.dataset.previewTab;
-            render();
-        });
+    document.querySelector(".preview-tabs")?.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-preview-tab]");
+        if (!button) return;
+        state.previewTab = button.dataset.previewTab;
+        render();
     });
     document.querySelectorAll("[data-active-file]").forEach((button) => {
         button.addEventListener("click", () => {
@@ -965,6 +1021,18 @@ function bindEvents() {
         button.addEventListener("click", () => openLocalPath(button.dataset.openFile || ""));
     });
     document.onkeydown = handleGlobalKeydown;
+}
+
+function applyInteraction(action) {
+    Object.assign(state, applyWorkbenchInteraction({
+        intent: state.intent,
+        previewTab: state.previewTab,
+        fieldErrors: state.fieldErrors,
+        activeFile: state.activeFile,
+        outputPreference: state.outputPreference,
+        searchMode: state.searchMode,
+        targetPages: state.targetPages,
+    }, action));
 }
 
 function bindLocaleControls(root = document) {
@@ -1255,8 +1323,8 @@ function sanitizeModelProfile(profile) {
         base_url: String(profile?.base_url || DEFAULT_MODEL_FORM.baseUrl),
         model: String(profile?.model || DEFAULT_MODEL_FORM.model),
         api_key_ref: profile?.api_key_ref ? String(profile.api_key_ref) : null,
-        context_window_hint: Number(profile?.context_window_hint || CONTEXT_LIMIT),
-        supports_streaming: Boolean(profile?.supports_streaming),
+        context_window_hint: Number(profile?.context_window_hint || DEFAULT_MODEL_FORM.contextWindowHint),
+        supports_streaming: profile?.supports_streaming === undefined ? DEFAULT_MODEL_FORM.supportsStreaming : Boolean(profile.supports_streaming),
         is_default: Boolean(profile?.is_default),
     };
 }
@@ -1268,6 +1336,8 @@ function hydrateModelFormFromProfile() {
         provider: profile?.provider || DEFAULT_MODEL_FORM.provider,
         baseUrl: profile?.base_url || DEFAULT_MODEL_FORM.baseUrl,
         model: profile?.model || DEFAULT_MODEL_FORM.model,
+        contextWindowHint: Number(profile?.context_window_hint || DEFAULT_MODEL_FORM.contextWindowHint),
+        supportsStreaming: profile?.supports_streaming === undefined ? DEFAULT_MODEL_FORM.supportsStreaming : Boolean(profile.supports_streaming),
         apiKey: "",
     };
 }
@@ -1349,10 +1419,10 @@ function buildModelProfilePayload({ includeApiKey }) {
     const payload = {
         display_name: form.displayName.trim() || t("model.defaultName"),
         provider: form.provider || "openai_compatible",
-        base_url: form.baseUrl.trim(),
-        model: form.model.trim(),
-        context_window_hint: CONTEXT_LIMIT,
-        supports_streaming: true,
+        base_url: form.baseUrl.trim() || DEFAULT_MODEL_FORM.baseUrl,
+        model: form.model.trim() || DEFAULT_MODEL_FORM.model,
+        context_window_hint: Number(form.contextWindowHint || DEFAULT_MODEL_FORM.contextWindowHint),
+        supports_streaming: Boolean(form.supportsStreaming ?? DEFAULT_MODEL_FORM.supportsStreaming),
     };
     if (includeApiKey && form.apiKey.trim()) payload.api_key = form.apiKey.trim();
     return payload;
@@ -1405,35 +1475,32 @@ function initialRunState(locale) {
 }
 
 function buildRunPayload({ promptText, uploadIds, revisionOfRunId }) {
-    const payload = {
-        task_text: promptText,
+    return buildRunRequest({
+        promptText,
+        uploadIds,
+        revisionOfRunId,
         intent: state.intent,
-        output_preference: outputPreferenceForIntent(state.intent),
-        search_mode: state.searchMode,
-        model_profile_id: state.model.profile?.id || null,
-        upload_ids: uploadIds,
-        options: optionsForIntent(state.intent),
-    };
-    if (revisionOfRunId) payload.revision_of_run_id = revisionOfRunId;
-    return payload;
+        outputPreference: state.outputPreference,
+        searchMode: state.searchMode,
+        modelProfileId: state.model.profile?.id || null,
+        targetPages: state.targetPages,
+    });
 }
 
 function outputPreferenceForIntent(intent) {
-    if (intent === "code_homework") return state.outputPreference;
-    return "pdf";
+    return outputPreferenceForIntentCore(intent, state.outputPreference);
 }
 
 function optionsForIntent(intent) {
-    if (intent !== "cheat_sheet") return {};
-    return {
-        target_pages: Math.max(1, Math.round(Number(state.targetPages) || 1)),
-        paper_size: "A4",
-        density: "dense",
-    };
+    return optionsForIntentCore(intent, state.targetPages);
 }
 
 function canSubmitRun(isAuthenticated) {
-    return isAuthenticated && state.taskText.trim() && state.run.status !== "queued" && state.run.status !== "running";
+    return canSubmitRunCore({
+        isAuthenticated,
+        taskText: state.taskText,
+        runStatus: state.run.status,
+    });
 }
 
 function applyRunApiError(data, fallback) {
@@ -1695,8 +1762,7 @@ function getSelectedIntent() {
 }
 
 function normalizeActiveFile() {
-    const files = getCodeFiles();
-    if (!files.includes(state.activeFile)) state.activeFile = files[0];
+    state.activeFile = normalizeActiveCodeFile(state.outputPreference, state.activeFile);
 }
 
 function getCodeFiles() {

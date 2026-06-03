@@ -37,9 +37,9 @@ Major versions below are the supported baseline; exact patch versions live in lo
 - Backend framework: FastAPI with Uvicorn; Pydantic v2 for request/response models.
 - Storage: SQLite via SQLAlchemy 2.x (stdlib `sqlite3` driver). No Postgres/Mongo in the local runtime.
 - Frontend: Vite 6 + vanilla/lightweight component layer (no heavy admin-dashboard kit); CSS-driven visual system.
-- Desktop shell: Electron 33 (Chromium renderer + Node main process), packaging via electron-builder (future-phase).
+- Desktop shell: Electron 42 (Chromium renderer + Node main process), packaging via electron-builder (future-phase).
 - Model client: `openai` Python SDK in OpenAI-compatible mode, pointed at a configurable Qwen base URL.
-- Document tooling: TeX Live 2024 (scheme-medium) + `latexmk` inside the container for LaTeX/PDF; `nbformat` for `.ipynb` validation; `pypdf` for PDF text extraction (OCR/scanned PDFs are out of scope in phase 1).
+- Document tooling: TeX Live 2024 (scheme-medium), Debian `lmodern`, and `latexmk` inside the container for LaTeX/PDF; `nbformat` for `.ipynb` validation; `pypdf` for PDF text extraction (OCR/scanned PDFs are out of scope in phase 1).
 - Web search: pluggable provider behind an adapter; concrete provider is an open question (see below).
 - Container runtime: Docker Desktop (Compose v2) as the only host prerequisite for the packaged build.
 
@@ -154,7 +154,7 @@ Future runtimes must preserve the same contracts:
 
 ## Operational Concerns
 
-- Configuration: backend reads runtime config from environment variables; local development values live in untracked `.env`/`.env.local`. Model variables use the `MODEL_*` names in `model-settings.md` (legacy `BIANXIE_*` names are not canonical). No secrets in tracked source.
+- Configuration: backend reads runtime config from environment variables; local development values live in untracked `.env`/`.env.local`. Model variables use the `MODEL_*` names in `model-settings.md` (legacy `BIANXIE_*` names are not canonical). Tracked source may contain only the documented non-secret Qwen defaults from `docs/CONTRACTS/model-settings.md`; API keys and other secrets are never defaulted or committed.
 - Observability: structured logs to stdout from the container; run progress is exposed via the status event shape in `generation-pipeline.md`. API keys, Authorization headers, raw prompts, and uploaded document contents are never logged by default.
 - Failure handling: web-search and PDF-compile failures are non-fatal unless the user forced the behavior; failures are recorded in run metadata and `manifest.json` with a sanitized message. `.tex` source is always preserved even when PDF compilation fails.
 - Backups/migrations: SQLite uses explicit, forward-only schema migrations with a `schema_version`; the database file and `workspace/` are the two artifacts a user must back up. Both must survive container/app restarts.
@@ -187,7 +187,7 @@ Rejected alternatives:
 
 ## Open Technical Questions
 
-- Exact default Qwen model id and base URL must be verified against current official documentation before implementation (mirrors `docs/SPEC.md` open question).
+- Future edits to the default Qwen model id, base URL, or context hint must be verified against current official documentation before implementation. The phase-1 default endpoint targets China (Beijing) DashScope because the human-confirmed release API key belongs to the China site.
 - Concrete web-search provider and its rate/cost limits are undecided; the adapter boundary lets the choice land later.
 - Whether SQLite secret columns should be encrypted at rest in phase 1 or deferred to an OS keychain in a later phase (see `docs/DECISIONS/004-local-secret-storage.md`).
 - Background execution model for runs (in-process tasks vs a worker) may evolve; the status event contract must stay stable regardless.

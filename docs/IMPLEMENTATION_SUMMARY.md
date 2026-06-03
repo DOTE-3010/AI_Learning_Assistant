@@ -74,7 +74,8 @@ This is a QA handoff, not a QA certification. Whole-product correctness must sti
 
 ## Known QA Risks
 
-- Exact default Qwen endpoint, model id, and context window remain open until current provider documentation is pinned. Do not commit guessed live defaults.
+- Default Qwen endpoint, model id, and context hint were pinned in `docs/CONTRACTS/model-settings.md` on 2026-06-03 after checking official Alibaba Cloud Model Studio documentation and confirming the release API key belongs to the China site. Live provider smoke still requires untracked credentials and may fail if a user's regional API key does not match the default endpoint.
+- Human E2E on 2026-06-03 found a live essay/PDF failure caused first by a missing Docker LaTeX `lmodern` package and then by ordinary generated-source LaTeX syntax. QA task `005` added the runtime dependency and a one-pass model-assisted LaTeX repair/recompile path; old failed runs remain historical records and should be rerun rather than rewritten.
 - The concrete web-search provider and rate/cost limits remain undecided. Search policy behavior can be tested with mocks, but live search remains a product/integration risk.
 - Native no-Docker packaging, signed macOS app distribution, and hosted deployment remain future-phase work and should not block phase-1 Electron plus Docker QA.
 - Real model-provider smoke tests require untracked credentials. Agent-run QA should prefer mocked-provider tests unless the human explicitly supplies local credentials for a real-provider check.

@@ -128,9 +128,12 @@ def test_beamer_slides_pipeline_failure_preserves_source_log_and_manifest(tmp_pa
     output_root = Path(body["output_root"])
     assert (output_root / "output" / "slides.tex").exists()
     assert not (output_root / "output" / "slides.pdf").exists()
-    assert (output_root / "logs" / "latex.log").read_text(encoding="utf-8") == (
-        "! Undefined control sequence.\n"
-    )
+    latex_log = (output_root / "logs" / "latex.log").read_text(encoding="utf-8")
+    assert "[initial compile failure]" in latex_log
+    assert "Repair source written; repaired compile still failed." in latex_log
+    assert "! Undefined control sequence." in latex_log
+    assert len(provider.requests) == 2
+    assert len(compiler.calls) == 2
 
     manifest = json.loads((output_root / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["intent"] == "beamer_slides"

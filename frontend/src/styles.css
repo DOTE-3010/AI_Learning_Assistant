@@ -113,6 +113,7 @@ input {
 .context-copy,
 .context-popover,
 .stage-track,
+.stage-track-head,
 .run-status-pill span,
 .inline-notice,
 .cell-label,
@@ -912,7 +913,6 @@ button.identity-chip {
 .run-status-pill span {
     color: var(--studio-ink-muted);
     font-size: 10px;
-    text-transform: uppercase;
 }
 
 .run-status-pill[data-status="failed"] .status-light {
@@ -938,28 +938,72 @@ button.identity-chip {
     line-height: 1.35;
 }
 
+.stage-track-shell {
+    display: grid;
+    gap: 7px;
+}
+
+.stage-track-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--studio-ink-muted);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0;
+}
+
+.stage-track-head span,
+.stage-track-head small {
+    white-space: nowrap;
+}
+
 .stage-track {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 6px;
 }
 
-.stage-track span {
+.stage-step {
     min-height: 28px;
-    display: grid;
-    place-items: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     border: 1px solid rgb(255 248 232 / 8%);
     border-radius: var(--radius-sm);
     color: var(--studio-ink-muted);
     font-size: 10px;
     font-weight: 800;
-    text-transform: uppercase;
 }
 
-.stage-track span.is-active {
+.stage-step small {
+    width: 15px;
+    height: 15px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    background: rgb(255 248 232 / 7%);
+    color: var(--studio-ink-muted);
+    font-size: 9px;
+}
+
+.stage-step strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.stage-step.is-active {
     border-color: rgb(189 116 75 / 42%);
     color: var(--accent-teal);
     background: rgb(189 116 75 / 8%);
+}
+
+.stage-step.is-active small {
+    background: rgb(189 116 75 / 18%);
+    color: var(--studio-paper);
 }
 
 .preview-shell {
@@ -1016,6 +1060,7 @@ button.identity-chip {
     border-color: rgb(189 116 75 / 38%);
     color: var(--studio-ink);
     background: rgb(189 116 75 / 9%);
+    box-shadow: inset 0 -2px 0 var(--accent-clay);
 }
 
 .preview-body {
@@ -1025,11 +1070,17 @@ button.identity-chip {
 }
 
 .code-product,
-.notebook-product,
-.inspection-product {
+.notebook-product {
     min-height: 100%;
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 10px;
+}
+
+.inspection-product {
+    min-height: 100%;
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
     gap: 10px;
 }
 
@@ -1055,6 +1106,26 @@ button.identity-chip {
 
 .copy-code-button {
     margin-left: auto;
+}
+
+.inspection-intro {
+    display: grid;
+    gap: 4px;
+    padding: 10px 12px;
+    border: 1px solid rgb(255 248 232 / 9%);
+    border-radius: var(--radius-sm);
+    background: rgb(255 248 232 / 4%);
+}
+
+.inspection-intro strong {
+    color: var(--studio-paper-2);
+    font: 700 16px / 1.2 var(--font-serif);
+}
+
+.inspection-intro span {
+    color: var(--studio-ink-muted);
+    font-size: 12px;
+    line-height: 1.4;
 }
 
 .code-editor {
@@ -1753,6 +1824,51 @@ button.identity-chip {
     margin-top: 16px;
 }
 
+.model-helper {
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid rgb(255 248 232 / 10%);
+    border-radius: var(--radius-sm);
+    background: rgb(255 248 232 / 4%);
+    color: var(--studio-ink-muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.model-default-grid {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr 0.8fr;
+    gap: 8px;
+}
+
+.model-default-grid div {
+    min-width: 0;
+    padding: 9px 10px;
+    border: 1px solid var(--studio-line-soft);
+    border-radius: var(--radius-sm);
+    background: rgb(15 15 13 / 44%);
+}
+
+.model-default-grid span,
+.model-default-grid strong {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.model-default-grid span {
+    color: var(--studio-ink-muted);
+    font: 800 10px / 1 var(--font-mono);
+}
+
+.model-default-grid strong {
+    margin-top: 6px;
+    color: var(--studio-paper-2);
+    font: 800 11px / 1.1 var(--font-mono);
+}
+
 .model-secret-row,
 .model-actions {
     justify-content: space-between;
@@ -1820,6 +1936,10 @@ button.identity-chip {
 
     .console-utility-row,
     .preview-status-strip {
+        grid-template-columns: 1fr;
+    }
+
+    .model-default-grid {
         grid-template-columns: 1fr;
     }
 
