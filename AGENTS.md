@@ -1,20 +1,25 @@
 Status: Active
-Last Reviewed: 2026-06-02
+Last Reviewed: 2026-06-03
 
 # Agent Instructions
 
-This repository is being rebuilt from the archived MVP into an Electron-wrapped teaching product that still uses Docker Desktop for the first distributable implementation.
+This repository has completed the phase-1 rebuild from the archived MVP into an Electron-wrapped teaching product that still uses Docker Desktop for the first distributable implementation. The active project phase is whole-product QA.
 
-Start with these files before implementing:
+Start with these files before implementing or testing:
 
 - `docs/SPEC.md` for product intent and user workflows.
 - `docs/ARCH.md` for module boundaries and migration direction.
 - `docs/RULES.md` for coding, testing, security, and review rules.
 - `docs/CONTRACTS/` for stable interfaces.
-- `docs/TASKS/` for the next bounded implementation unit.
+- `docs/IMPLEMENTATION_SUMMARY.md` for the completed development ledger.
+- `docs/QA_PLAN.md` for the QA phase order, ownership, and report format.
+- `docs/TASKS/` for the active bounded QA unit.
 
 ## Current Direction
 
+- Development is complete for the phase-1 implementation queue. Old implementation task files were removed from `docs/TASKS/` on 2026-06-03 and summarized in `docs/IMPLEMENTATION_SUMMARY.md`.
+- The pre-QA `/api/uploads` blocker was resolved on 2026-06-03 by `docs/TASKS/000-resolve-upload-api-pre-qa-blocker.md`.
+- Active work now starts at `docs/TASKS/001-qa-agent-module-smoke-tests.md`, then proceeds through agent module unit/functional tests, agent integration tests, and human E2E functional tests.
 - Preserve the core idea: a teaching-oriented artifact generator for homework code, essay PDFs, Beamer slides, and dense cheat sheets.
 - Preserve CUHK-style weak auth: `@cuhk.edu.hk` and `@link.cuhk.edu.hk` registration/login remain part of the product and should be shaped so stronger auth can replace it later.
 - Replace the default model path with Qwen through an OpenAI-compatible provider abstraction. Do not hard-code development API keys.
@@ -36,7 +41,7 @@ Start with these files before implementing:
 - End-to-end smoke: `./scripts/smoke_e2e.sh`
 - Governance check: `/Users/myron/Desktop/constitution/coding_agent_constitution/constitution-skill/scripts/check-governance.sh .`
 
-Commands may change during the rewrite. Update this file and the matching task when a command becomes stale.
+Commands may change during QA. Update this file and the matching QA task when a command becomes stale.
 
 ## Canonical Phase-1 Layout
 
@@ -59,21 +64,23 @@ Do not create `apps/web/` or `services/api/` in phase 1 unless a new decision re
 
 ## Implementation Discipline
 
-- Work from one `docs/TASKS/NNN-*.md` at a time.
-- Keep implementation slices small enough for one agent pass and one review pass.
+- Work from one `docs/TASKS/NNN-*.md` QA task at a time.
+- Keep fixes small enough for one agent pass and one review pass.
 - Prefer contracts and tests before broad rewrites.
 - Use repo-native patterns only when they still match the new architecture; legacy course/assignment/chat structure is not authoritative.
 - Do not treat chat UI as a generic support widget. For frontend tasks, follow `docs/CONTRACTS/ui-workbench.md`: production console, side artifact preview, explicit artifact type, preview-only outputs, professional code/PDF renderers, and purposeful motion.
-- For task 018, do not touch backend code or backend contracts. Adapt the frontend to existing documented APIs and record backend gaps separately.
-- For task 018, partial frontend refactor is acceptable: preserve working API/auth/model/upload/run-status logic, then rebuild visual shell, design tokens, locale catalog, production console, preview surfaces, and motion to match `docs/CONTRACTS/ui-workbench.md`, `docs/CONTRACTS/visual-assets.md`, `docs/ASSET_PROMPTS/`, and the generated assets under `frontend/src/assets/`.
-- Large local cleanup is allowed when scoped by a task, because remote `archived` branches preserve the old MVP.
+- During QA, run the tests/checks first, report blockers and risks to the human, then fix blockers and only the risks the human asks to fix.
+- Do not add new product features during QA unless the human turns a QA finding into an explicit follow-up task.
+- Large local cleanup is not part of QA unless a QA task or human-approved fix explicitly scopes it.
 
 ## Handoff Notes
 
-Every implementation handoff should state:
+Every QA or fix handoff should state:
 
 - Which task file was executed.
 - Files changed.
 - Verification commands and results.
+- Blockers found, blockers fixed, and retest results.
+- Risks found and the human disposition for each risk.
 - Any contract, SPEC, ARCH, or RULES updates required by what was learned.
 - Remaining human decisions, especially around auth, secrets, model defaults, and distribution.

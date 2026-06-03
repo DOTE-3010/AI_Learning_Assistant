@@ -187,9 +187,16 @@ def _repo_with_user(tmp_path):
     return repo, user
 
 
-def _create_pdf_upload(repo: SQLiteRepository, upload_id: str, path: Path) -> None:
+def _create_pdf_upload(
+    repo: SQLiteRepository,
+    upload_id: str,
+    path: Path,
+    *,
+    user_id: str = "user-1",
+) -> None:
     repo.create_upload(
         id=upload_id,
+        user_id=user_id,
         original_name=path.name,
         media_type="application/pdf",
         stored_path=str(path),

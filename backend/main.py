@@ -8,9 +8,11 @@ from fastapi.staticfiles import StaticFiles
 from backend.api.auth import auth_error_handler, router as auth_router
 from backend.api.runs import router as runs_router, run_error_handler
 from backend.api.settings import router as settings_router, settings_error_handler
+from backend.api.uploads import router as uploads_router, upload_error_handler
 from backend.core.config import validate_config
 from backend.core.model_settings import SettingsError
 from backend.core.runs import RunError
+from backend.core.uploads import UploadError
 from backend.core.weak_auth import AuthError
 from backend.storage.sqlite import SQLiteRepository
 
@@ -18,9 +20,11 @@ app = FastAPI(title="AI Learning Assistant Backend")
 app.add_exception_handler(AuthError, auth_error_handler)
 app.add_exception_handler(RunError, run_error_handler)
 app.add_exception_handler(SettingsError, settings_error_handler)
+app.add_exception_handler(UploadError, upload_error_handler)
 app.include_router(auth_router)
 app.include_router(runs_router)
 app.include_router(settings_router)
+app.include_router(uploads_router)
 
 # CORS
 app.add_middleware(

@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-01
+Last Reviewed: 2026-06-03
 Status: Active
 -->
 
@@ -17,6 +17,12 @@ The current frontend appearance is not a compatibility target. The phase-1 front
 The target aesthetic is warm, elegant, and editorial rather than sci-fi or dashboard-like. The workbench may take inspiration from modern warm AI tools and literary product surfaces, but it must remain original: warm graphite, parchment, clay/terracotta accents, readable serif typography, and product-state previews should define the experience. Do not copy proprietary brand assets, proprietary typefaces, or exact visual identity from another product.
 
 The product should feel like a polished consumer creative tool, not a generic admin dashboard. The first production-shaped implementation is an Electron desktop shell that depends on Docker Desktop to run the local backend, LaTeX runtime, and file processing stack.
+
+## Current Phase
+
+The phase-1 implementation queue is complete as of 2026-06-03 and has been summarized in `docs/IMPLEMENTATION_SUMMARY.md`. Human review then identified the missing backend upload API as a pre-QA blocker because uploads are part of the phase-1 product acceptance criteria.
+
+The upload blocker was resolved on 2026-06-03 by `docs/TASKS/000-resolve-upload-api-pre-qa-blocker.md`. Whole-product QA is now governed by `docs/QA_PLAN.md` and begins with `docs/TASKS/001-qa-agent-module-smoke-tests.md`. QA must validate this specification before release readiness is declared. Known gaps or risks found during QA should be reported to the human, then either fixed, accepted as risk, or moved to future-phase scope by explicit human decision.
 
 ## Users
 
@@ -153,3 +159,6 @@ Process outcomes that make the rebuild safe for rotating agents (verified by `sc
 - 2026-06-01: Strengthened frontend direction around a conversational production console plus persistent artifact preview panel, preview-only phase-1 behavior, editor-grade code rendering, PDF-like previews, and purposeful motion.
 - 2026-06-01: Clarified that the existing frontend appearance is disposable; upcoming frontend work should fully rebuild the product surface while preserving backend-facing contracts and capabilities.
 - 2026-06-01: Added warm editorial visual direction, required serif typography, and English/Simplified Chinese/Traditional Chinese workbench localization requirements.
+- 2026-06-03: Marked the implementation queue complete, moved active work to whole-product QA, and added implementation-summary and QA-plan governance assets.
+- 2026-06-03: Promoted missing backend upload API from QA risk to pre-QA blocker by human decision.
+- 2026-06-03: Resolved the upload pre-QA blocker and moved the active queue to agent module smoke QA.

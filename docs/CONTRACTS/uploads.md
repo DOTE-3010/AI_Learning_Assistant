@@ -18,6 +18,7 @@ Multipart form upload of one or more files. Requires `Authorization: Bearer <tok
 
 - Form field: `files` (repeatable).
 - Each accepted file is written to the artifact filesystem and recorded in the `uploads` table (`sqlite-schema.md`).
+- Upload metadata is owner-scoped; API-created upload rows record the authenticated `user_id`.
 
 Response (`201`):
 

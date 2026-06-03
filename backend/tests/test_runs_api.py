@@ -282,6 +282,47 @@ def test_revision_run_rejects_prior_run_owned_by_another_user(run_client):
     assert json.loads(manifests[0].read_text(encoding="utf-8"))["run_id"] == prior_body["id"]
 
 
+def test_run_api_rejects_upload_owned_by_another_user(run_client, tmp_path):
+    client, repo, workspace_root = run_client
+    owner_headers = _register_and_login(client, "teacher@cuhk.edu.hk")
+    other_headers = _register_and_login(client, "other@cuhk.edu.hk")
+    owner = repo.get_user_by_email("teacher@cuhk.edu.hk")
+    upload_path = tmp_path / "owner-reference.md"
+    upload_path.write_text("Owner-only reference.", encoding="utf-8")
+    repo.create_upload(
+        id="owner-upload",
+        user_id=owner["id"],
+        original_name="owner-reference.md",
+        media_type="text/markdown",
+        stored_path=str(upload_path),
+        sha256="a" * 64,
+        size_bytes=upload_path.stat().st_size,
+    )
+    calls = []
+
+    def fake_executor(_repo, _artifact_run, run, _preparation):
+        calls.append(run["id"])
+
+    app.dependency_overrides[get_run_executor] = lambda: fake_executor
+
+    response = client.post(
+        "/api/runs",
+        headers=other_headers,
+        json={
+            "task_text": "Try to use another user's upload.",
+            "intent": "code_homework",
+            "output_preference": "py",
+            "search_mode": "off",
+            "upload_ids": ["owner-upload"],
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "not_found"
+    assert calls == []
+    assert not workspace_root.exists()
+
+
 def test_run_api_rejects_missing_token(run_client):
     client, _repo, _workspace_root = run_client
 

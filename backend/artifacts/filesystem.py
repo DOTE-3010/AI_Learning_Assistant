@@ -180,3 +180,30 @@ class ArtifactWriter:
         )
         artifact_run.write_task(task_text)
         return artifact_run
+
+
+class UploadStore:
+    def __init__(self, workspace_root: str | os.PathLike[str] | None = None):
+        configured_root = workspace_root or os.getenv(WORKSPACE_ROOT_ENV) or "workspace"
+        self.root = Path(configured_root).resolve()
+        self.root.mkdir(parents=True, exist_ok=True)
+
+    def write_upload(
+        self,
+        *,
+        user_label: str,
+        upload_id: str,
+        original_name: str,
+        content: bytes,
+    ) -> Path:
+        path = (
+            self.root
+            / sanitize_segment(user_label, fallback="local")
+            / "uploads"
+            / sanitize_segment(upload_id, fallback="upload")
+            / sanitize_segment(original_name, fallback="upload.bin")
+        )
+        _assert_under_root(self.root, path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+        return path

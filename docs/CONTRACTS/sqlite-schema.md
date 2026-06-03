@@ -93,6 +93,7 @@ The exact host path may change, but it must be stable across restarts and includ
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | text primary key | upload id |
+| `user_id` | text nullable | owner; required for API-created uploads, nullable only for legacy migration compatibility |
 | `run_id` | text nullable | may be linked after upload |
 | `original_name` | text not null | sanitized on write |
 | `media_type` | text nullable | detected type |

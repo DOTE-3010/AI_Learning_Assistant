@@ -103,7 +103,7 @@ def build_run_context(
     revision_of_run_id: str | None = None,
     user_id: str | None = None,
 ) -> PreparedContext:
-    uploads = tuple(_load_upload_contexts(repo, upload_ids or []))
+    uploads = tuple(_load_upload_contexts(repo, upload_ids or [], user_id=user_id))
     sections = [ContextSection(name="task_text", text=task_text, kind=_task_kind(intent))]
     bundle_parts = ["[Task]\n" + task_text]
 
@@ -172,11 +172,18 @@ def build_run_context(
 
 
 def _load_upload_contexts(
-    repo: SQLiteRepository, upload_ids: list[str]
+    repo: SQLiteRepository,
+    upload_ids: list[str],
+    *,
+    user_id: str | None = None,
 ) -> list[UploadExtraction]:
     contexts: list[UploadExtraction] = []
     for upload_id in upload_ids:
-        upload = repo.get_upload(upload_id)
+        upload = (
+            repo.get_upload_for_user(upload_id, user_id)
+            if user_id
+            else repo.get_upload(upload_id)
+        )
         if not upload:
             raise ContextBuildError(
                 400,

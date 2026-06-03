@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-01
+Last Reviewed: 2026-06-03
 Status: Active
 -->
 
@@ -10,13 +10,15 @@ These are repo-specific rules. General programming hygiene and anything a linter
 
 ## Coding Rules
 
-- Implement one `docs/TASKS/NNN-*.md` at a time unless the human explicitly broadens scope.
+- Implement or test one `docs/TASKS/NNN-*.md` at a time unless the human explicitly broadens scope.
 - Keep module boundaries from `docs/ARCH.md` intact.
 - Prefer small repository/service interfaces over direct cross-module imports.
 - Do not add hard-coded API keys, default personal credentials, or real secrets.
 - Preserve `.tex` source even when PDF compilation fails.
 - Use structured parsers for PDFs, notebooks, JSON, and LaTeX manifests when available.
 - Do not keep new product behavior only in chat; update SPEC, ARCH, RULES, or CONTRACTS when durable knowledge changes.
+- During the QA phase, run the active QA checks first, report blockers and risks, then fix blockers and only human-approved risks.
+- Do not add new feature work during QA unless the human converts a QA finding into a follow-up task.
 
 ## Frontend Experience Rules
 
@@ -46,6 +48,11 @@ These are repo-specific rules. General programming hygiene and anything a linter
 
 ## Testing Rules
 
+- Whole-product QA follows this order: agent module smoke tests, agent module unit/functional tests, agent integration tests, then human E2E functional tests.
+- Agent-executed QA must report blockers and risks to the human after testing and before fixes. Agents then fix blockers and only the risks the human asks to fix.
+- A QA phase cannot advance while open blockers remain unless the human explicitly waives them.
+- Every QA fix must rerun the failed check and the nearest broader check that could catch a regression.
+- Save durable QA findings under `docs/QA_REPORTS/` when a phase finds blockers, risks, fixes, or human decisions.
 - Backend behavior needs focused tests for auth, settings, storage repositories, artifact writing, and pipeline routing.
 - Frontend UI changes need at least build verification and targeted component/interaction checks when a test framework exists.
 - Frontend experience changes that affect layout, typography, localization, or preview rendering need desktop and narrow-width visual QA, preferably through the in-app Browser or Playwright screenshots when available.

@@ -3,10 +3,10 @@ description: Project governance for AI Learning Assistant
 alwaysApply: true
 ---
 
-`AGENTS.md` is canonical. Read it before implementation, then identify the active task in `docs/TASKS/` and the contracts it cites.
+`AGENTS.md` is canonical. Read it before implementation or QA, then identify the active task in `docs/TASKS/` and the contracts it cites.
+
+The project is at the pre-QA gate. Read `docs/IMPLEMENTATION_SUMMARY.md` for the completed development ledger and `docs/QA_PLAN.md` for the required QA order, report format, and blocker/risk handling. Complete `docs/TASKS/000-resolve-upload-api-pre-qa-blocker.md` before running QA tasks.
 
 For frontend work, also read `docs/CONTRACTS/ui-workbench.md` and `docs/CONTRACTS/visual-assets.md`. The phase-1 UI is a preview-only conversational artifact workbench: production console beside a persistent artifact preview panel, with explicit artifact type selection and professional code/PDF previews.
 
-For task 018, treat old frontend appearance, layout, component hierarchy, and visual assets as disposable. Preserve backend-facing behavior and do not change backend code or contracts for appearance work.
-
-Keep changes bounded to the active task. If implementation needs to cross task scope or change a contract, update the governance asset first or ask the human.
+Keep changes bounded to the active task. For QA tasks, run checks first, report blockers and risks to the human, then fix blockers and human-approved risks. If a fix needs to cross task scope or change a contract, update the governance asset first or ask the human.

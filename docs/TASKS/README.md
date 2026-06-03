@@ -1,55 +1,54 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-02
+Last Reviewed: 2026-06-03
 Status: Active
 -->
 
-# Task: Maintain Task Queue Index
+# Task: Maintain Pre-QA And QA Task Queue Index
 
 ## Goal
 
-Keep the numbered task queue readable for rotating agents, especially when urgent tasks land out of numeric order.
+Keep the active task queue focused on the resolved pre-QA upload gate and whole-product QA after completion of the phase-1 implementation queue.
 
 ## Source Context
 
-- `AGENTS.md`: Implementation Discipline
-- `docs/SPEC.md`: Governance Acceptance
-- `docs/RULES.md`: Coding Rules
-- `docs/TASKS/*.md`
+- `AGENTS.md`: QA discipline and handoff rules.
+- `docs/IMPLEMENTATION_SUMMARY.md`: historical implementation ledger.
+- `docs/QA_PLAN.md`: pre-QA entry gate, required QA sequence, and report format.
+- `docs/SPEC.md`: phase-1 product acceptance criteria.
+- `docs/RULES.md`: testing, safety, and review rules.
 
 ## Scope
 
 ### Touch
 
 - This queue index.
-- Individual task files only when their source context, scope, or handoff notes become stale.
+- Pre-QA and QA task files under `docs/TASKS/`.
+- QA reports under `docs/QA_REPORTS/` when a QA phase completes.
 
 ### Do Not Touch
 
-- Do not replace the numbered task files.
-- Do not mark implementation tasks complete without either verification results or an explicit human/agent handoff.
-- Do not fold broad cleanup into a queue-index update.
+- Do not restore the old implementation tasks into the active queue.
+- Do not add new implementation tasks except the human-approved pre-QA upload blocker.
+- Do not mark a QA task complete without verification results and human risk disposition.
 
 ## Queue Status
 
-| State | Tasks | Notes |
-| --- | --- | --- |
-| Completed by queue position | `000`-`018` | Earlier rebuild foundations are treated as complete because the active queue has advanced past them. |
-| Landed but uncommitted | `019`, `020`, `021`, `023` | Current workspace includes revision-run support, Electron Docker shell scaffold, Docker compose/launcher runtime wiring, and dynamic revision-context budgeting. Review or commit before broad cleanup if a cleaner diff stack is desired. |
-| Completed in current workspace | `022-end-to-end-smoke-and-legacy-cleanup` | End-to-end smoke script, README/runtime docs, launcher health wait, persistent Docker model secret file, mock provider smoke mode, and confirmed legacy cleanup are landed but uncommitted. |
-| Next | Future task | Implement backend upload API or split additional cleanup if review finds compatibility surfaces still needed. |
-
-## Open Follow-Up Decisions
-
-- Exact default Qwen endpoint/model/window values remain open until provider documentation is pinned.
-- Web-search provider choice and rate/cost limits remain open.
-- Native no-Docker packaging, signed macOS app distribution, and app icon/name polish are future-phase decisions.
+| State | Tasks | Owner | Notes |
+| --- | --- | --- | --- |
+| Resolved pre-QA gate | `000-resolve-upload-api-pre-qa-blocker` | Agent | Verified on 2026-06-03; upload API blocker no longer prevents QA start. |
+| Current QA phase | `001-qa-agent-module-smoke-tests` | Agent | Establish that modules/build/runtime config can start. |
+| Next | `002-qa-agent-module-functional-tests` | Agent | Run after smoke blockers are fixed or waived. |
+| Next | `003-qa-agent-integration-tests` | Agent | Run after module functional blockers are fixed or waived. |
+| Final QA gate | `004-qa-human-e2e-functional-tests` | Human | Human executes product workflows; agents only prepare checklist and fix reported issues. |
 
 ## Acceptance Criteria
 
-- A fresh agent can identify the next implementation task without relying on chat history.
-- Out-of-order completed tasks are recorded without renumbering the queue.
-- The index does not weaken the bounded scope of individual task files.
+- A fresh agent can identify the active QA phase without relying on chat history.
+- Old completed implementation tasks are absent from `docs/TASKS/`.
+- The resolved backend upload API gate is represented before QA tasks, not as an accepted QA risk.
+- The QA queue preserves the required order: agent smoke, agent unit/functional, agent integration, human E2E.
+- Agent-executed QA tasks require blocker/risk reporting before fixes and retests after fixes.
 
 ## Verification
 
@@ -57,5 +56,5 @@ Keep the numbered task queue readable for rotating agents, especially when urgen
 
 ## Handoff Notes
 
-- Cursor should review: whether the queue status matches the actual diff stack before cleanup.
-- Human should decide: whether to commit the landed `019`/`020`/`023` stack before or after task `021`.
+- Cursor should review: whether the queue matches `docs/QA_PLAN.md`, keeps the resolved upload gate ahead of QA, and avoids reintroducing old implementation backlog.
+- Human should decide: which reported QA risks deserve fixes before the human E2E gate.

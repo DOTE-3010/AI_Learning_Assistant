@@ -21,7 +21,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.engine import Engine
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 SQLITE_PATH_ENV = "APP_SQLITE_PATH"
 DEFAULT_SQLITE_PATH = Path("data/app.sqlite")
 
@@ -105,6 +105,7 @@ uploads = Table(
     "uploads",
     metadata,
     Column("id", Text, primary_key=True),
+    Column("user_id", Text, ForeignKey("users.id"), nullable=True),
     Column("run_id", Text, ForeignKey("runs.id"), nullable=True),
     Column("original_name", Text, nullable=False),
     Column("media_type", Text, nullable=True),
@@ -183,7 +184,12 @@ def initialize_database(engine: Engine) -> None:
     if current_version < 2:
         with engine.begin() as connection:
             _migrate_1_to_2(connection)
-            connection.exec_driver_sql("PRAGMA user_version = 2")
+            current_version = 2
+
+    if current_version < 3:
+        with engine.begin() as connection:
+            _migrate_2_to_3(connection)
+            connection.exec_driver_sql("PRAGMA user_version = 3")
 
 
 def _migrate_1_to_2(connection: Any) -> None:
@@ -193,6 +199,15 @@ def _migrate_1_to_2(connection: Any) -> None:
     }
     if "revision_of_run_id" not in columns:
         connection.exec_driver_sql("ALTER TABLE runs ADD COLUMN revision_of_run_id text")
+
+
+def _migrate_2_to_3(connection: Any) -> None:
+    columns = {
+        row._mapping["name"]
+        for row in connection.exec_driver_sql("PRAGMA table_info(uploads)").all()
+    }
+    if "user_id" not in columns:
+        connection.exec_driver_sql("ALTER TABLE uploads ADD COLUMN user_id text")
 
 
 def _now() -> str:
@@ -490,6 +505,7 @@ class SQLiteRepository:
         stored_path: str,
         sha256: str,
         size_bytes: int,
+        user_id: str | None = None,
         run_id: str | None = None,
         media_type: str | None = None,
         id: str | None = None,
@@ -499,6 +515,7 @@ class SQLiteRepository:
             uploads,
             {
                 "id": id or _new_id(),
+                "user_id": user_id,
                 "run_id": run_id,
                 "original_name": original_name,
                 "media_type": media_type,
@@ -511,6 +528,16 @@ class SQLiteRepository:
 
     def get_upload(self, upload_id: str) -> dict[str, Any] | None:
         return self._get_by_id(uploads, upload_id)
+
+    def get_upload_for_user(self, upload_id: str, user_id: str) -> dict[str, Any] | None:
+        with self.engine.connect() as connection:
+            row = connection.execute(
+                select(uploads).where(
+                    uploads.c.id == upload_id,
+                    uploads.c.user_id == user_id,
+                )
+            ).first()
+            return _row_to_dict(row)
 
     def create_artifact(
         self,

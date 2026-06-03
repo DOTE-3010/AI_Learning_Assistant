@@ -47,7 +47,7 @@ if [ "${backend_ready}" -ne 1 ]; then
   exit 1
 fi
 
-echo "[smoke] Exercising auth, model settings, run creation, manifest, and workbench."
+echo "[smoke] Exercising auth, uploads, model settings, run creation, manifest, and workbench."
 curl_json() {
   local method="$1"
   local path="$2"
@@ -81,7 +81,10 @@ import sys
 with open(sys.argv[1], encoding="utf-8") as handle:
     value = json.load(handle)
 for part in sys.argv[2].split("."):
-    value = value[part]
+    if isinstance(value, list):
+        value = value[int(part)]
+    else:
+        value = value[part]
 print(value)
 PY
 }
@@ -100,6 +103,15 @@ AUTH_HEADER="Authorization: Bearer ${TOKEN}"
 status="$(curl_json GET /api/auth/me "${TMP_ROOT}/me.json" "__NO_BODY__" -H "${AUTH_HEADER}")"
 assert_status "${status}" 200 "${TMP_ROOT}/me.json"
 
+printf "# Smoke reference\nUse this uploaded note in the mocked run.\n" > "${TMP_ROOT}/reference.md"
+status="$(curl -sS -o "${TMP_ROOT}/upload.json" -w "%{http_code}" -X POST "${BACKEND_URL}/api/uploads" \
+  -H "${AUTH_HEADER}" \
+  -F "files=@${TMP_ROOT}/reference.md;type=text/markdown;filename=reference.md")"
+assert_status "${status}" 201 "${TMP_ROOT}/upload.json"
+UPLOAD_ID="$(json_get "${TMP_ROOT}/upload.json" uploads.0.id)"
+status="$(curl_json GET "/api/uploads/${UPLOAD_ID}" "${TMP_ROOT}/fetched-upload.json" "__NO_BODY__" -H "${AUTH_HEADER}")"
+assert_status "${status}" 200 "${TMP_ROOT}/fetched-upload.json"
+
 PROFILE_BODY="{\"display_name\":\"Smoke Mock Qwen\",\"provider\":\"openai_compatible\",\"base_url\":\"${MODEL_BASE_URL}\",\"model\":\"${MODEL_NAME}\",\"api_key\":\"smoke-profile-key\",\"context_window_hint\":256000,\"supports_streaming\":true}"
 status="$(curl_json PUT /api/settings/model-profiles/default "${TMP_ROOT}/profile.json" "${PROFILE_BODY}" -H "${AUTH_HEADER}")"
 assert_status "${status}" 200 "${TMP_ROOT}/profile.json"
@@ -107,7 +119,7 @@ PROFILE_ID="$(json_get "${TMP_ROOT}/profile.json" id)"
 status="$(curl_json POST /api/settings/model-profiles/test "${TMP_ROOT}/profile-test.json" "{}" -H "${AUTH_HEADER}")"
 assert_status "${status}" 200 "${TMP_ROOT}/profile-test.json"
 
-RUN_BODY="{\"task_text\":\"Write a tiny Python program that prints a mocked smoke-test result.\",\"intent\":\"code_homework\",\"output_preference\":\"py\",\"search_mode\":\"off\",\"model_profile_id\":\"${PROFILE_ID}\",\"upload_ids\":[],\"options\":{}}"
+RUN_BODY="{\"task_text\":\"Write a tiny Python program that prints a mocked smoke-test result.\",\"intent\":\"code_homework\",\"output_preference\":\"py\",\"search_mode\":\"off\",\"model_profile_id\":\"${PROFILE_ID}\",\"upload_ids\":[\"${UPLOAD_ID}\"],\"options\":{}}"
 status="$(curl_json POST /api/runs "${TMP_ROOT}/run.json" "${RUN_BODY}" -H "${AUTH_HEADER}")"
 assert_status "${status}" 202 "${TMP_ROOT}/run.json"
 RUN_ID="$(json_get "${TMP_ROOT}/run.json" id)"
@@ -119,6 +131,7 @@ assert_status "${status}" 200 "${TMP_ROOT}/event.json"
 status="$(curl -fsS -o "${TMP_ROOT}/ui.html" -w "%{http_code}" "${BACKEND_URL}/ui/")"
 assert_status "${status}" 200 "${TMP_ROOT}/ui.html"
 python3 - "${TMP_ROOT}" <<'PY'
+import hashlib
 import json
 import os
 import pathlib
@@ -130,6 +143,8 @@ workspace_dir = pathlib.Path(os.environ["AILA_WORKSPACE_DIR"]).resolve()
 
 register = json.loads((tmp_root / "register.json").read_text(encoding="utf-8"))
 me = json.loads((tmp_root / "me.json").read_text(encoding="utf-8"))
+upload_response = json.loads((tmp_root / "upload.json").read_text(encoding="utf-8"))
+fetched_upload = json.loads((tmp_root / "fetched-upload.json").read_text(encoding="utf-8"))
 profile = json.loads((tmp_root / "profile.json").read_text(encoding="utf-8"))
 profile_test = json.loads((tmp_root / "profile-test.json").read_text(encoding="utf-8"))
 run = json.loads((tmp_root / "run.json").read_text(encoding="utf-8"))
@@ -138,6 +153,13 @@ event = json.loads((tmp_root / "event.json").read_text(encoding="utf-8"))
 
 assert register["role"] == "teacher", register
 assert me == {"email": register["email"], "role": "teacher"}, me
+upload = upload_response["uploads"][0]
+assert fetched_upload == upload, fetched_upload
+assert upload["id"].startswith("upl_"), upload
+assert upload["original_name"] == "reference.md", upload
+assert upload["media_type"] == "text/markdown", upload
+assert upload["sha256"] == hashlib.sha256((tmp_root / "reference.md").read_bytes()).hexdigest()
+assert "stored_path" not in json.dumps(upload_response), upload_response
 assert "smoke-profile-key" not in json.dumps(profile), profile
 assert profile["api_key_ref"] == "env:MODEL_API_KEY", profile
 assert profile_test["ok"] is True, profile_test
@@ -178,6 +200,7 @@ assert asset_paths, ui_html[:500]
 
 print(json.dumps({
     "email": register["email"],
+    "upload_id": upload["id"],
     "run_id": run["id"],
     "manifest": str(manifest_path),
     "workbench_assets_checked": len(asset_paths[:2]),

@@ -36,8 +36,13 @@ def test_initialize_database_creates_contract_tables(tmp_path):
             row._mapping["name"]
             for row in connection.exec_driver_sql("PRAGMA table_info(runs)").all()
         }
+        upload_columns = {
+            row._mapping["name"]
+            for row in connection.exec_driver_sql("PRAGMA table_info(uploads)").all()
+        }
     assert EXPECTED_TABLES.issubset(table_names)
     assert "revision_of_run_id" in run_columns
+    assert "user_id" in upload_columns
 
 
 def test_repository_inserts_and_reads_representative_metadata(tmp_path):
@@ -97,6 +102,7 @@ def test_repository_inserts_and_reads_representative_metadata(tmp_path):
     )
     upload = repo.create_upload(
         id="upload-1",
+        user_id=user["id"],
         run_id=run["id"],
         original_name="brief.pdf",
         media_type="application/pdf",
@@ -128,6 +134,8 @@ def test_repository_inserts_and_reads_representative_metadata(tmp_path):
     assert repo.get_run(run["id"])["revision_of_run_id"] is None
     assert repo.get_run(revision_run["id"])["revision_of_run_id"] == run["id"]
     assert repo.get_upload(upload["id"])["stored_path"] == "workspace/uploads/brief.pdf"
+    assert repo.get_upload_for_user(upload["id"], user["id"])["id"] == upload["id"]
+    assert repo.get_upload_for_user(upload["id"], "other-user") is None
     assert repo.get_artifact(artifact["id"])["kind"] == "manifest"
     assert repo.get_citation(citation["id"])["url"] == "https://example.edu/reference"
     assert repo.list_citations_for_run(run["id"])[0]["id"] == citation["id"]
@@ -166,3 +174,34 @@ def test_initialize_database_migrates_v1_runs_with_revision_column(tmp_path):
             for row in connection.exec_driver_sql("PRAGMA table_info(runs)").all()
         }
     assert "revision_of_run_id" in run_columns
+
+
+def test_initialize_database_migrates_v2_uploads_with_user_id_column(tmp_path):
+    db_path = tmp_path / "legacy-v2.sqlite"
+    engine = create_sqlite_engine(db_path)
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            """
+            create table uploads (
+                id text primary key,
+                run_id text nullable,
+                original_name text not null,
+                media_type text nullable,
+                stored_path text not null,
+                sha256 text not null,
+                size_bytes integer not null,
+                created_at text not null
+            )
+            """
+        )
+        connection.exec_driver_sql("PRAGMA user_version = 2")
+
+    initialize_database(engine)
+
+    assert get_schema_version(engine) == SCHEMA_VERSION
+    with engine.connect() as connection:
+        upload_columns = {
+            row._mapping["name"]
+            for row in connection.exec_driver_sql("PRAGMA table_info(uploads)").all()
+        }
+    assert "user_id" in upload_columns

@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-01
+Last Reviewed: 2026-06-03
 Status: Active
 -->
 
@@ -169,6 +169,7 @@ Future runtimes must preserve the same contracts:
 5. Add revision-run support if needed for follow-up refinement.
 6. Add Electron shell and Docker runtime management.
 7. Remove legacy Postgres/Mongo/course/chat surfaces after their replacements are verified.
+8. Execute whole-product QA in the order defined by `docs/QA_PLAN.md`: agent module smoke, agent module functional, agent integration, then human E2E functional testing.
 
 ## Tradeoffs
 

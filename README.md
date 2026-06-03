@@ -55,9 +55,12 @@ Tracked source contains only placeholder model defaults. Real Qwen/OpenAI-compat
 
 The end-to-end smoke script sets `AILA_MOCK_MODEL_PROVIDER=1` and uses temporary data/workspace mounts, so it exercises the real API and artifact pipeline without live model credentials.
 
+## QA Entry
+
+- `docs/TASKS/000-resolve-upload-api-pre-qa-blocker.md` implements `/api/uploads` and adds upload coverage to the mocked smoke path. Run that task's verification commands before starting `docs/TASKS/001-qa-agent-module-smoke-tests.md`.
+
 ## Known Gaps
 
-- `docs/CONTRACTS/uploads.md` defines `/api/uploads`, and the frontend already attempts to call it when files are attached. The backend upload API is not implemented yet, so the task 022 smoke path intentionally avoids uploads.
 - Native no-Docker packaging, signed macOS app distribution, and hosted deployment remain future phases.
 
 Read `AGENTS.md`, `docs/SPEC.md`, `docs/ARCH.md`, `docs/RULES.md`, and `docs/CONTRACTS/` before implementing a task.
