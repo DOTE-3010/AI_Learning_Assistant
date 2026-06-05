@@ -4,18 +4,18 @@ Last Reviewed: 2026-06-05
 Status: Active
 -->
 
-# Task: Maintain Pre-E2E Repair Task Queue
+# Task: Maintain Post-Human-E2E Repair Task Queue
 
 ## Goal
 
-Keep the active task queue empty after completion of the phase-1 implementation queue, agent QA phases, first human-selected E2E usability fixes, and the pre-E2E runtime/contract repair pass.
+Keep the active task queue aligned with the 2026-06-05 human E2E completion findings and the durable governance contracts.
 
 ## Source Context
 
 - `AGENTS.md`: QA discipline and handoff rules.
 - `docs/IMPLEMENTATION_SUMMARY.md`: historical implementation ledger.
 - `docs/QA_PLAN.md`: QA entry gates, required phase order, and report format.
-- `docs/QA_REPORTS/2026-06-03-human-e2e.md`: completed human-selected fixes and remaining E2E retest context.
+- `docs/QA_REPORTS/2026-06-05-human-e2e-completion.md`: completed human E2E results and the new blocker/risk queue.
 - `docs/SPEC.md`: phase-1 product acceptance criteria.
 - `docs/RULES.md`: testing, safety, and review rules.
 
@@ -30,25 +30,25 @@ Keep the active task queue empty after completion of the phase-1 implementation 
 ### Do Not Touch
 
 - Do not restore old completed pre-QA, agent QA, or first human E2E fix tasks into the active queue.
-- Do not add new implementation tasks except human-approved pre-E2E blockers/risks converted into bounded follow-up fix tasks.
+- Do not add new implementation tasks except human-approved post-human-E2E blockers/risks converted into bounded follow-up fix tasks.
 - Do not mark a repair task complete without verification results and human risk disposition.
 
 ## Queue Status
 
 | State | Tasks | Owner | Notes |
 | --- | --- | --- | --- |
-| Archived history | Completed pre-QA and agent QA tasks | Agent | The old numbered task queue was cleared on 2026-06-05 by human decision. Durable results remain in `docs/QA_REPORTS/` and `docs/IMPLEMENTATION_SUMMARY.md`. |
-| Completed first human-selected fix pass | Workbench usability/provider/LaTeX fixes | Agent/Human | Recorded in `docs/QA_REPORTS/2026-06-03-human-e2e.md`; human will continue manual E2E from product knowledge rather than a checklist task. |
-| Completed pre-E2E repair | Cleared from active task files | Agent | Completed on 2026-06-05. Fixed CORS scope, run lifecycle contract truthfulness, and automated smoke rerun friction; results are recorded in `docs/QA_REPORTS/2026-06-05-pre-e2e-runtime-contract-repairs.md`. |
-| Next phase | Human E2E continuation | Human | Resume manual E2E from the product workflows and completed QA history in `docs/QA_REPORTS/`. |
+| Active high priority | `001`-`005` | Agent | Fix truthful status/progress, artifact access, real previews, PDF page preview, and LaTeX diagram handling. |
+| Active medium priority | `006`-`011` | Agent | Add timing instrumentation/triage and course context containers. |
+| Deferred low priority | Onboarding/tutorial | Human/Agent | Recorded in `docs/SPEC.md`; no implementation task until the human chooses a tutorial form. |
+| Archived history | Completed implementation, pre-QA, agent QA, first E2E fixes, and pre-E2E repair tasks | Agent | Durable results remain in `docs/QA_REPORTS/` and `docs/IMPLEMENTATION_SUMMARY.md`. |
 
 ## Acceptance Criteria
 
-- A fresh agent can identify that there are no active numbered tasks and that the next step is human E2E continuation.
-- Old completed implementation, pre-QA, agent QA, and first human E2E fix tasks are absent from `docs/TASKS/`.
+- A fresh agent can identify the active post-human-E2E numbered tasks and execute them in priority order.
+- Old completed implementation, pre-QA, agent QA, first human E2E fix, and pre-E2E repair tasks are absent from `docs/TASKS/`.
 - Completed QA history remains recoverable from `docs/QA_REPORTS/`.
-- The repair task was bounded, had explicit non-goals, and did not require secret handling.
-- Agent-executed repair work recorded verification commands and residual-risk handoff before human E2E resumes.
+- Each active repair/follow-up task is bounded, has explicit non-goals, and names verification commands.
+- Agent-executed repair work records verification commands and residual-risk handoff before release readiness is claimed.
 
 ## Verification
 
@@ -56,5 +56,5 @@ Keep the active task queue empty after completion of the phase-1 implementation 
 
 ## Handoff Notes
 
-- Cursor should review: whether the queue is empty except for this index and avoids reintroducing old backlog.
-- Human decided on 2026-06-05: phase 1 may continue with request-synchronous run execution for release readiness.
+- Cursor should review: whether active tasks remain bounded and whether high-priority blockers are completed before medium-priority follow-ups.
+- Human decided on 2026-06-05: all generation functions pass, but release readiness requires high-priority repair tasks or explicit human waiver.

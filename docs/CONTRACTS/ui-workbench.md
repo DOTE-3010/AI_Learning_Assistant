@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-03
+Last Reviewed: 2026-06-05
 Status: Active
 -->
 
@@ -21,6 +21,7 @@ After auth, the user lands directly in a split artifact studio:
 - production console for prompts, run commands, follow-up refinements, status, and warnings
 - explicit artifact type selector
 - optional file upload area
+- lightweight course selector with an undeletable default "Just Asking" course
 - model/search controls
 - run button
 - visual context budget indicator
@@ -49,6 +50,8 @@ The authenticated workbench must provide three stable regions:
 | Production console | prompt composer, artifact type, uploads, search/model controls, run button, follow-up requests, run history, stage messages | May look chat-like, but messages should read as commands, progress, warnings, and refinement history. |
 | Artifact preview panel | current generated artifact, placeholder/running/succeeded/failed preview states, tabs/files, copy/open/reveal affordances | Must be visually independent from the console so output is not buried in the transcript. |
 | Utility/status surface | context dial, model status, run status, lightweight errors | Can be part of either pane as long as it stays visible during generation. |
+
+The course selector belongs in the production console or utility/status surface. It must stay lightweight: default "Just Asking" is always available and context-disabled, ordinary courses can be selected/renamed/archived, and archived courses do not clutter the primary selector.
 
 Responsive behavior:
 
@@ -99,6 +102,8 @@ Fallback order for PDF-producing artifacts:
 
 Raw LaTeX is an advanced inspection view, not the default preview for essay, slides, or cheat-sheet artifacts.
 
+Current implementation assessment from 2026-06-05: true PDF page rendering is moderate engineering difficulty. The Vite frontend currently has no PDF renderer dependency and no authenticated artifact-byte endpoint. A safe implementation should first add artifact access, then render PDFs through PDF.js display APIs or an equivalent safe blob/canvas renderer with correct worker/static asset handling.
+
 ## Run Status Presentation
 
 The workbench may consume canonical backend stage values such as `queued`, `compose`, `route`, `context`, `generate`, `validate`, and `manifest`, but it must not present them as an unexplained row of bare technical words.
@@ -108,6 +113,8 @@ The workbench may consume canonical backend stage values such as `queued`, `comp
 - Canonical stage identifiers may appear as secondary technical detail, but the primary label should explain the work being performed.
 - If a stage item is clickable, it must reveal a real detail panel, log excerpt, or status explanation. If it is not interactive, it must not use visual treatment that implies tabs or buttons.
 - Status labels such as `Idle`, `Ready`, and `Running` must be visually grouped with their meaning and localized; they must not float near unrelated stages in a way that suggests a broken control strip.
+- Idle, ready, succeeded, failed, and cancelled indicators must be static. Only active queued/running generation may use looping spinner or progress motion.
+- Long-running queued/running generation should show an approximate comfort progress bar where the composer/run note would otherwise say that a task brief is required. The progress bar must match the warm editorial visual system and must not claim exact provider, token, or compile percentage unless such progress is truly measured.
 
 ## Preview Tabs And File Views
 
@@ -119,6 +126,7 @@ Preview tabs or file-view controls such as Code, Source, Logs, and Manifest must
 - Manifest views should show a compact manifest skeleton or metadata summary before real `manifest.json` content is available.
 - Logs views should show pending/run log state before logs exist, and real sanitized logs or a clear empty-log message after a run.
 - Source/code views should show generated content when available; otherwise they should show a demo snippet, expected output description, or waiting state rather than leaving the old panel unchanged.
+- After a run succeeds, enabled primary/source/log/manifest views must read real generated files through the artifact access API. Static demo code or skeleton PDF pages must not remain the apparent output when the corresponding artifact exists.
 
 ## Visual Direction
 
@@ -184,6 +192,7 @@ Hover/focus state:
 - Code output preference control for `.py` vs `.ipynb` when `code_homework` is selected.
 - Search mode: `auto`, `on`, `off`.
 - Upload control supporting multiple files for cheat sheets.
+- Course selector/management control supporting the default context-disabled "Just Asking" course and ordinary user-created courses.
 - Prompt composer with a clear run/regenerate action.
 - Follow-up/refinement composer once a run exists.
 - Run status display with stage-level progress.
@@ -199,6 +208,8 @@ The UI consumes:
 - Model settings endpoints from `model-settings.md`.
 - Generation run endpoints/events from `generation-pipeline.md`.
 - Artifact path/manifest outputs from `artifact-filesystem.md`.
+- Artifact byte and metadata endpoints from `artifact-access.md`.
+- Course list/selection behavior from `course-context.md`.
 
 The UI must not:
 
@@ -234,6 +245,9 @@ The UI must not:
 - Code/Source/Logs/Manifest controls either render meaningful selected content or are visibly disabled; no enabled preview control is inert.
 - Code output previews with syntax highlighting, file affordances, copy action, and status/error treatment.
 - PDF-producing outputs preview as rendered/PDF-like pages when possible and keep source/log/file access visible when rendering fails.
+- Succeeded output states are backed by real generated artifacts; placeholder/demo previews are limited to no-output, running, or renderer-failure states.
+- Status motion is truthful: idle and completed are static; queued/running can animate and show approximate comfort progress.
+- The workbench exposes the default context-disabled "Just Asking" course and ordinary course selection without making course administration the main navigation model.
 - Follow-up requests create a visible revision/run history and refresh the preview without losing access to the previous output.
 - A failed run surfaces a human-readable message without leaking secrets.
 - Layout works at desktop and narrow widths without text overlap or incoherent pane stacking.

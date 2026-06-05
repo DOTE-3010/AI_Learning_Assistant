@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-03
+Last Reviewed: 2026-06-05
 Status: Active
 -->
 
@@ -20,6 +20,8 @@ These are repo-specific rules. General programming hygiene and anything a linter
 - Do not keep new product behavior only in chat; update SPEC, ARCH, RULES, or CONTRACTS when durable knowledge changes.
 - During the QA phase, run the active QA checks first, report blockers and risks, then fix blockers and only human-approved risks.
 - Do not add new feature work during QA unless the human converts a QA finding into a follow-up task.
+- The 2026-06-05 human E2E findings are human-approved post-E2E repair work. Complete high-priority status/progress, real preview, and LaTeX diagram-safety tasks before medium-priority course context and performance triage unless the human changes the order.
+- Before performance optimization, add or use timing instrumentation that separates local preparation, upload/context work, model-provider calls, LaTeX compilation/repair, and artifact persistence. If live runs spend more than half of wall time inside the external model provider, report that bottleneck and avoid speculative local rewrites.
 
 ## Frontend Experience Rules
 
@@ -40,6 +42,10 @@ These are repo-specific rules. General programming hygiene and anything a linter
 - Avoid UI text that explains the product in marketing language. The interface should show the workbench through controls, status, previews, and artifacts.
 - Do not present backend stage/status codes as a bare unexplained word strip. Localize human-readable stage labels and make status surfaces clearly non-interactive or genuinely interactive.
 - Do not ship enabled tabs, chips, or buttons that silently do nothing. Preview controls must change visible content, show an intentional empty/running/demo state, or be disabled with clear affordance.
+- Idle, ready, succeeded, failed, and cancelled status indicators must be visually static. Only active queued/running generation states may use looping motion such as a spinner.
+- Long-running queued/running states should show an approximate comfort progress indicator in the warm editorial visual style. It must not claim exact provider, token, or compile percentage unless the backend supplies measured progress for that stage.
+- Completed previews must render real generated output content when an artifact file exists. Static demo snippets and PDF skeletons are acceptable only before output exists or as a clearly labeled renderer fallback.
+- PDF preview work must use authenticated artifact byte access; do not rely on frontend access to absolute host paths as a rendering strategy.
 
 ## Architecture Rules
 
@@ -84,6 +90,7 @@ These are repo-specific rules. General programming hygiene and anything a linter
 - Syntax highlighting, PDF preview, and animation dependencies are acceptable when they replace fragile homegrown renderers and stay inside the frontend boundary.
 - Do not add backend dependencies to satisfy frontend appearance work.
 - New LaTeX or PDF tooling must work inside the Docker runtime.
+- LaTeX prompts and repair flows must not allow final PDFs to contain unrendered diagram placeholders such as `[Diagram: ...]`. Complex precision diagrams should be omitted or summarized in prose unless the implementation can generate and compile a reliable LaTeX/TikZ representation.
 
 ## Contract Rules
 

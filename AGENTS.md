@@ -19,7 +19,9 @@ Start with these files before implementing or testing:
 
 - Development is complete for the phase-1 implementation queue. Old implementation task files were removed from `docs/TASKS/` on 2026-06-03 and summarized in `docs/IMPLEMENTATION_SUMMARY.md`.
 - The pre-QA `/api/uploads` blocker, agent QA phases, and first human-selected E2E usability fixes were completed and recorded under `docs/QA_REPORTS/`.
-- On 2026-06-05 the human cleared the old numbered QA task queue from `docs/TASKS/`. Active work now starts at `docs/TASKS/001-pre-e2e-runtime-contract-repairs.md` before the human resumes manual E2E testing.
+- On 2026-06-05 the human completed manual E2E functional testing. All generation functions passed, but the human promoted three high-priority product blockers into the active repair queue: truthful running/complete status motion with a comfort progress bar, real generated-output previews, and LaTeX diagram-placeholder/complex-diagram avoidance.
+- Medium-priority follow-up work now covers optional course context containers and performance bottleneck triage. Low-priority onboarding/tutorial work is recorded in `docs/SPEC.md` as future product direction, not an active implementation task.
+- Active work now starts from the numbered post-human-E2E repair tasks in `docs/TASKS/`. Complete high-priority tasks before medium-priority tasks unless the human explicitly changes the order.
 - Preserve the core idea: a teaching-oriented artifact generator for homework code, essay PDFs, Beamer slides, and dense cheat sheets.
 - Preserve CUHK-style weak auth: `@cuhk.edu.hk` and `@link.cuhk.edu.hk` registration/login remain part of the product and should be shaped so stronger auth can replace it later.
 - Replace the default model path with Qwen through an OpenAI-compatible provider abstraction. Do not hard-code development API keys.

@@ -22,7 +22,9 @@ The product should feel like a polished consumer creative tool, not a generic ad
 
 The phase-1 implementation queue is complete as of 2026-06-03 and has been summarized in `docs/IMPLEMENTATION_SUMMARY.md`. Human review then identified the missing backend upload API as a pre-QA blocker because uploads are part of the phase-1 product acceptance criteria.
 
-The upload blocker was resolved on 2026-06-03. Whole-product QA is governed by `docs/QA_PLAN.md`; agent QA phases and the first human-selected E2E usability fix pass were completed and recorded under `docs/QA_REPORTS/`. On 2026-06-05 the human cleared the old numbered QA task queue and replaced it with `docs/TASKS/001-pre-e2e-runtime-contract-repairs.md` before resuming manual E2E. QA must validate this specification before release readiness is declared. Known gaps or risks found during QA should be reported to the human, then either fixed, accepted as risk, or moved to future-phase scope by explicit human decision.
+The upload blocker was resolved on 2026-06-03. Whole-product QA is governed by `docs/QA_PLAN.md`; agent QA phases and the first human-selected E2E usability fix pass were completed and recorded under `docs/QA_REPORTS/`. On 2026-06-05 the human completed manual E2E functional testing: all four generation capabilities passed, but three high-priority product blockers and two medium-priority follow-up areas were identified. Active work now follows the post-human-E2E repair queue in `docs/TASKS/`, with the human findings recorded in `docs/QA_REPORTS/2026-06-05-human-e2e-completion.md`.
+
+Release readiness requires the high-priority blockers to be fixed or explicitly waived by the human: truthful run status motion plus a comfort progress bar, real generated-output previews, and LaTeX diagram-placeholder/complex-diagram avoidance. Medium-priority course context and performance bottleneck work may proceed after the high-priority queue unless the human reorders it.
 
 ## Users
 
@@ -45,6 +47,9 @@ The upload blocker was resolved on 2026-06-03. Whole-product QA is governed by `
 - Present generated artifacts in a side-by-side workbench inspired by the "chat plus artifact panel" pattern: conversation and controls on one side, current artifact preview on the other.
 - Make chat feel like a production console, not a customer-support widget: user requests, run stages, warnings, and follow-up refinements should appear as actionable work history.
 - Provide professional preview renderers for code, notebooks, PDFs, Beamer slides, and dense cheat sheets even when phase 1 does not allow direct editing.
+- Show real generated artifact content after a run completes. Code and source/log/manifest tabs must read generated files rather than leaving static demo content in place; PDF-producing artifacts should render real PDF pages where feasible.
+- Present run status honestly: idle and completed states use static indicators, active generation uses motion, and long-running generation shows a warm editorial comfort progress indicator that is clearly approximate rather than a precise provider progress percentage.
+- Support optional course containers that can add compact historical context to generation without making course management the primary navigation model.
 - Support English, Simplified Chinese (`zh-Hans`), and Traditional Chinese (`zh-Hant`) UI copy for the authenticated workbench, using serious written language rather than casual marketing or support-chat phrasing.
 
 ## Non-Goals
@@ -62,14 +67,16 @@ The upload blocker was resolved on 2026-06-03. Whole-product QA is governed by `
 2. User opens the desktop app and configures a model profile, or relies on a local development profile when present.
 3. User lands in a split workbench with the production console on the left and artifact preview on the right.
 4. User chooses the desired artifact type from an explicit control.
-5. User enters the assignment/task text and optionally attaches files.
-6. The app estimates context budget, decides whether web search is useful, and shows a compact visual status indicator.
-7. The backend runs the selected artifact pipeline and streams stage status to the UI.
-8. The right-side artifact panel moves from placeholder, to running preview state, to generated code/PDF/slides/cheat-sheet preview.
-9. User asks for follow-up refinements in the console; the app creates a new run or revision while preserving the previous output in history.
+5. User optionally selects a course context. If no real course is selected, the app uses the default "Just Asking" course without adding course memory to the model context.
+6. User enters the assignment/task text and optionally attaches files.
+7. The app estimates context budget, decides whether web search is useful, and shows a compact visual status indicator.
+8. The backend runs the selected artifact pipeline and streams stage status to the UI.
+9. The right-side artifact panel moves from placeholder, to running preview state with approximate comfort progress, to generated code/PDF/slides/cheat-sheet preview backed by real output files.
+10. User asks for follow-up refinements in the console; the app creates a new run or revision while preserving the previous output in history.
    Revision runs should carry enough prior artifact context to support meaningful refinements, with the included prior source/log budget adapting to the selected model profile's context window rather than a fixed legacy cap.
-10. The app writes a structured output folder containing source files, PDFs when applicable, metadata, citations, and logs.
-11. User reviews, opens, copies, downloads, reveals, or regenerates the artifact. Direct in-app editing is out of scope for phase 1.
+11. The app writes a structured output folder containing source files, PDFs when applicable, metadata, citations, and logs.
+12. For non-default selected courses, the app updates a compact `course_context.md` summary after successful runs so later runs may use prior questions and summarized materials as optional reference.
+13. User reviews, opens, copies, downloads, reveals, or regenerates the artifact. Direct in-app editing is out of scope for phase 1.
 
 ## Functional Requirements
 
@@ -81,7 +88,9 @@ The upload blocker was resolved on 2026-06-03. Whole-product QA is governed by `
 - File upload parsing must support text, Markdown, Python, notebooks, and PDF text extraction as first-class inputs.
 - Cheat-sheet generation must accept multiple slide PDFs and a target A4 page count.
 - LaTeX pipelines must save `.tex` even when PDF compilation fails.
+- LaTeX pipelines must prevent non-rendered image placeholders such as bracketed diagram notes from appearing in final PDFs. Complex, high-precision diagrams should be omitted or converted to concise prose when reliable LaTeX/TikZ generation is unlikely; simple TikZ diagrams are acceptable only when they compile.
 - Every run must create durable metadata that links inputs, model profile, search mode, output files, and status.
+- Runs may optionally belong to a course container. Non-default courses can provide a compact Markdown context summary as low-priority reference input; the default "Just Asking" course never contributes course context.
 - The Electron shell must detect Docker Desktop availability and guide startup without requiring Python or Node on the host.
 
 ## UX Requirements
@@ -99,15 +108,18 @@ The upload blocker was resolved on 2026-06-03. Whole-product QA is governed by `
 - The context/token indicator should be graphical and compact by default, with exact numbers shown on hover or focused inspection.
 - Run status/stage indicators should be immediately legible as progress, not as an unlabeled row of technical values or inert navigation controls.
 - Avoid course-management-heavy navigation in the primary flow.
+- Course management, when present, is a lightweight workbench context selector. A default undeletable "Just Asking" course exists for unclassified requests and does not contribute course context; ordinary user-created courses can be archived so they disappear from the frontend without hard-deleting database rows.
 - Output should be visible as files and as an in-app preview wherever feasible.
 - Code and notebook previews should have editor-grade presentation: syntax highlighting, file tabs, line numbers when useful, copy affordances, run/test/status panels, and error cards. They are renderers, not editable source editors in phase 1.
 - Preview tabs and file views must never be silent no-ops; before real output exists they should show useful empty, running, demo, or skeleton content, or be visibly disabled.
 - PDF-producing artifacts should show a PDF-like preview inside the workbench. Essay, Beamer, and cheat-sheet outputs should not degrade to plain text unless PDF rendering fails.
+- True PDF rendering is considered moderate engineering difficulty in the current Vite workbench: it needs an authenticated artifact file endpoint plus a browser renderer such as PDF.js or an equivalent safe blob-based renderer. Before that endpoint exists, showing copied absolute filesystem paths is not an acceptable substitute for in-app preview.
 - Slide previews should communicate deck structure and current page/slide position.
 - Cheat-sheet previews should emphasize dense A4 pagination and scale, including target page count.
 - Motion should be polished but purposeful: transitions can smooth preview replacement, stage changes, panel focus, and regenerated output, while respecting reduced-motion settings.
 - Visual assets should have a deliberate system: named generated images, motion briefs, texture/background assets, and a compact visual language for artifact states.
 - Existing frontend visuals are disposable. Preserve user-facing capabilities and backend integration behavior, not old component structure or appearance.
+- A future release should include a first-run/onboarding tutorial for new users. The exact form is intentionally undecided and is not part of the active post-human-E2E repair queue.
 
 ## Constraints
 
@@ -128,8 +140,11 @@ Product-observable outcomes for the first phase:
 - The selected artifact type is recorded in run metadata; prompt-only intent guessing is not part of the first-phase product.
 - Every run produces an inspectable output folder with `manifest.json`, source files, and a compiled PDF when applicable; `.tex` source survives even if PDF compilation fails.
 - Code artifacts preview with syntax highlighting and copy/file affordances; PDF-producing artifacts preview as rendered pages or PDF-like pages before falling back to file-only output.
+- Idle and completed runs show static status indicators; only active queued/running generation uses looping motion. Long-running generation shows an approximate comfort progress bar in the composer/status area without claiming exact provider progress.
+- The artifact preview panel shows real generated code/source/log/manifest content after completion. Essay, Beamer, and cheat-sheet previews render real PDF pages when the artifact byte endpoint and browser renderer are available, with a clear fallback when PDF rendering fails.
 - Web search mode (`auto`, `on`, `off`) is honored and recorded, with citations when search is used.
 - With Docker Desktop running, the Electron shell launches services and opens the workbench; without it, the shell shows a clear, actionable failure state.
+- A user can create and rename ordinary course containers, select one for generation, archive ordinary courses so they disappear from the frontend, and always fall back to the undeletable context-disabled "Just Asking" course.
 
 ## Governance Acceptance
 
@@ -149,6 +164,8 @@ Process outcomes that make the rebuild safe for rotating agents (verified by `sc
 - Student accounts have the same phase-1 artifact generation capability as teacher accounts.
 - Generated artifacts default to `workspace/`.
 - Qwen defaults are pinned in `docs/CONTRACTS/model-settings.md` as of 2026-06-03. The phase-1 default base URL targets the China (Beijing) DashScope endpoint because the human-confirmed release API key belongs to the China site. Future changes should be re-verified against current official provider documentation before tracked defaults are edited.
+- Course context summaries are intentionally small by default: target about 8 KB of Markdown per course, treated as a tunable cap rather than a promise to preserve all prior conversation detail.
+- Performance optimization should start with timing instrumentation. If measured live-generation time is dominated by the external model provider, especially more than half of total wall time, local optimization should not be pursued unless a separate local bottleneck is identified.
 
 ## Open Questions
 
@@ -166,3 +183,4 @@ Process outcomes that make the rebuild safe for rotating agents (verified by `sc
 - 2026-06-03: Resolved the upload pre-QA blocker and moved the active queue to agent module smoke QA.
 - 2026-06-03: Pinned documented Qwen non-secret defaults for the China-site API and added human E2E usability requirements for legible run stages and non-inert preview tabs.
 - 2026-06-05: Cleared the completed QA task queue by human decision and opened a narrow pre-E2E runtime/contract repair task before manual E2E resumes.
+- 2026-06-05: Recorded completed human E2E results, promoted status/progress, real preview, and LaTeX diagram handling to high-priority repair work, and added medium-priority course context plus performance triage direction.

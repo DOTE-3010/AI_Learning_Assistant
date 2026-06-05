@@ -16,7 +16,9 @@ Stable interfaces that implementation agents must preserve during the rebuild. U
 | Upload ingestion | `uploads.md` | project-maintainer | web UI, context builder, pipelines | Active |
 | SQLite schema | `sqlite-schema.md` | project-maintainer | storage layer, run service | Active |
 | Artifact filesystem | `artifact-filesystem.md` | project-maintainer | artifact writer, Electron reveal, pipelines | Active |
+| Artifact access API | `artifact-access.md` | project-maintainer | web UI, preview renderers, backend API | Active; authenticated generated-file metadata and bytes |
 | Generation pipeline | `generation-pipeline.md` | project-maintainer | run API, context builder, pipelines, UI | Active |
+| Course context | `course-context.md` | project-maintainer | web UI, run API, context builder, SQLite storage | Active; optional course memory with context-disabled default course |
 | Electron + Docker runtime | `runtime-electron-docker.md` | project-maintainer | Electron shell, compose, launchers | Active |
 | UI workbench | `ui-workbench.md` | project-maintainer | web frontend | Active; split production console plus artifact preview; old frontend appearance is disposable |
 | Visual assets | `visual-assets.md` | project-maintainer | web frontend, asset prompts | Active; preview-first visual/motion system; replace legacy visual assets as needed |

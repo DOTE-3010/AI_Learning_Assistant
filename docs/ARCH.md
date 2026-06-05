@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-03
+Last Reviewed: 2026-06-05
 Status: Active
 -->
 
@@ -48,11 +48,13 @@ Major versions below are the supported baseline; exact patch versions live in lo
 | Module | Owns | Must Not Own | Initial Location | Key Contracts |
 | --- | --- | --- | --- | --- |
 | Desktop Shell | Electron startup, Docker Desktop detection, backend health polling, window lifecycle, reveal-in-folder | Backend business logic, Python imports, SQLite access, model calls | `apps/desktop/` | `runtime-electron-docker.md` |
-| Web Workbench | Production console, artifact type controls, upload controls, model settings UI, context dial, stage status, preview-only artifact renderers, client state, locale catalog, warm editorial design tokens | Local secrets, direct filesystem/SQLite access, token-generation internals, editing generated source as source-of-truth, executing generated code/HTML, backend-owned translation or auth behavior | `frontend/` | `ui-workbench.md`, `visual-assets.md` |
+| Web Workbench | Production console, artifact type controls, lightweight course selector, upload controls, model settings UI, context dial, stage status, comfort progress, preview-only artifact renderers, client state, locale catalog, warm editorial design tokens | Local secrets, direct filesystem/SQLite access, token-generation internals, editing generated source as source-of-truth, executing generated code/HTML, backend-owned translation or auth behavior | `frontend/` | `ui-workbench.md`, `visual-assets.md`, `course-context.md`, `artifact-access.md` |
 | API Backend | HTTP routes, auth/session, run orchestration, request validation, static serving | SQL details, LaTeX internals, Electron lifecycle, raw secret persistence | `backend/` | `auth.md`, `generation-pipeline.md`, `errors.md` |
 | Storage Layer | SQLite repositories, migrations, transactions for users/sessions/settings/runs/uploads/artifacts/citations | HTTP shapes, business rules, artifact bytes, prompt content | backend storage package | `sqlite-schema.md` |
 | Artifact Filesystem | Run/project folder creation, safe filenames, manifests, PDF/source persistence | Metadata-of-record (rows), HTTP concerns, model calls | backend artifact package | `artifact-filesystem.md` |
+| Artifact Access | Authenticated metadata and byte access for generated artifacts owned by the current user | Writing artifacts, inferring generation success, direct unauthenticated filesystem serving | backend API/core package | `artifact-access.md`, `artifact-filesystem.md` |
 | Model Provider | OpenAI-compatible client, profile validation, secret loading, redaction | Pipeline/business logic, HTTP routes, SQLite schema | backend provider package | `model-settings.md` |
+| Course Context | User-visible course containers, undeletable context-disabled default course, soft archive, compact `course_context.md` summary policy | Primary navigation shell, raw upload storage, hard deletion by default, forcing context into every run | backend API/core/context package, `frontend/` selector | `course-context.md`, `sqlite-schema.md`, `generation-pipeline.md` |
 | Context Builder | File extraction, context-budget estimation, adaptive revision context budgeting, web-search policy decision | Artifact generation, model-call orchestration, UI rendering | backend context package | `generation-pipeline.md`, `uploads.md` |
 | Artifact Pipelines | Code/essay/Beamer/cheat-sheet generation + repair, intent routing | Secret loading, Electron internals, HTTP transport, raw SQL | backend pipeline package | `generation-pipeline.md`, `artifact-filesystem.md` |
 
@@ -77,16 +79,17 @@ Do not create `apps/web/` or `services/api/` during phase 1. If a later task wan
 
 - `users`, `sessions` -- identity and weak local auth.
 - `model_profiles` -- provider profile metadata; secret material is referenced, never stored raw (see `model-settings.md` and `docs/DECISIONS/004-local-secret-storage.md`).
-- `projects`, `runs` -- generation requests and their lifecycle/status.
+- `projects`, `runs` -- user-visible course containers and generation requests/lifecycle/status. In phase 1, `projects` are surfaced as courses; the default "Just Asking" project/course is undeletable and context-disabled.
 - `uploads` -- references to user-supplied input bytes on disk.
 - `artifacts`, `citations` -- references to generated output files and recorded sources.
+- Compact course context files -- one small Markdown summary per non-default course, stored on disk and referenced from SQLite metadata.
 
 Source of truth for metadata is the SQLite file. Source of truth for bytes (uploads, generated source, PDFs, notebooks, logs, manifests) is the artifact filesystem. See `docs/CONTRACTS/sqlite-schema.md` and `docs/CONTRACTS/artifact-filesystem.md`.
 
 ## Interfaces
 
 - Internal: pipelines depend on the Model Provider interface and Artifact Filesystem writer, never on env vars or HTTP objects directly.
-- External APIs: REST under `/api`, SSE/polling for run status. See `docs/CONTRACTS/auth.md`, `docs/CONTRACTS/model-settings.md`, `docs/CONTRACTS/generation-pipeline.md`, `docs/CONTRACTS/uploads.md`.
+- External APIs: REST under `/api`, SSE/polling for run status. See `docs/CONTRACTS/auth.md`, `docs/CONTRACTS/model-settings.md`, `docs/CONTRACTS/generation-pipeline.md`, `docs/CONTRACTS/uploads.md`, `docs/CONTRACTS/artifact-access.md`, and `docs/CONTRACTS/course-context.md`.
 - Error envelope: every API error uses the canonical shape in `docs/CONTRACTS/errors.md`.
 - Files/artifacts: run folder shape and `manifest.json` per `docs/CONTRACTS/artifact-filesystem.md`.
 - Desktop/runtime: Electron-to-backend handshake and startup states per `docs/CONTRACTS/runtime-electron-docker.md`.
@@ -98,6 +101,7 @@ The workbench is a preview-first conversational editor, not a direct editor in p
 
 - The left production console owns prompts, explicit artifact-type selection, uploads, search/model controls, run commands, status messages, warnings, and follow-up refinement requests.
 - The right artifact panel owns the current preview, file tabs, generated file list, copy/reveal/open affordances, and preview-specific status such as PDF compile failure or code validation notes.
+- The course selector is a lightweight context control inside the workbench, not a return to the old course/assignment/chat dashboard. The default "Just Asking" course receives uncategorized runs and never contributes course context; ordinary archived courses are hidden from the primary selector but remain in storage.
 - The frontend owns user-facing locale selection and localized UI strings for English, Simplified Chinese (`zh-Hans`), and Traditional Chinese (`zh-Hant`). Canonical backend values, API enums, error machine codes, artifact filenames, and metadata keys stay untranslated.
 - The frontend owns design-token application for the warm editorial visual system: serif display typography, warm graphite/ink surfaces, parchment preview surfaces, clay/terracotta primary accents, restrained sage/amber/coral states, and mono code/run chrome.
 - A user follow-up creates a new generation run or revision. It must not mutate generated files only in frontend memory.
@@ -119,6 +123,7 @@ The frontend rebuild boundary is intentionally asymmetric:
 
 - Electron may depend on Docker CLI/Compose availability and backend HTTP health endpoints; it must not import backend Python code.
 - Web UI may call backend APIs and consume server-sent events or polling; it must not read local secrets directly.
+- Web UI must read generated artifact bytes through authenticated backend artifact-access APIs, not by dereferencing absolute host paths. Absolute output paths may remain available for copy/reveal affordances.
 - Web UI may render generated source and PDFs, but it must not treat editable frontend state as the source of truth for artifacts.
 - Web UI must not execute generated JavaScript, notebooks, shell commands, or arbitrary HTML in the main renderer. Any future execution feature needs a sandbox contract and a new task.
 - Frontend appearance tasks may freely replace frontend implementation details, but must not require backend code changes to pass.
@@ -157,6 +162,7 @@ Future runtimes must preserve the same contracts:
 - Configuration: backend reads runtime config from environment variables; local development values live in untracked `.env`/`.env.local`. Model variables use the `MODEL_*` names in `model-settings.md` (legacy `BIANXIE_*` names are not canonical). Tracked source may contain only the documented non-secret Qwen defaults from `docs/CONTRACTS/model-settings.md`; API keys and other secrets are never defaulted or committed.
 - Observability: structured logs to stdout from the container; run progress is exposed via the status event shape in `generation-pipeline.md`. API keys, Authorization headers, raw prompts, and uploaded document contents are never logged by default.
 - Failure handling: web-search and PDF-compile failures are non-fatal unless the user forced the behavior; failures are recorded in run metadata and `manifest.json` with a sanitized message. `.tex` source is always preserved even when PDF compilation fails.
+- Performance: run-stage timing must be measured before optimization work. If the external model provider accounts for more than half of live run wall time, local optimization should stop at reporting and small obvious fixes unless a separate local bottleneck is demonstrated.
 - Backups/migrations: SQLite uses explicit, forward-only schema migrations with a `schema_version`; the database file and `workspace/` are the two artifacts a user must back up. Both must survive container/app restarts.
 - Security: weak auth is local/teaching only and isolated behind middleware so stronger auth can replace it; tokens are opaque to clients; secret storage follows `docs/DECISIONS/004-local-secret-storage.md`.
 
@@ -179,6 +185,8 @@ Future runtimes must preserve the same contracts:
 - **Artifact-specific pipelines over one generic endpoint**: trades more pipeline code for reliable, intent-shaped outputs.
 - **Preview-only conversational workbench over direct editing**: gives the product a modern artifact-generation feel while keeping phase-1 persistence and safety simple. See `docs/DECISIONS/006-conversational-preview-workbench.md`.
 - **Full frontend appearance rebuild over incremental polish**: the existing frontend UI is not a compatibility target; backend contracts are. See `docs/DECISIONS/007-full-frontend-appearance-rebuild.md`.
+- **Soft-archived course containers over hard deletion**: matches the human preference to avoid fragile database deletion paths while keeping the frontend tidy. The default "Just Asking" course is context-disabled and cannot be archived.
+- **PDF.js-style browser rendering over path-only previews**: real in-app PDF preview is feasible but requires an authenticated artifact byte endpoint plus worker/static-asset handling in the Vite frontend, so it is split into a bounded frontend task after artifact access exists.
 
 Rejected alternatives:
 

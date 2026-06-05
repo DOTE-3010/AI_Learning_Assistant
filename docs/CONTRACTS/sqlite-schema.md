@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-01
+Last Reviewed: 2026-06-05
 Status: Active
 -->
 
@@ -61,12 +61,19 @@ The exact host path may change, but it must be stable across restarts and includ
 
 ### `projects`
 
+Phase 1 surfaces `projects` as lightweight course containers. The name stays `projects` in SQLite to avoid a breaking table rename; APIs and UI may call these rows courses.
+
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | text primary key | UUID or ULID |
 | `user_id` | text not null | owner |
 | `title` | text not null | user visible |
 | `root_path` | text not null | artifact filesystem root |
+| `is_default` | integer not null | 0/1; exactly one undeletable default "Just Asking" course per user |
+| `is_archived` | integer not null | 0/1 soft-delete flag; archived courses are hidden from normal frontend lists |
+| `context_enabled` | integer not null | 0/1; default course must be 0, ordinary courses default to 1 |
+| `context_path` | text nullable | filesystem path to compact `course_context.md` when present |
+| `context_updated_at` | text nullable | ISO timestamp for the latest context summary update |
 | `created_at` | text not null | ISO timestamp |
 | `updated_at` | text not null | ISO timestamp |
 
@@ -75,7 +82,7 @@ The exact host path may change, but it must be stable across restarts and includ
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | text primary key | run id used in output path |
-| `project_id` | text nullable | optional grouping |
+| `project_id` | text nullable | selected course/project id; null allowed only for legacy rows or migration fallback |
 | `user_id` | text not null | requester |
 | `intent` | text not null | see generation contract |
 | `task_text` | text not null | original user task |
@@ -128,6 +135,7 @@ The exact host path may change, but it must be stable across restarts and includ
 
 - Use explicit migrations once the schema exists.
 - SQLite schema changes must have a rollback or compatibility note.
+- Course archive semantics are soft-delete only in phase 1; do not hard-delete project/course rows as the default behavior.
 - Do not couple SQLAlchemy models directly to UI response shapes.
 
 ## Versioning
@@ -137,7 +145,7 @@ The exact host path may change, but it must be stable across restarts and includ
 
 ## Compatibility
 
-- Additive: new nullable columns, new tables, new indexes.
+- Additive: new nullable columns, new tables, new indexes, new non-null columns with safe defaults/backfills.
 - Breaking (ADR required): dropping/renaming a column or table, changing a column type, or changing a primary/foreign key relationship.
 
 ## Acceptance Checks
@@ -145,9 +153,11 @@ The exact host path may change, but it must be stable across restarts and includ
 - A new database can be created without Postgres or Mongo.
 - Users, sessions, profiles, runs, uploads, artifacts, and citations can be inserted in isolation.
 - A revision run can reference a prior run without overwriting or mutating the prior run row/folder.
+- A new user can receive one default context-disabled project/course row, ordinary courses can be archived without deleting linked runs, and runs can record their selected course via `project_id`.
 - Large file contents are absent from SQLite rows.
 - `api_key_ref` never contains a raw key or recoverable ciphertext (see `model-settings.md`).
 
 ## Open Questions
 
 - Whether to add soft-delete/retention columns for runs and uploads, or rely on filesystem cleanup tasks.
+- Whether `projects` should be renamed to `courses` in a later breaking migration if course context becomes the dominant long-term product concept.

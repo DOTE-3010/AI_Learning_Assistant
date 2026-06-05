@@ -17,7 +17,7 @@ This is a QA handoff, not a QA certification. Whole-product correctness must sti
 - The human has declared development complete and asked to move the project into whole-product QA.
 - `docs/TASKS/README.md` previously recorded implementation tasks `000`-`018` as complete and tasks `019`, `020`, `021`, `022`, and `023` as landed in the current workspace.
 - The old numbered implementation tasks have been removed from the active queue so future agents do not treat them as pending work.
-- Human review on 2026-06-03 promoted the missing backend upload API from a known QA risk to a pre-QA blocker. That blocker was resolved on 2026-06-03, agent QA proceeded, and on 2026-06-05 the human cleared the completed numbered QA task queue. Active pre-E2E repair work now starts at `docs/TASKS/001-pre-e2e-runtime-contract-repairs.md`.
+- Human review on 2026-06-03 promoted the missing backend upload API from a known QA risk to a pre-QA blocker. That blocker was resolved on 2026-06-03, agent QA proceeded, and on 2026-06-05 the human completed manual E2E functional testing. All four generation capabilities passed; active work now consists of post-human-E2E repair tasks for status/progress, real previews, LaTeX diagram handling, performance triage, and course context.
 
 ## Implemented Governance Claims
 
@@ -80,6 +80,13 @@ This is a QA handoff, not a QA certification. Whole-product correctness must sti
 - Native no-Docker packaging, signed macOS app distribution, and hosted deployment remain future-phase work and should not block phase-1 Electron plus Docker QA.
 - Real model-provider smoke tests require untracked credentials. Agent-run QA should prefer mocked-provider tests unless the human explicitly supplies local credentials for a real-provider check.
 
+## Post-Human-E2E Findings
+
+- Functional generation for code homework, essay PDFs, Beamer slides, and cheat sheets passed human E2E.
+- High-priority blockers remain for truthful run status motion and comfort progress, real generated-output previews, and avoiding failed/non-rendered diagrams in PDFs.
+- Medium-priority approved follow-ups cover lightweight course context containers and performance bottleneck triage.
+- Low-priority onboarding/tutorial work is recorded in `docs/SPEC.md` but is not an active implementation task.
+
 ## Historical Queue Handling
 
-The old implementation task files were intentionally removed from `docs/TASKS/` on 2026-06-03. Completed pre-QA, agent QA, and first human E2E fix task files were cleared from `docs/TASKS/` on 2026-06-05 by human decision. This summary and `docs/QA_REPORTS/` are now the historical references for completed work; active work begins from `docs/TASKS/001-pre-e2e-runtime-contract-repairs.md`.
+The old implementation task files were intentionally removed from `docs/TASKS/` on 2026-06-03. Completed pre-QA, agent QA, first human E2E fix, and pre-E2E repair task files were cleared from `docs/TASKS/` on 2026-06-05 by human decision. This summary and `docs/QA_REPORTS/` are now the historical references for completed work; active work begins from the numbered post-human-E2E repair queue under `docs/TASKS/`.

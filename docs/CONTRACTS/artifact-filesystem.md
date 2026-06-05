@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-01
+Last Reviewed: 2026-06-05
 Status: Active
 -->
 
@@ -26,6 +26,8 @@ Future tasks may introduce a user-selectable project root. Any root must be moun
 workspace/
   <safe-user-or-local>/
     <safe-project-title>/
+      context/
+        course_context.md
       runs/
         <run-id>/
           input/
@@ -47,6 +49,8 @@ workspace/
 ```
 
 Only files relevant to a run need to exist.
+
+`context/course_context.md` exists only for non-default course containers that have compact course context. The default "Just Asking" course must not contribute context and does not need this file.
 
 ## `manifest.json`
 
@@ -76,9 +80,18 @@ Only files relevant to a run need to exist.
     {"path": "output/main.tex", "kind": "source"},
     {"path": "output/main.pdf", "kind": "pdf"}
   ],
+  "timings": {
+    "total_ms": 45210,
+    "stages": [
+      {"name": "generate_source", "duration_ms": 39200},
+      {"name": "compile_pdf", "duration_ms": 4100}
+    ]
+  },
   "status": "succeeded"
 }
 ```
+
+`timings` is optional and additive. When present, it is approximate wall-clock instrumentation for local QA and user-facing diagnostics, not a billing or provider-token accounting source.
 
 ## Filename Rules
 
@@ -97,6 +110,8 @@ Only files relevant to a run need to exist.
 | `essay_latex` | `main.tex` | `main.pdf`, references |
 | `beamer_slides` | `slides.tex` | `slides.pdf`, speaker notes |
 | `cheat_sheet` | `cheat-sheet.tex` | `cheat-sheet.pdf`, extraction notes |
+
+Course context files are not run artifacts and are not listed in `manifest.outputs`. If a run used course context, the manifest may include an additive metadata key such as `context.course_id` or `context.used_course_context`.
 
 ## Errors
 
@@ -126,6 +141,7 @@ Filesystem failures are surfaced through the run, not as a separate transport. U
 - Failed LaTeX runs still keep source and logs.
 - Electron can reveal the run folder in the host filesystem.
 - SQLite artifact rows point to files that exist.
+- Course context Markdown, when present, stays under the owning course/project folder and is not stored in SQLite as large text.
 
 ## Open Questions
 

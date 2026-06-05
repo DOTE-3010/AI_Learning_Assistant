@@ -10,6 +10,8 @@ Status: Active
 
 This plan governs the post-development QA phase for the phase-1 Electron plus Docker product. It turns the human-requested QA order into repo-native instructions so rotating agents can test, report, fix, and hand off without relying on hidden chat context.
 
+As of 2026-06-05, human E2E functional testing completed and confirmed that all four generation capabilities work. The active QA work is now the post-human-E2E repair queue generated from human findings: high-priority status/progress, real preview, and LaTeX diagram handling fixes, followed by medium-priority course context and performance triage tasks.
+
 ## Source Context
 
 - `docs/IMPLEMENTATION_SUMMARY.md` for what the completed development queue claims to have built.
@@ -23,7 +25,7 @@ This plan governs the post-development QA phase for the phase-1 Electron plus Do
 
 QA could not start while the former pre-QA upload blocker was open. The backend upload API is part of the existing upload contract and phase-1 product acceptance criteria, so its absence was treated as a blocker rather than a QA risk.
 
-As of 2026-06-03, the upload blocker was resolved and the agent QA sequence proceeded through smoke, module functional, and integration testing. As of 2026-06-05, the human cleared the completed numbered QA queue from `docs/TASKS/`; durable QA results remain under `docs/QA_REPORTS/`, and the current active task is `docs/TASKS/001-pre-e2e-runtime-contract-repairs.md`.
+As of 2026-06-03, the upload blocker was resolved and the agent QA sequence proceeded through smoke, module functional, and integration testing. As of 2026-06-05, the human cleared the completed numbered QA queue from `docs/TASKS/`, completed manual E2E functional testing, and supplied the next repair queue. Durable QA results remain under `docs/QA_REPORTS/`, including `docs/QA_REPORTS/2026-06-05-human-e2e-completion.md`.
 
 The upload blocker is cleared only when:
 
@@ -41,6 +43,7 @@ QA must run in this order:
 2. Agent module unit/functional tests.
 3. Agent integration tests.
 4. Human end-to-end functional tests.
+5. Post-human-E2E repair tasks for human-reported blockers and approved follow-ups.
 
 Do not begin QA until the pre-QA entry gate is closed. Do not advance to the next QA phase while open blockers remain in the current phase. Non-blocking risks may advance only after the human accepts them or asks an agent to fix them.
 
@@ -48,6 +51,7 @@ Do not begin QA until the pre-QA entry gate is closed. Do not advance to the nex
 
 - Agents execute phases 1 through 3, report blockers and risks to the human after testing, then fix blockers and human-approved risks.
 - The human executes phase 4. Agents may prepare the checklist and later fix human-reported blockers or human-selected risks.
+- Agents execute the post-human-E2E repair queue one numbered task at a time, fixing high-priority blockers before medium-priority follow-ups unless the human reorders the work.
 - Agents must not silently convert QA into feature work. Any new feature, contract change, auth semantic change, secret-storage change, model default change, or distribution decision needs human approval.
 
 ## Module Map

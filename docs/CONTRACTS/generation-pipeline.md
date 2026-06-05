@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-03
+Last Reviewed: 2026-06-05
 Status: Active
 -->
 
@@ -29,6 +29,7 @@ Route user intent to reliable artifact-specific generation instead of one generi
   "search_mode": "auto",
   "model_profile_id": "default-qwen",
   "revision_of_run_id": null,
+  "course_id": "course-ml",
   "upload_ids": ["upload-1"],
   "options": {
     "target_pages": 2,
@@ -43,6 +44,8 @@ Route user intent to reliable artifact-specific generation instead of one generi
 For `code_homework`, `output_preference` defaults to `py` and may be either `py` or `ipynb`. The backend may normalize UI-friendly aliases such as `.py`, `python`, `script`, `.ipynb`, `notebook`, or `jupyter` into those canonical values. Unsupported code output preferences fail request validation with `validation_error`.
 
 `revision_of_run_id` is optional. When present, the new run is a follow-up to a prior run owned by the same authenticated user. The backend may use the prior manifest, generated source, and output metadata as context for the revision, but the new run still produces its own run folder and manifest.
+
+`course_id` is optional. When absent, the backend uses the user's default "Just Asking" course for grouping and must not include course context. When present and owned by the user, a non-default course may contribute compact `course_context.md` content as low-priority reference input. See `course-context.md`.
 
 ## Run Lifecycle
 
@@ -65,14 +68,15 @@ Clients must not rely on the create-run response being terminal. After a success
 1. Validate request and auth.
 2. Resolve revision context if `revision_of_run_id` is present.
 3. Resolve model profile.
-4. Extract uploaded context.
-5. Use the explicit selected intent to choose a pipeline.
-6. Decide web search if `search_mode = auto`.
-7. Estimate context budget and compress or reject if needed.
-8. Generate artifact source.
-9. Validate/repair source when feasible.
-10. Compile PDF or notebook when applicable.
-11. Write manifest, artifacts, citations, and logs.
+4. Resolve selected course and compact course context when applicable.
+5. Extract uploaded context.
+6. Use the explicit selected intent to choose a pipeline.
+7. Decide web search if `search_mode = auto`.
+8. Estimate context budget and compress or reject if needed.
+9. Generate artifact source.
+10. Validate/repair source when feasible.
+11. Compile PDF or notebook when applicable.
+12. Write manifest, artifacts, citations, timings, and logs.
 
 ## Status Event Shape
 
@@ -92,6 +96,10 @@ For SSE or polling responses:
     "utilization_ratio": 0.016,
     "warning_level": "ok",
     "source": "heuristic"
+  },
+  "timings": {
+    "elapsed_ms": 12000,
+    "stage_ms": 9000
   }
 }
 ```
@@ -101,6 +109,7 @@ Phase-1 status/polling compatibility surface:
 - `GET /api/runs/{run_id}/events` returns the latest status event object for the authenticated run owner.
 - Clients poll this endpoint until `status` is `succeeded`, `failed`, or `cancelled`.
 - When the in-memory event history is unavailable, the endpoint falls back to the persisted run status; `context` may be absent in that fallback case.
+- `timings` is optional and approximate. Clients may use it for diagnostics or comfort-progress calibration, but must not present it as exact provider progress unless the emitting stage supplies real measured progress.
 
 ## Context Estimation
 
@@ -128,6 +137,7 @@ When `revision_of_run_id` is present, prior-run context is low-priority input. T
 - Logs remain much more tightly capped than generated source because they are higher-risk and lower-value; sanitization must run before truncation.
 - When the profile hint is missing or small, the current conservative fallback is acceptable. When the hint is large, the default revision source budget should be meaningfully larger than the legacy 24k-character cap while still keeping the context dial below warning thresholds for ordinary follow-ups.
 - The status/context estimate must count the revision text that is actually included.
+- The status/context estimate must count included course context text when a non-default course contributes `course_context.md`.
 
 ## Web Search Policy
 
@@ -144,6 +154,7 @@ Search citations must be stored in metadata and manifest when used.
 - Code generation writes either `solution.py` or `solution.ipynb`; notebook output must validate as nbformat JSON.
 - LaTeX generation should produce full compilable documents for essay, slides, and cheat-sheet intents.
 - When LaTeX compilation fails after source generation, the pipeline may run one bounded model-assisted repair pass using the generated source and sanitized compiler log, then recompile. It must overwrite the generated `.tex` with the repaired source only when a repair is attempted, must not change the external run API shape, and must still fail as `compile_failed` if the repaired source does not compile.
+- LaTeX prompts and repair flows must avoid final placeholder text for missing diagrams, including bracketed notes such as `[Diagram: Encoder-Decoder Schematic]`. Complex precision diagrams such as transformer encoder-decoder architecture should be omitted or summarized in prose unless the implementation can produce a complete, compiling LaTeX/TikZ representation. Simple TikZ diagrams are acceptable only when they compile in the Docker LaTeX runtime.
 - The Docker LaTeX runtime must include common article/Beamer dependencies used by phase-1 prompts and real model output, including `lmodern.sty`; missing runtime packages that make ordinary generated LaTeX fail are QA blockers, not accepted model-output risks.
 - Cheat-sheet layout may use aggressive typography, columns, and small fonts, but must target the requested A4 page count.
 - Revision runs must be independent persisted runs. They may reference prior run metadata and files, but must not overwrite the prior run folder.
@@ -160,6 +171,7 @@ Uses the canonical envelope (`errors.md`). `POST /api/runs` validation errors ar
 | `cheat_sheet` without `options.target_pages` | 400 sync | `validation_error` |
 | Referenced `upload_ids` missing | 400 sync | `not_found` |
 | `revision_of_run_id` missing or not owned by caller | 404 sync | `not_found` |
+| `course_id` missing, archived/unselectable, or not owned by caller | 404 sync | `not_found` |
 | No usable model key | run `failed` | `missing_api_key` |
 | Provider rejects key / unreachable | run `failed` | `provider_auth_failed` / `provider_unavailable` |
 | Context too large after compression | run `failed` | `context_overflow` |
@@ -173,11 +185,12 @@ Uses the canonical envelope (`errors.md`). `POST /api/runs` validation errors ar
 - `code_homework.output_preference` is `py` or `ipynb` after normalization.
 - `cheat_sheet` requires `options.target_pages` (positive integer).
 - `revision_of_run_id`, when present, references a run owned by the authenticated user.
+- `course_id`, when present, references a selectable course owned by the authenticated user. When absent, the backend assigns the default context-disabled course.
 - Students and teachers can both create generation runs in phase 1.
 
 ## Compatibility
 
-- Additive: new optional request fields, new optional `options.*`, new status `stage` strings, new `context` fields.
+- Additive: new optional request fields such as `course_id`, new optional `options.*`, new status `stage` strings, new `context` fields, new optional timing fields.
 - Breaking (ADR required): adding/removing an intent, changing the run lifecycle states, or changing the status event envelope.
 
 ## Versioning
@@ -190,8 +203,11 @@ Uses the canonical envelope (`errors.md`). `POST /api/runs` validation errors ar
 - Each intent has a pipeline entrypoint with mocked model tests.
 - Failed generation records sanitized error metadata and any partial source/logs.
 - Context stats can be consumed by the UI context dial.
+- Timing stats can distinguish local preparation, provider generation, LaTeX compilation/repair, and artifact persistence well enough for bottleneck triage.
+- Course context, when used, is counted in context estimates and recorded in metadata without forcing the default "Just Asking" course to contribute context.
 - The Docker runtime resolves common LaTeX dependencies required by phase-1 PDF outputs, including `kpsewhich lmodern.sty`.
 - A LaTeX source-level compile error can be repaired once without adding duplicate source entries to the manifest or changing the run response contract.
+- Generated PDFs do not contain visible non-rendered diagram placeholders; complex diagrams are omitted or converted to prose unless a reliable compiling representation exists.
 
 ## Open Questions
 
