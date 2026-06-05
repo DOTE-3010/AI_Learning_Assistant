@@ -3,10 +3,38 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_NAME="${AILA_SMOKE_PROJECT:-ai-learning-assistant-smoke}"
-BACKEND_URL="${AILA_BACKEND_URL:-http://127.0.0.1:14242}"
+
+pick_free_port() {
+  python3 - <<'PY'
+import socket
+
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    sock.bind(("127.0.0.1", 0))
+    print(sock.getsockname()[1])
+PY
+}
+
+port_from_url() {
+  python3 - "$1" <<'PY'
+import sys
+from urllib.parse import urlparse
+
+parsed = urlparse(sys.argv[1])
+print(parsed.port or 14242)
+PY
+}
+
+if [ -n "${AILA_BACKEND_URL:-}" ]; then
+  BACKEND_URL="${AILA_BACKEND_URL}"
+  BACKEND_PORT="${AILA_BACKEND_PORT:-$(port_from_url "${BACKEND_URL}")}"
+else
+  BACKEND_PORT="${AILA_BACKEND_PORT:-$(pick_free_port)}"
+  BACKEND_URL="http://127.0.0.1:${BACKEND_PORT}"
+fi
 TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/aila-smoke.XXXXXX")"
 
 export AILA_BACKEND_URL="${BACKEND_URL}"
+export AILA_BACKEND_PORT="${BACKEND_PORT}"
 export AILA_DATA_DIR="${TMP_ROOT}/data"
 export AILA_WORKSPACE_DIR="${TMP_ROOT}/workspace"
 export APP_SQLITE_PATH="/app/data/app.sqlite"
@@ -28,7 +56,7 @@ trap cleanup EXIT
 
 mkdir -p "${AILA_DATA_DIR}" "${AILA_WORKSPACE_DIR}"
 
-echo "[smoke] Starting Docker runtime with mocked model provider."
+echo "[smoke] Starting Docker runtime with mocked model provider at ${BACKEND_URL}."
 docker compose -p "${PROJECT_NAME}" -f "${ROOT_DIR}/compose.yml" down --remove-orphans >/dev/null 2>&1 || true
 docker compose -p "${PROJECT_NAME}" -f "${ROOT_DIR}/compose.yml" up --build -d
 

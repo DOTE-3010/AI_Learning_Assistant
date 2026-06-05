@@ -52,6 +52,14 @@ queued -> running -> failed
 queued -> cancelled
 ```
 
+## Phase-1 Execution Semantics
+
+`POST /api/runs` currently validates the request, creates a persisted run, emits the initial `queued` status event, creates the artifact folder, applies the selected search policy, and then executes the selected pipeline request-synchronously before returning the `202` response.
+
+Because execution is synchronous in phase 1, the create-run response may already contain a terminal status such as `succeeded` or `failed`. The `queued` and `running` lifecycle states are still part of the contract: they are emitted during execution, may be observed by injected test executors, and remain the compatibility surface for a future background worker or job queue.
+
+Clients must not rely on the create-run response being terminal. After a successful `POST /api/runs`, clients should continue to fetch the status/event endpoint until `status` is `succeeded`, `failed`, or `cancelled`. A later background executor may return from `POST /api/runs` while the run is still `queued` or `running` without changing the response envelope.
+
 ## Stages
 
 1. Validate request and auth.
@@ -88,7 +96,7 @@ For SSE or polling responses:
 }
 ```
 
-Phase-1 polling fallback:
+Phase-1 status/polling compatibility surface:
 
 - `GET /api/runs/{run_id}/events` returns the latest status event object for the authenticated run owner.
 - Clients poll this endpoint until `status` is `succeeded`, `failed`, or `cancelled`.

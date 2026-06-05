@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-03
+Last Reviewed: 2026-06-05
 Status: Active
 -->
 
@@ -21,9 +21,9 @@ This plan governs the post-development QA phase for the phase-1 Electron plus Do
 
 ## Pre-QA Entry Gate
 
-QA must not start while `docs/TASKS/000-resolve-upload-api-pre-qa-blocker.md` is open. The backend upload API is part of the existing upload contract and phase-1 product acceptance criteria, so its absence is a blocker rather than a QA risk.
+QA could not start while the former pre-QA upload blocker was open. The backend upload API is part of the existing upload contract and phase-1 product acceptance criteria, so its absence was treated as a blocker rather than a QA risk.
 
-As of 2026-06-03, `docs/TASKS/000-resolve-upload-api-pre-qa-blocker.md` is resolved and the active queue moves to `docs/TASKS/001-qa-agent-module-smoke-tests.md`.
+As of 2026-06-03, the upload blocker was resolved and the agent QA sequence proceeded through smoke, module functional, and integration testing. As of 2026-06-05, the human cleared the completed numbered QA queue from `docs/TASKS/`; durable QA results remain under `docs/QA_REPORTS/`, and the current active task is `docs/TASKS/001-pre-e2e-runtime-contract-repairs.md`.
 
 The upload blocker is cleared only when:
 

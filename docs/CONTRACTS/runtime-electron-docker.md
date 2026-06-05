@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-02
+Last Reviewed: 2026-06-05
 Status: Active
 -->
 
@@ -44,7 +44,7 @@ First-phase compose should include:
 
 It should not include Postgres or Mongo for the rebuilt local runtime.
 
-The root `compose.yml` is the canonical local runtime file for phase 1. Electron starts it with the Compose project name `ai-learning-assistant` so containers and networks do not depend on the checkout folder name. Development smoke scripts may override the host data/workspace mount paths with temporary folders, but the in-container paths stay `/app/data` and `/app/workspace`.
+The root `compose.yml` is the canonical local runtime file for phase 1. Electron starts it with the Compose project name `ai-learning-assistant` so containers and networks do not depend on the checkout folder name. Development smoke scripts may override the host data/workspace mount paths with temporary folders and may override the host port through `AILA_BACKEND_PORT` to avoid conflicts with a running product container. The default product host port remains `14242`; the in-container paths stay `/app/data` and `/app/workspace`, and the in-container backend port stays `14242`.
 
 ## Startup States
 

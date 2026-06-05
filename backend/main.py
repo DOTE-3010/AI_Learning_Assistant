@@ -17,6 +17,17 @@ from backend.core.uploads import UploadError
 from backend.core.weak_auth import AuthError
 from backend.storage.sqlite import SQLiteRepository
 
+LOCAL_CORS_ORIGINS = [
+    "http://localhost:14242",
+    "http://127.0.0.1:14242",
+    "http://localhost:14243",
+    "http://127.0.0.1:14243",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+]
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -40,7 +51,7 @@ app.include_router(uploads_router)
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=LOCAL_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

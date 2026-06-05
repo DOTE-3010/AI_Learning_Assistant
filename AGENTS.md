@@ -1,5 +1,5 @@
 Status: Active
-Last Reviewed: 2026-06-03
+Last Reviewed: 2026-06-05
 
 # Agent Instructions
 
@@ -18,8 +18,8 @@ Start with these files before implementing or testing:
 ## Current Direction
 
 - Development is complete for the phase-1 implementation queue. Old implementation task files were removed from `docs/TASKS/` on 2026-06-03 and summarized in `docs/IMPLEMENTATION_SUMMARY.md`.
-- The pre-QA `/api/uploads` blocker was resolved on 2026-06-03 by `docs/TASKS/000-resolve-upload-api-pre-qa-blocker.md`.
-- Active work now starts at `docs/TASKS/001-qa-agent-module-smoke-tests.md`, then proceeds through agent module unit/functional tests, agent integration tests, and human E2E functional tests.
+- The pre-QA `/api/uploads` blocker, agent QA phases, and first human-selected E2E usability fixes were completed and recorded under `docs/QA_REPORTS/`.
+- On 2026-06-05 the human cleared the old numbered QA task queue from `docs/TASKS/`. Active work now starts at `docs/TASKS/001-pre-e2e-runtime-contract-repairs.md` before the human resumes manual E2E testing.
 - Preserve the core idea: a teaching-oriented artifact generator for homework code, essay PDFs, Beamer slides, and dense cheat sheets.
 - Preserve CUHK-style weak auth: `@cuhk.edu.hk` and `@link.cuhk.edu.hk` registration/login remain part of the product and should be shaped so stronger auth can replace it later.
 - Replace the default model path with Qwen through an OpenAI-compatible provider abstraction. Do not hard-code development API keys.

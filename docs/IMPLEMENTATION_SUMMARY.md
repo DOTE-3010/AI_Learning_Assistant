@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-03
+Last Reviewed: 2026-06-05
 Status: Active
 -->
 
@@ -17,7 +17,7 @@ This is a QA handoff, not a QA certification. Whole-product correctness must sti
 - The human has declared development complete and asked to move the project into whole-product QA.
 - `docs/TASKS/README.md` previously recorded implementation tasks `000`-`018` as complete and tasks `019`, `020`, `021`, `022`, and `023` as landed in the current workspace.
 - The old numbered implementation tasks have been removed from the active queue so future agents do not treat them as pending work.
-- Human review on 2026-06-03 promoted the missing backend upload API from a known QA risk to a pre-QA blocker. `docs/TASKS/000-resolve-upload-api-pre-qa-blocker.md` resolved that blocker on 2026-06-03, so the active task queue now starts whole-product QA at `docs/TASKS/001-qa-agent-module-smoke-tests.md`.
+- Human review on 2026-06-03 promoted the missing backend upload API from a known QA risk to a pre-QA blocker. That blocker was resolved on 2026-06-03, agent QA proceeded, and on 2026-06-05 the human cleared the completed numbered QA task queue. Active pre-E2E repair work now starts at `docs/TASKS/001-pre-e2e-runtime-contract-repairs.md`.
 
 ## Implemented Governance Claims
 
@@ -70,7 +70,7 @@ This is a QA handoff, not a QA certification. Whole-product correctness must sti
 
 ## Resolved Pre-QA Blocker
 
-- `docs/CONTRACTS/uploads.md` defines `POST /api/uploads`, the frontend has upload controls, and uploads are part of `docs/SPEC.md` phase-1 acceptance criteria. By human decision on 2026-06-03, the missing backend upload API had to be fixed before agent QA could start. `docs/TASKS/000-resolve-upload-api-pre-qa-blocker.md` implemented the upload API and passed its verification commands on 2026-06-03.
+- `docs/CONTRACTS/uploads.md` defines `POST /api/uploads`, the frontend has upload controls, and uploads are part of `docs/SPEC.md` phase-1 acceptance criteria. By human decision on 2026-06-03, the missing backend upload API had to be fixed before agent QA could start. The former upload blocker task implemented the upload API and passed its verification commands on 2026-06-03; the task file was later cleared from the active queue as completed history.
 
 ## Known QA Risks
 
@@ -82,4 +82,4 @@ This is a QA handoff, not a QA certification. Whole-product correctness must sti
 
 ## Historical Queue Handling
 
-The old implementation task files were intentionally removed from `docs/TASKS/` on 2026-06-03. This summary is now the historical reference for what was implemented. Active work now begins from `docs/QA_PLAN.md` and the QA tasks in `docs/TASKS/`.
+The old implementation task files were intentionally removed from `docs/TASKS/` on 2026-06-03. Completed pre-QA, agent QA, and first human E2E fix task files were cleared from `docs/TASKS/` on 2026-06-05 by human decision. This summary and `docs/QA_REPORTS/` are now the historical references for completed work; active work begins from `docs/TASKS/001-pre-e2e-runtime-contract-repairs.md`.

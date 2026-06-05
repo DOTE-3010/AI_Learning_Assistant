@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-03
+Last Reviewed: 2026-06-05
 Status: Active
 -->
 
@@ -22,7 +22,7 @@ The product should feel like a polished consumer creative tool, not a generic ad
 
 The phase-1 implementation queue is complete as of 2026-06-03 and has been summarized in `docs/IMPLEMENTATION_SUMMARY.md`. Human review then identified the missing backend upload API as a pre-QA blocker because uploads are part of the phase-1 product acceptance criteria.
 
-The upload blocker was resolved on 2026-06-03 by `docs/TASKS/000-resolve-upload-api-pre-qa-blocker.md`. Whole-product QA is now governed by `docs/QA_PLAN.md` and begins with `docs/TASKS/001-qa-agent-module-smoke-tests.md`. QA must validate this specification before release readiness is declared. Known gaps or risks found during QA should be reported to the human, then either fixed, accepted as risk, or moved to future-phase scope by explicit human decision.
+The upload blocker was resolved on 2026-06-03. Whole-product QA is governed by `docs/QA_PLAN.md`; agent QA phases and the first human-selected E2E usability fix pass were completed and recorded under `docs/QA_REPORTS/`. On 2026-06-05 the human cleared the old numbered QA task queue and replaced it with `docs/TASKS/001-pre-e2e-runtime-contract-repairs.md` before resuming manual E2E. QA must validate this specification before release readiness is declared. Known gaps or risks found during QA should be reported to the human, then either fixed, accepted as risk, or moved to future-phase scope by explicit human decision.
 
 ## Users
 
@@ -165,3 +165,4 @@ Process outcomes that make the rebuild safe for rotating agents (verified by `sc
 - 2026-06-03: Promoted missing backend upload API from QA risk to pre-QA blocker by human decision.
 - 2026-06-03: Resolved the upload pre-QA blocker and moved the active queue to agent module smoke QA.
 - 2026-06-03: Pinned documented Qwen non-secret defaults for the China-site API and added human E2E usability requirements for legible run stages and non-inert preview tabs.
+- 2026-06-05: Cleared the completed QA task queue by human decision and opened a narrow pre-E2E runtime/contract repair task before manual E2E resumes.
