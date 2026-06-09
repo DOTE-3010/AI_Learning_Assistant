@@ -1,5 +1,5 @@
 Status: Active
-Last Reviewed: 2026-06-05
+Last Reviewed: 2026-06-09
 
 # Agent Instructions
 
@@ -45,9 +45,10 @@ Start with these files before implementing or testing:
 - Desktop dependency audit: `npm --prefix apps/desktop audit --json`
 - Docker config check: `docker compose -p ai-learning-assistant config`
 - Docker runtime smoke: `docker compose -p ai-learning-assistant up --build -d && curl -fsS http://localhost:14242/health`
-- Web browser launch (macOS dev/QA): `./run_web.command`
+- Web browser launch (macOS dev/QA): `./run_web.command` (stable stub; real logic in `scripts/launcher-web.sh`)
 - End-to-end smoke: `./scripts/smoke_e2e.sh`
-- Electron launch (macOS packaging phase): `./run_desktop.command`
+- Electron launch (macOS packaging phase): `./run_desktop.command` (stable stub; real logic in `scripts/launcher-desktop.sh`)
+- Launcher re-bless (run from human Terminal.app only, if a `.command` stub was rewritten by Cursor): `bash scripts/bless-launchers.sh`
 - Governance check: `/Users/myron/Desktop/constitution/coding_agent_constitution/constitution-skill/scripts/check-governance.sh .`
 
 Commands may change during QA. Update this file and the matching QA task when a command becomes stale.
@@ -57,6 +58,7 @@ Commands may change during QA. Update this file and the matching QA task when a 
 - `backend/`: FastAPI API/runtime, SQLite repositories, artifact writer, model provider, context builder, and pipelines.
 - `frontend/`: web workbench renderer built by Vite.
 - `apps/desktop/`: Electron shell only.
+- `scripts/`: dev/QA helpers and the real macOS launcher logic invoked by the `.command` stubs.
 - `workspace/`: generated artifact roots and run folders.
 - `data/`: local runtime metadata such as SQLite when mounted outside Docker.
 - `docs/`: governance, contracts, task queue, decisions, and future asset prompts.
@@ -69,6 +71,7 @@ Do not create `apps/web/` or `services/api/` in phase 1 unless a new decision re
 - API key storage, `.env`, local settings files, and model provider defaults require care; never commit real secrets.
 - Filesystem writes under `workspace/` or future project output folders must follow `docs/CONTRACTS/artifact-filesystem.md`.
 - Docker/Electron startup scripts can delete or recreate containers only when the task explicitly says so.
+- The macOS launcher stubs `run_web.command` and `run_desktop.command` are stable by design and MUST NOT be edited from Cursor or any other GUI app. macOS attaches `com.apple.provenance` to any file a GUI app writes, and `AppleSystemPolicy` then SIGKILLs the stub on Finder double-click before the launcher log is even created. Edit `scripts/launcher-web.sh` / `scripts/launcher-desktop.sh` instead. See `docs/DECISIONS/008-launcher-stub-split.md` and `.cursor/rules/launcher-stability.mdc`.
 - Do not restore the deleted legacy PDF/no-code materials unless the human asks; those deletions are intentional cleanup.
 
 ## Implementation Discipline

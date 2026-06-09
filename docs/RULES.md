@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-05
+Last Reviewed: 2026-06-09
 Status: Active
 -->
 
@@ -22,6 +22,7 @@ These are repo-specific rules. General programming hygiene and anything a linter
 - Do not add new feature work during QA unless the human converts a QA finding into a follow-up task.
 - The 2026-06-05 human E2E findings are human-approved post-E2E repair work. Complete high-priority status/progress, real preview, and LaTeX diagram-safety tasks before medium-priority course context and performance triage unless the human changes the order.
 - Before performance optimization, add or use timing instrumentation that separates local preparation, upload/context work, model-provider calls, LaTeX compilation/repair, and artifact persistence. If live runs spend more than half of wall time inside the external model provider, report that bottleneck and avoid speculative local rewrites.
+- The macOS launcher stubs (`run_web.command`, `run_desktop.command`) are stable by design and must not be edited from Cursor or any other GUI app. To change launcher behavior, edit `scripts/launcher-web.sh` or `scripts/launcher-desktop.sh` instead. If a stub itself genuinely must change (e.g., the path to the real script changes), tell the human and ask them to apply the edit from their own Terminal.app, then run `bash scripts/bless-launchers.sh`. See `docs/DECISIONS/008-launcher-stub-split.md` and `.cursor/rules/launcher-stability.mdc`.
 
 ## Frontend Experience Rules
 

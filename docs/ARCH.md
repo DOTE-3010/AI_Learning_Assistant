@@ -70,12 +70,15 @@ The first rewrite keeps the existing `backend/` and `frontend/` roots to reduce 
 backend/            FastAPI API/runtime and backend modules
 frontend/           Vite web workbench renderer
 apps/desktop/       Electron shell
+scripts/            dev/QA helpers and macOS launcher logic invoked by the .command stubs
 workspace/          generated artifacts
 data/               local SQLite and runtime metadata when mounted on host
 docs/               governance, contracts, task queue, decisions, asset briefs
 ```
 
 Do not create `apps/web/` or `services/api/` during phase 1. If a later task wants that layout, it must add a decision record and update this file, `AGENTS.md`, and affected task verification commands first.
+
+The two macOS launcher files at the project root (`run_web.command`, `run_desktop.command`) are intentionally thin stubs that only `exec /bin/zsh` on the real logic under `scripts/launcher-*.sh`. This split exists so the `.command` files stay free of the `com.apple.provenance` xattr that macOS attaches to any file a GUI app writes, which would otherwise cause `AppleSystemPolicy` to block double-click execution. See `docs/DECISIONS/008-launcher-stub-split.md`.
 
 ## Data Model
 
@@ -167,6 +170,7 @@ Future runtimes must preserve the same contracts:
 - Performance: run-stage timing must be measured before optimization work. If the external model provider accounts for more than half of live run wall time, local optimization should stop at reporting and small obvious fixes unless a separate local bottleneck is demonstrated.
 - Backups/migrations: SQLite uses explicit, forward-only schema migrations with a `schema_version`; the database file and `workspace/` are the two artifacts a user must back up. Both must survive container/app restarts.
 - Security: weak auth is local/teaching only and isolated behind middleware so stronger auth can replace it; tokens are opaque to clients; secret storage follows `docs/DECISIONS/004-local-secret-storage.md`.
+- Launcher hygiene: the macOS launchers at the project root are stub-plus-script: `run_web.command` and `run_desktop.command` are stable stubs and `scripts/launcher-web.sh` and `scripts/launcher-desktop.sh` hold the real logic. The stubs must not be rewritten by Cursor or any other GUI app; if they are, `AppleSystemPolicy` will SIGKILL the script on Finder double-click and `scripts/bless-launchers.sh` must be re-run from the human's Terminal.app. See `docs/DECISIONS/008-launcher-stub-split.md` and `.cursor/rules/launcher-stability.mdc`.
 
 ## Migration Strategy
 

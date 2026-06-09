@@ -1,0 +1,78 @@
+---
+description: macOS launcher stub stability for run_web.command and run_desktop.command
+alwaysApply: true
+---
+
+# Launcher Stability
+
+The two macOS launcher stubs at the project root MUST stay stable across
+agent edits:
+
+- `run_web.command`
+- `run_desktop.command`
+
+Each stub is a ~10-line shell file that only computes its own directory
+and `exec`s `/bin/zsh` on the real launcher under `scripts/`. The real
+launcher logic lives in:
+
+- `scripts/launcher-web.sh`
+- `scripts/launcher-desktop.sh`
+
+## Why the stubs must not be edited from Cursor
+
+When Cursor (or any other GUI app) writes a file, macOS attaches
+kernel-managed extended attributes (`com.apple.provenance`, and on some
+versions `com.apple.macl`). On macOS Sequoia/Tahoe, `AppleSystemPolicy`
+(ASP) then refuses to `execve()` that file when it is launched from
+Finder/Terminal.app, which lack the "App Management" entitlement. The
+process is SIGKILL'd in the kernel before the script's first `echo`, so
+no launcher log is created and the failure looks like a silent crash.
+The unified system log shows entries such as:
+
+  kernel: (AppleSystemPolicy) ASP: Security policy would not allow
+  process: <PID>, /path/to/run_web.command
+
+Those xattrs are kernel-managed and cannot be removed by `xattr -d` or
+`xattr -c` from inside Cursor's process tree, because the kernel
+immediately re-tags any file Cursor touches.
+
+The split-stub design works around this by ensuring the file Finder
+double-clicks (`*.command`) is never modified by Cursor again, so it
+never receives a provenance tag. The real logic file is invoked as
+`/bin/zsh ./scripts/launcher-X.sh`, which only `execve`s `/bin/zsh`
+(Apple-signed, always allowed); the script argument is read as data,
+not executed, so ASP never inspects it.
+
+## Rules for AI agents
+
+1. NEVER call `Write`, `StrReplace`, `EditNotebook`, or any other
+   content-modifying tool on `run_web.command` or `run_desktop.command`.
+   Treat them as read-only.
+2. To change launcher behavior, edit `scripts/launcher-web.sh` or
+   `scripts/launcher-desktop.sh` instead. The stubs do not need to
+   change for any logic update.
+3. If the stub itself genuinely must change (e.g., renaming the real
+   script path), do not edit it directly. Tell the human exactly what
+   new contents to paste and ask them to apply the edit from their own
+   Terminal.app, then run `bash scripts/bless-launchers.sh` to strip
+   any leftover provenance xattr.
+4. `scripts/bless-launchers.sh` is the one-shot human repair tool. Keep
+   it idempotent. Do not invoke it from Cursor's terminal yourself; the
+   bless only takes effect when run from the human's Terminal.app
+   because Cursor's process tree re-tags any file it touches.
+5. The real launcher scripts (`scripts/launcher-*.sh`) may be edited
+   freely. They are read as zsh script arguments and never `execve`'d
+   directly, so ASP never inspects them.
+
+## Diagnostic shortcut
+
+If the human reports "double-click does nothing" or "Killed: 9" with no
+launcher log file under `data/logs/`, run from their Terminal.app:
+
+  /usr/bin/log show --last 5m \
+    --predicate 'eventMessage CONTAINS "AppleSystemPolicy"' \
+    --info
+
+ASP rejections look like the `Security policy would not allow process`
+line cited above. The fix is `bash scripts/bless-launchers.sh` from
+their Terminal, not from Cursor's terminal.
