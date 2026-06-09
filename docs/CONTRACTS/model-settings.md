@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-03
+Last Reviewed: 2026-06-10
 Status: Active
 -->
 
@@ -20,7 +20,7 @@ The model settings experience must prefill every non-secret default needed for a
   "display_name": "Qwen Default",
   "provider": "openai_compatible",
   "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  "model": "qwen-plus",
+  "model": "qwen3.6-flash",
   "api_key_ref": "local-secret-reference",
   "context_window_hint": 1000000,
   "supports_streaming": true,
@@ -36,9 +36,9 @@ Verified on 2026-06-03 against Alibaba Cloud Model Studio OpenAI-compatible Qwen
 | --- | --- | --- |
 | `provider` | `openai_compatible` | Canonical provider adapter for phase 1. |
 | `base_url` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | China (Beijing) OpenAI-compatible endpoint. This matches the human-confirmed phase-1 Qwen API key region. Users with international/Singapore keys may change this to `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`. |
-| `model` | `qwen-plus` | Stable balanced Qwen model used in Alibaba Cloud OpenAI-compatible examples. |
-| `context_window_hint` | `1000000` | Qwen-Plus currently advertises a 1M-token context window in the model list. Treat this as a hint, not exact billing/accounting. |
-| `supports_streaming` | `true` | The OpenAI-compatible Chat API documents streaming examples for `qwen-plus`. |
+| `model` | `qwen3.6-flash` | Cost-efficient Qwen3.6 flash model for China-site OpenAI-compatible calls; near-flagship quality with lower output cost. |
+| `context_window_hint` | `1000000` | Qwen3.6-Flash advertises a 1M-token context window in the model list. Treat this as a hint, not exact billing/accounting. |
+| `supports_streaming` | `true` | The OpenAI-compatible Chat API supports streaming for current Qwen3.6 models. |
 | API key | none | Never default, guess, store in tracked source, or display after save. |
 
 Reference URLs:
@@ -66,7 +66,7 @@ Supported local development variables:
 ```text
 MODEL_PROVIDER=openai_compatible
 MODEL_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-MODEL_NAME=qwen-plus
+MODEL_NAME=qwen3.6-flash
 MODEL_API_KEY=<secret>
 MODEL_CONTEXT_WINDOW=1000000
 MODEL_SUPPORTS_STREAMING=true

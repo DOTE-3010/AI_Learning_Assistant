@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from openai import APIConnectionError, AuthenticationError, OpenAI
+import httpx
+from openai import APIConnectionError, APITimeoutError, AuthenticationError, OpenAI
 
 from backend.core.model_settings import SettingsError, resolve_api_key
 from backend.providers.base import ModelProviderError, TextGenerationRequest
+
+GENERATION_TIMEOUT = httpx.Timeout(connect=15.0, read=300.0, write=15.0, pool=15.0)
 
 
 def test_openai_compatible_provider(profile: dict[str, Any], api_key: str) -> dict[str, Any]:
@@ -43,7 +46,12 @@ class OpenAICompatibleTextProvider:
                 "No model API key is configured.",
             )
 
-        client = OpenAI(api_key=api_key, base_url=profile["base_url"], timeout=60.0)
+        client = OpenAI(
+            api_key=api_key,
+            base_url=profile["base_url"],
+            timeout=GENERATION_TIMEOUT,
+            max_retries=1,
+        )
         try:
             response = client.chat.completions.create(
                 model=profile["model"],
@@ -58,6 +66,11 @@ class OpenAICompatibleTextProvider:
             raise ModelProviderError(
                 "provider_auth_failed",
                 "The model provider rejected the API key. Update it in model settings.",
+            ) from exc
+        except APITimeoutError as exc:
+            raise ModelProviderError(
+                "provider_timeout",
+                "The model provider did not respond in time. The generation may be too large; try a shorter brief or fewer target pages.",
             ) from exc
         except APIConnectionError as exc:
             raise ModelProviderError(

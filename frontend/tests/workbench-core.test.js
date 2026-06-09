@@ -163,7 +163,7 @@ test("course helpers hide archived courses and keep the default selectable", () 
 test("default Qwen profile only omits the API key", () => {
     assert.equal(DEFAULT_MODEL_PROFILE.provider, "openai_compatible");
     assert.equal(DEFAULT_MODEL_PROFILE.baseUrl, "https://dashscope.aliyuncs.com/compatible-mode/v1");
-    assert.equal(DEFAULT_MODEL_PROFILE.model, "qwen-plus");
+    assert.equal(DEFAULT_MODEL_PROFILE.model, "qwen3.6-flash");
     assert.equal(DEFAULT_MODEL_PROFILE.contextWindowHint, 1000000);
     assert.equal(DEFAULT_MODEL_PROFILE.supportsStreaming, true);
     assert.equal(Object.hasOwn(DEFAULT_MODEL_PROFILE, "apiKey"), false);

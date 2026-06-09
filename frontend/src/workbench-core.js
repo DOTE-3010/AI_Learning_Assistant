@@ -13,7 +13,7 @@ export const DEFAULT_MODEL_PROFILE = Object.freeze({
     displayName: "Qwen Default",
     provider: "openai_compatible",
     baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    model: "qwen-plus",
+    model: "qwen3.6-flash",
     contextWindowHint: 1000000,
     supportsStreaming: true,
 });

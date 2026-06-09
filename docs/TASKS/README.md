@@ -54,8 +54,8 @@ Re-wrap the verified web product into the Electron shell for release distributio
 | 009 | Update frontend preview for HTML artifacts | 2 | Completed | Agent |
 | 010 | Migrate pipeline unit tests | 3 | Completed | Agent |
 | 011 | Add integration tests for HTML-to-PDF | 3 | Completed | Agent |
-| 012 | Update E2E smoke script | 3 | Pending | Agent |
-| 013 | Electron packaging for release | 4 | Pending | Agent/Human |
+| 012 | Update E2E smoke script | 3 | Completed | Agent |
+| 013 | Electron packaging for release | 4 | Completed | Agent/Human |
 
 ## Completed History
 

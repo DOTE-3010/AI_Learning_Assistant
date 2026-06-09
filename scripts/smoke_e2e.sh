@@ -147,7 +147,7 @@ PROFILE_ID="$(json_get "${TMP_ROOT}/profile.json" id)"
 status="$(curl_json POST /api/settings/model-profiles/test "${TMP_ROOT}/profile-test.json" "{}" -H "${AUTH_HEADER}")"
 assert_status "${status}" 200 "${TMP_ROOT}/profile-test.json"
 
-RUN_BODY="{\"task_text\":\"Write a tiny Python program that prints a mocked smoke-test result.\",\"intent\":\"code_homework\",\"output_preference\":\"py\",\"search_mode\":\"off\",\"model_profile_id\":\"${PROFILE_ID}\",\"upload_ids\":[\"${UPLOAD_ID}\"],\"options\":{}}"
+RUN_BODY="{\"task_text\":\"Write a short smoke-test essay about using uploaded notes in an information systems class.\",\"intent\":\"essay_latex\",\"output_preference\":\"pdf\",\"search_mode\":\"off\",\"model_profile_id\":\"${PROFILE_ID}\",\"upload_ids\":[\"${UPLOAD_ID}\"],\"options\":{}}"
 status="$(curl_json POST /api/runs "${TMP_ROOT}/run.json" "${RUN_BODY}" -H "${AUTH_HEADER}")"
 assert_status "${status}" 202 "${TMP_ROOT}/run.json"
 RUN_ID="$(json_get "${TMP_ROOT}/run.json" id)"
@@ -192,7 +192,7 @@ assert "smoke-profile-key" not in json.dumps(profile), profile
 assert profile["api_key_ref"] == "env:MODEL_API_KEY", profile
 assert profile_test["ok"] is True, profile_test
 assert run["status"] == "succeeded", run
-assert run["intent"] == "code_homework", run
+assert run["intent"] == "essay_latex", run
 assert run["context"]["warning_level"] == "ok", run
 assert fetched_run["id"] == run["id"], fetched_run
 assert fetched_run["status"] == "succeeded", fetched_run
@@ -207,9 +207,15 @@ assert manifest_path.exists(), manifest_path
 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 assert manifest["schema_version"] == 1, manifest
 assert manifest["run_id"] == run["id"], manifest
-assert manifest["intent"] == "code_homework", manifest
+assert manifest["intent"] == "essay_latex", manifest
 assert manifest["status"] == "succeeded", manifest
-assert {"path": "output/solution.py", "kind": "script"} in manifest["outputs"], manifest
+assert {"path": "output/main.html", "kind": "source"} in manifest["outputs"], manifest
+assert {"path": "output/main.pdf", "kind": "pdf"} in manifest["outputs"], manifest
+assert {
+    entry["path"] for entry in manifest["outputs"]
+} == {"output/main.html", "output/main.pdf"}, manifest
+for entry in [*manifest["inputs"], *manifest["outputs"]]:
+    assert (host_run_root / entry["path"]).exists(), entry
 stage_timings = {
     stage["name"]: stage["duration_ms"]
     for stage in manifest["timings"]["stages"]
@@ -217,7 +223,7 @@ stage_timings = {
 timing_groups = {
     "provider_generation_ms": stage_timings.get("provider_generation", 0)
     + stage_timings.get("repair_generation", 0),
-    "latex_compile_repair_ms": stage_timings.get("compile_pdf", 0),
+    "convert_pdf_ms": stage_timings.get("convert_pdf", 0),
     "context_upload_search_ms": stage_timings.get("preparation_context", 0)
     + stage_timings.get("search", 0),
     "artifact_persistence_ms": stage_timings.get("artifact_persistence", 0),
@@ -228,9 +234,20 @@ timing_groups["other_local_ms"] = max(
 )
 timing_groups["total_ms"] = manifest["timings"]["total_ms"]
 
-solution_path = host_run_root / "output" / "solution.py"
-assert solution_path.exists(), solution_path
-assert "mocked pipeline output" in solution_path.read_text(encoding="utf-8")
+html_path = host_run_root / "output" / "main.html"
+pdf_path = host_run_root / "output" / "main.pdf"
+convert_log_path = host_run_root / "logs" / "convert.log"
+assert html_path.exists(), html_path
+assert pdf_path.exists(), pdf_path
+assert convert_log_path.exists(), convert_log_path
+html_text = html_path.read_text(encoding="utf-8")
+assert html_text.lstrip().lower().startswith("<!doctype html>"), html_text[:120]
+assert "Mocked Essay" in html_text, html_text[:500]
+assert pdf_path.read_bytes().startswith(b"%PDF"), pdf_path
+assert pdf_path.stat().st_size > 1024, pdf_path.stat().st_size
+convert_log = convert_log_path.read_text(encoding="utf-8")
+assert "Converter: playwright_chromium" in convert_log, convert_log
+assert "Result: pdf_ok" in convert_log, convert_log
 
 secret_file = pathlib.Path(os.environ["AILA_DATA_DIR"]) / "model-secrets.env"
 assert secret_file.exists(), secret_file

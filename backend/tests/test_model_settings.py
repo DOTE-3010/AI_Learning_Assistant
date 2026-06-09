@@ -52,7 +52,7 @@ def test_create_update_and_list_default_model_profile_redacts_secret(settings_cl
             "display_name": "Qwen",
             "provider": "openai_compatible",
             "base_url": DEFAULT_QWEN_BASE_URL,
-            "model": "qwen-plus",
+            "model": "qwen3.6-flash",
             "api_key": raw_key,
             "context_window_hint": 1000000,
             "supports_streaming": True,
@@ -93,7 +93,7 @@ def test_missing_credentials_return_clear_error(settings_client):
         headers=headers,
         json={
             "base_url": DEFAULT_QWEN_BASE_URL,
-            "model": "qwen-plus",
+            "model": "qwen3.6-flash",
         },
     )
     assert save.status_code == 200
@@ -120,7 +120,7 @@ def test_provider_connectivity_is_mockable(settings_client):
         headers=headers,
         json={
             "base_url": DEFAULT_QWEN_BASE_URL,
-            "model": "qwen-plus",
+            "model": "qwen3.6-flash",
             "api_key": "sk-connectivity-test",
         },
     )
@@ -132,7 +132,7 @@ def test_provider_connectivity_is_mockable(settings_client):
     assert response.json() == {
         "ok": True,
         "provider": "openai_compatible",
-        "model": "qwen-plus",
+        "model": "qwen3.6-flash",
     }
     assert seen["api_key"] == "sk-connectivity-test"
 
@@ -146,7 +146,7 @@ def test_environment_default_profile_uses_documented_qwen_defaults(monkeypatch):
 
     assert defaults["provider"] == "openai_compatible"
     assert defaults["base_url"] == DEFAULT_QWEN_BASE_URL
-    assert defaults["model"] == "qwen-plus"
+    assert defaults["model"] == "qwen3.6-flash"
     assert defaults["context_window_hint"] == 1000000
     assert defaults["supports_streaming"] is True
 

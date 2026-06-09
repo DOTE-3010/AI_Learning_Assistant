@@ -11,7 +11,7 @@ MODEL_API_KEY_REF = "env:MODEL_API_KEY"
 SECRET_FILE_ENV = "MODEL_SECRET_FILE"
 DEFAULT_SECRET_FILE = Path(".env.local")
 DEFAULT_QWEN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-DEFAULT_QWEN_MODEL = "qwen-plus"
+DEFAULT_QWEN_MODEL = "qwen3.6-flash"
 DEFAULT_QWEN_CONTEXT_WINDOW = 1000000
 
 
