@@ -7,9 +7,11 @@ import authEntryPreviewUrl from "./assets/previews/auth-entry-preview.png";
 import emptyWorkbenchPreviewUrl from "./assets/previews/empty-workbench-preview.png";
 import {
     DEFAULT_MODEL_PROFILE,
+    UPLOAD_ACCEPT_ATTRIBUTE,
     applyWorkbenchInteraction,
     buildRunRequest,
     canSubmitRun as canSubmitRunCore,
+    isActiveRunStatus,
     normalizeActiveCodeFile,
     optionsForIntent as optionsForIntentCore,
     outputPreferenceForIntent as outputPreferenceForIntentCore,
@@ -184,7 +186,6 @@ function renderConsolePane(isAuthenticated) {
             <div class="pane-head">
                 <div>
                     <div class="pane-kicker">${escapeHtml(t("pane.consoleKicker"))}</div>
-                    <h1>${escapeHtml(t("pane.consoleTitle"))}</h1>
                 </div>
                 <div class="pane-actions">
                     ${renderLocaleSwitch()}
@@ -223,11 +224,11 @@ function renderConsolePane(isAuthenticated) {
                 ${renderIntentOptions()}
                 ${renderUploadArea()}
                 <div class="composer-actions">
-                    <button class="run-button" type="button" data-action="run" ${canSubmitRun(isAuthenticated) ? "" : "disabled"}>
+                    <button class="run-button" type="button" data-action="run" data-run-status="${escapeHtml(state.run.status)}" ${canSubmitRun(isAuthenticated) ? "" : "disabled"}>
                         <span class="run-glyph" aria-hidden="true"></span>
                         <span data-run-button-label>${runButtonLabel()}</span>
                     </button>
-                    <span class="run-note" data-run-note>${escapeHtml(runNote(isAuthenticated))}</span>
+                    ${renderComposerRunStatus(isAuthenticated)}
                 </div>
             </section>
 
@@ -315,7 +316,7 @@ function renderUploadArea() {
     return `
         <section class="upload-module" aria-label="${escapeHtml(t("uploads.label"))}">
             <div class="upload-zone" data-action="open-file-picker" role="button" tabindex="0">
-                <input id="file-input" type="file" multiple>
+                <input id="file-input" type="file" multiple accept="${UPLOAD_ACCEPT_ATTRIBUTE}">
                 <span class="upload-mark" aria-hidden="true"></span>
                 <div>
                     <strong>${escapeHtml(t("uploads.label"))}</strong>
@@ -362,7 +363,7 @@ function renderAuthEntry() {
 }
 
 function renderRefinementComposer(isAuthenticated) {
-    const disabled = !isAuthenticated || !state.run.id || state.run.status === "queued" || state.run.status === "running";
+    const disabled = !isAuthenticated || !state.run.id || isActiveRunStatus(state.run.status);
     return `
         <section class="refinement-composer" aria-label="${escapeHtml(t("refinement.label"))}">
             <div class="composer-head">
@@ -653,7 +654,7 @@ function renderPreviewOverlay(title, message) {
             </div>
         `;
     }
-    if (state.run.status === "queued" || state.run.status === "running") {
+    if (isActiveRunStatus(state.run.status)) {
         return `
             <div class="preview-overlay is-running">
                 <strong>${escapeHtml(stageLabel(state.run.stage))}</strong>
@@ -1629,13 +1630,14 @@ function updateComposerActionState() {
     const runButton = document.querySelector("[data-action='run']");
     if (runButton) {
         runButton.disabled = !canSubmitRun(authenticated);
+        runButton.dataset.runStatus = state.run.status;
         const label = runButton.querySelector("[data-run-button-label]");
         if (label) label.textContent = runButtonLabel();
     }
-    const runNoteElement = document.querySelector("[data-run-note]");
-    if (runNoteElement) runNoteElement.textContent = runNote(authenticated);
+    const runNoteElement = document.querySelector("[data-run-note-shell]");
+    if (runNoteElement) runNoteElement.outerHTML = renderComposerRunStatus(authenticated);
 
-    const refinementDisabled = !authenticated || !state.run.id || state.run.status === "queued" || state.run.status === "running";
+    const refinementDisabled = !authenticated || !state.run.id || isActiveRunStatus(state.run.status);
     const refinementButton = document.querySelector("[data-action='run-refinement']");
     if (refinementButton) refinementButton.disabled = refinementDisabled || !state.refinementText.trim();
 }
@@ -1962,30 +1964,48 @@ function artifactAccessNote() {
 }
 
 function runButtonLabel() {
-    if (state.run.status === "queued" || state.run.status === "running") return t("actions.running");
+    if (isActiveRunStatus(state.run.status)) return t("actions.running");
     if (state.run.status === "failed") return t("actions.runAgain");
     return t("actions.runArtifact");
+}
+
+function renderComposerRunStatus(isAuthenticated) {
+    if (!isActiveRunStatus(state.run.status)) {
+        return `<span class="run-note" data-run-note-shell>${escapeHtml(runNote(isAuthenticated))}</span>`;
+    }
+    return `
+        <div class="comfort-progress" data-run-note-shell role="status" aria-live="polite" aria-label="${escapeHtml(t("composer.progressAria"))}">
+            <div class="comfort-progress-head">
+                <strong>${escapeHtml(t("composer.progressLabel"))}</strong>
+                <span>${escapeHtml(stageLabel(state.run.stage))}</span>
+            </div>
+            <div class="comfort-progress-track" aria-hidden="true">
+                <span class="comfort-progress-fill"></span>
+            </div>
+            <p>${escapeHtml(t("composer.progressNote"))}</p>
+        </div>
+    `;
 }
 
 function runNote(isAuthenticated) {
     if (!isAuthenticated) return t("composer.runNoteLogin");
     if (!state.taskText.trim()) return t("composer.runNoteBrief");
     if (state.files.some((file) => !file.uploadId)) return t("composer.runNoteUploads");
-    if (state.run.status === "queued" || state.run.status === "running") return t("composer.runNoteRunning");
+    if (isActiveRunStatus(state.run.status)) return t("composer.runNoteRunning");
     return t("composer.runNoteReady");
 }
 
 function codeStatusTitle() {
     if (state.run.status === "failed") return t("run.validationIssue");
     if (state.run.status === "succeeded") return t("run.artifactReady");
-    if (state.run.status === "queued" || state.run.status === "running") return t("run.generating");
+    if (isActiveRunStatus(state.run.status)) return t("run.generating");
     return t("run.rendererArmed");
 }
 
 function codeStatusDetail() {
     if (state.run.status === "failed") return state.run.errorCode || t("run.sourcePreserved");
     if (state.run.status === "succeeded") return state.run.outputRoot ? t("run.copyOpenAvailable") : t("run.completed");
-    if (state.run.status === "queued" || state.run.status === "running") return stageLabel(state.run.stage);
+    if (isActiveRunStatus(state.run.status)) return stageLabel(state.run.stage);
     return t("run.syntaxPreview");
 }
 

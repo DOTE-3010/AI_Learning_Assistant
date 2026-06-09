@@ -43,7 +43,7 @@ QA must run in this order:
 2. Agent module unit/functional tests. *(completed)*
 3. Agent integration tests. *(completed)*
 4. Human end-to-end functional tests. *(completed 2026-06-05)*
-5. Web browser QA baseline — verify Docker plus browser workflow without Electron. *(active, task 000)*
+5. Web browser QA baseline — verify Docker plus browser workflow without Electron. *(completed 2026-06-09, task 000)*
 6. Post-human-E2E repair tasks — high-priority blockers then medium-priority follow-ups. *(tasks 001–011)*
 7. Human E2E retest on web — loops with additional fix tasks until the human declares the web product acceptable.
 8. Electron packaging and desktop-specific QA — only after the human approves advancement from phase 7. *(task 012)*

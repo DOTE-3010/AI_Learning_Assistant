@@ -7,6 +7,8 @@ export const ARTIFACT_INTENTS = Object.freeze([
 
 export const SEARCH_MODES = Object.freeze(["auto", "on", "off"]);
 
+export const UPLOAD_ACCEPT_ATTRIBUTE = ".txt,.md,.py,.ipynb,.pdf,text/plain,text/markdown,text/x-python,application/json,application/pdf";
+
 export const DEFAULT_MODEL_PROFILE = Object.freeze({
     displayName: "Qwen Default",
     provider: "openai_compatible",
@@ -68,9 +70,12 @@ export function canSubmitRun({ isAuthenticated, taskText, runStatus }) {
     return Boolean(
         isAuthenticated
         && String(taskText || "").trim()
-        && runStatus !== "queued"
-        && runStatus !== "running"
+        && !isActiveRunStatus(runStatus)
     );
+}
+
+export function isActiveRunStatus(runStatus) {
+    return runStatus === "queued" || runStatus === "running";
 }
 
 export function outputPreferenceForIntent(intent, codeOutputPreference) {

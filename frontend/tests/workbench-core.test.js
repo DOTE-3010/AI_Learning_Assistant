@@ -4,9 +4,11 @@ import { test } from "node:test";
 import { LOCALES, messages } from "../src/locales.js";
 import {
     DEFAULT_MODEL_PROFILE,
+    UPLOAD_ACCEPT_ATTRIBUTE,
     applyWorkbenchInteraction,
     buildRunRequest,
     canSubmitRun,
+    isActiveRunStatus,
     normalizeActiveCodeFile,
     optionsForIntent,
     outputPreferenceForIntent,
@@ -26,6 +28,9 @@ const requiredLocaleKeys = [
     "preview.sourceTitle",
     "preview.logsTitle",
     "preview.manifestTitle",
+    "composer.progressLabel",
+    "composer.progressNote",
+    "composer.progressAria",
     "stages.repair_source",
     "model.defaultHelp",
     "model.provider",
@@ -113,6 +118,12 @@ test("default Qwen profile only omits the API key", () => {
     assert.equal(Object.hasOwn(DEFAULT_MODEL_PROFILE, "apiKey"), false);
 });
 
+test("upload accept attribute covers phase-1 file types", () => {
+    for (const accepted of [".txt", ".md", ".py", ".ipynb", ".pdf", "application/pdf"]) {
+        assert.equal(UPLOAD_ACCEPT_ATTRIBUTE.includes(accepted), true, accepted);
+    }
+});
+
 test("submission and artifact helpers match workbench expectations", () => {
     assert.equal(canSubmitRun({
         isAuthenticated: true,
@@ -138,6 +149,15 @@ test("submission and artifact helpers match workbench expectations", () => {
         density: "dense",
     });
     assert.equal(normalizeActiveCodeFile("py", "solution.ipynb"), "solution.py");
+});
+
+test("run motion status is active only for queued and running states", () => {
+    for (const status of ["queued", "running"]) {
+        assert.equal(isActiveRunStatus(status), true, status);
+    }
+    for (const status of ["idle", "ready", "succeeded", "failed", "cancelled", "", null]) {
+        assert.equal(isActiveRunStatus(status), false, String(status));
+    }
 });
 
 function messageAt(catalog, path) {

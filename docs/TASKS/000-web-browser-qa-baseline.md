@@ -1,7 +1,7 @@
 <!--
 Owner: agent
 Last Reviewed: 2026-06-09
-Status: Pending
+Status: Complete
 -->
 
 # Task 000: Web Browser QA Baseline
@@ -90,6 +90,12 @@ npm --prefix frontend run test
 - E2E smoke passes.
 - No Electron dependency is required for any verification step.
 - Human can begin Phase 2 E2E testing directly in the browser.
+
+## Completion Notes
+
+Completed on 2026-06-09. The Docker plus browser workflow is verified at `http://127.0.0.1:14242/ui/` without Electron. One browser-baseline issue was fixed: the frontend file picker now advertises the phase-1 upload types through its `accept` attribute while preserving multi-file upload.
+
+Durable report: `docs/QA_REPORTS/2026-06-09-web-browser-qa-baseline.md`.
 
 ## Non-Goals
 

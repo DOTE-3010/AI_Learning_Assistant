@@ -20,7 +20,6 @@ export const messages = {
         },
         pane: {
             consoleKicker: "Production console",
-            consoleTitle: "Generate artifacts",
             previewKicker: "Artifact preview",
         },
         actions: {
@@ -101,6 +100,9 @@ export const messages = {
             runNoteUploads: "Selected files upload before run creation.",
             runNoteRunning: "Context and stage events update as the backend reports.",
             runNoteReady: "Ready for a local generation run.",
+            progressLabel: "Approximate progress",
+            progressNote: "This bar is a comfort estimate while the backend works; stage text is authoritative.",
+            progressAria: "Approximate generation progress",
         },
         uploads: {
             label: "Reference files",
@@ -346,7 +348,6 @@ export const messages = {
         },
         pane: {
             consoleKicker: "生产控制台",
-            consoleTitle: "生成学术成果",
             previewKicker: "成果预览",
         },
         actions: {
@@ -427,6 +428,9 @@ export const messages = {
             runNoteUploads: "已选文件会在创建运行前上传。",
             runNoteRunning: "后端报告上下文与阶段事件后会同步更新。",
             runNoteReady: "已准备好创建本地生成运行。",
+            progressLabel: "近似进度",
+            progressNote: "此进度条仅用于等待时的节奏提示；实际状态以后端阶段为准。",
+            progressAria: "近似生成进度",
         },
         uploads: {
             label: "参考文件",
@@ -672,7 +676,6 @@ export const messages = {
         },
         pane: {
             consoleKicker: "生產控制台",
-            consoleTitle: "生成學術成果",
             previewKicker: "成果預覽",
         },
         actions: {
@@ -753,6 +756,9 @@ export const messages = {
             runNoteUploads: "已選文件會在建立執行前上傳。",
             runNoteRunning: "後端回報上下文與階段事件後會同步更新。",
             runNoteReady: "已準備好建立本地生成執行。",
+            progressLabel: "近似進度",
+            progressNote: "此進度條僅用於等待時的節奏提示；實際狀態以後端階段為準。",
+            progressAria: "近似生成進度",
         },
         uploads: {
             label: "參考文件",

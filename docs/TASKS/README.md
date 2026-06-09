@@ -59,8 +59,8 @@ After the web product passes human QA, re-wrap into Electron. QA at this phase c
 
 | # | Task | Phase | Priority | State | Owner |
 | --- | --- | --- | --- | --- | --- |
-| 000 | Web browser QA baseline | A | — | Pending | Agent |
-| 001 | Fix run status motion and comfort progress | B | High | Pending | Agent |
+| 000 | Web browser QA baseline | A | — | Complete | Agent |
+| 001 | Fix run status motion and comfort progress | B | High | Complete | Agent |
 | 002 | Add authenticated artifact access API | B | High | Pending | Agent |
 | 003 | Render real artifact preview content | B | High | Pending | Agent |
 | 004 | Add PDF page preview renderer | B | High | Pending | Agent |
@@ -85,6 +85,8 @@ After the web product passes human QA, re-wrap into Electron. QA at this phase c
 | First human E2E fixes | Workbench usability, provider, and LaTeX fixes applied. | `docs/QA_REPORTS/2026-06-03-human-e2e.md` |
 | Pre-E2E runtime/contract repairs | CORS, run lifecycle, and smoke friction fixed. | `docs/QA_REPORTS/2026-06-05-pre-e2e-runtime-contract-repairs.md` |
 | Human E2E completion | All generation functions pass; repair queue populated. | `docs/QA_REPORTS/2026-06-05-human-e2e-completion.md` |
+| Web browser QA baseline | Docker plus browser workflow verified without Electron. | `docs/QA_REPORTS/2026-06-09-web-browser-qa-baseline.md` |
+| Task 001 run status/progress repair | Truthful run motion and approximate composer comfort progress implemented and verified. | `docs/QA_REPORTS/2026-06-09-task001-run-status-progress.md` |
 
 ## Acceptance Criteria
 

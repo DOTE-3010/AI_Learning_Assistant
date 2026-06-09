@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-05
+Last Reviewed: 2026-06-09
 Status: Active
 -->
 
@@ -8,7 +8,7 @@ Status: Active
 
 ## Architecture Summary
 
-The rebuild uses a local-first architecture: Electron provides the desktop shell, a web renderer provides the conversational artifact workbench, Docker Desktop runs the backend/runtime container, SQLite stores local metadata, and generated artifacts are written to explicit filesystem folders.
+The rebuild uses a local-first architecture: a web renderer provides the conversational artifact workbench, Docker Desktop runs the backend/runtime container, SQLite stores local metadata, and generated artifacts are written to explicit filesystem folders. Electron remains the desktop shell and packaging wrapper, but current functional QA and repair work targets the Docker plus browser surface first.
 
 The web renderer is the product center. It presents a production console beside a persistent preview panel, so generation history, run status, and follow-up instructions stay adjacent to the current artifact instead of burying outputs in chat text.
 
@@ -17,16 +17,18 @@ The existing frontend implementation is disposable from an architecture perspect
 The system is intentionally portable. The same API, storage interfaces, and artifact contracts should later support a native no-Docker desktop build or a hosted server deployment without rewriting product logic. The shell talks to the backend only over HTTP/SSE so the runtime underneath can change.
 
 ```text
-[Electron shell]  --detect/start-->  [Docker Desktop]
-       |                                   |
-       | loads window                      | docker compose up
-       v                                   v
+[Browser at /ui/] ------------------> [Docker Desktop]
+                                            |
+                                            | docker compose up
+                                            v
 [Web Workbench: console + preview] --HTTP/SSE--> [Backend API container]
                                    |--> SQLite file (metadata)
                                    |--> workspace/ (artifact bytes)
                                    |--> Qwen / OpenAI-compatible API
                                    |--> optional web search
                                    |--> LaTeX toolchain (in container)
+
+[Electron shell] wraps the same Docker-backed workbench in the final packaging phase.
 ```
 
 ## Technology Stack

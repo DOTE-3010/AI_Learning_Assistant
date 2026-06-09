@@ -1,6 +1,6 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-05
+Last Reviewed: 2026-06-09
 Status: Active
 -->
 
@@ -16,13 +16,13 @@ The current frontend appearance is not a compatibility target. The phase-1 front
 
 The target aesthetic is warm, elegant, and editorial rather than sci-fi or dashboard-like. The workbench may take inspiration from modern warm AI tools and literary product surfaces, but it must remain original: warm graphite, parchment, clay/terracotta accents, readable serif typography, and product-state previews should define the experience. Do not copy proprietary brand assets, proprietary typefaces, or exact visual identity from another product.
 
-The product should feel like a polished consumer creative tool, not a generic admin dashboard. The first production-shaped implementation is an Electron desktop shell that depends on Docker Desktop to run the local backend, LaTeX runtime, and file processing stack.
+The product should feel like a polished consumer creative tool, not a generic admin dashboard. The active QA and repair surface is the web workbench served by the Docker runtime at `/ui/`; the Electron shell remains a later packaging wrapper for the same backend and frontend contracts.
 
 ## Current Phase
 
 The phase-1 implementation queue is complete as of 2026-06-03 and has been summarized in `docs/IMPLEMENTATION_SUMMARY.md`. Human review then identified the missing backend upload API as a pre-QA blocker because uploads are part of the phase-1 product acceptance criteria.
 
-The upload blocker was resolved on 2026-06-03. Whole-product QA is governed by `docs/QA_PLAN.md`; agent QA phases and the first human-selected E2E usability fix pass were completed and recorded under `docs/QA_REPORTS/`. On 2026-06-05 the human completed manual E2E functional testing: all four generation capabilities passed, but three high-priority product blockers and two medium-priority follow-up areas were identified. Active work now follows the post-human-E2E repair queue in `docs/TASKS/`, with the human findings recorded in `docs/QA_REPORTS/2026-06-05-human-e2e-completion.md`.
+The upload blocker was resolved on 2026-06-03. Whole-product QA is governed by `docs/QA_PLAN.md`; agent QA phases and the first human-selected E2E usability fix pass were completed and recorded under `docs/QA_REPORTS/`. On 2026-06-05 the human completed manual E2E functional testing: all four generation capabilities passed, but three high-priority product blockers and two medium-priority follow-up areas were identified. On 2026-06-09 task 000 re-established Docker plus browser as the active functional QA baseline at `http://127.0.0.1:14242/ui/`, with Electron packaging deferred until the web product is accepted. Active work now follows the post-human-E2E repair queue in `docs/TASKS/`, with the human findings recorded in `docs/QA_REPORTS/2026-06-05-human-e2e-completion.md`.
 
 Release readiness requires the high-priority blockers to be fixed or explicitly waived by the human: truthful run status motion plus a comfort progress bar, real generated-output previews, and LaTeX diagram-placeholder/complex-diagram avoidance. Medium-priority course context and performance bottleneck work may proceed after the high-priority queue unless the human reorders it.
 
@@ -184,3 +184,4 @@ Process outcomes that make the rebuild safe for rotating agents (verified by `sc
 - 2026-06-03: Pinned documented Qwen non-secret defaults for the China-site API and added human E2E usability requirements for legible run stages and non-inert preview tabs.
 - 2026-06-05: Cleared the completed QA task queue by human decision and opened a narrow pre-E2E runtime/contract repair task before manual E2E resumes.
 - 2026-06-05: Recorded completed human E2E results, promoted status/progress, real preview, and LaTeX diagram handling to high-priority repair work, and added medium-priority course context plus performance triage direction.
+- 2026-06-09: Re-established Docker plus browser as the functional QA baseline and deferred Electron packaging until after web product acceptance.
