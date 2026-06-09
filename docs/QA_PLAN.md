@@ -25,7 +25,7 @@ As of 2026-06-05, human E2E functional testing completed and confirmed that all 
 
 QA could not start while the former pre-QA upload blocker was open. The backend upload API is part of the existing upload contract and phase-1 product acceptance criteria, so its absence was treated as a blocker rather than a QA risk.
 
-As of 2026-06-03, the upload blocker was resolved and the agent QA sequence proceeded through smoke, module functional, and integration testing. As of 2026-06-05, the human cleared the completed numbered QA queue from `docs/TASKS/`, completed manual E2E functional testing, and supplied the next repair queue. Durable QA results remain under `docs/QA_REPORTS/`, including `docs/QA_REPORTS/2026-06-05-human-e2e-completion.md`.
+As of 2026-06-03, the upload blocker was resolved and the agent QA sequence proceeded through smoke, module functional, and integration testing. As of 2026-06-05, the human completed manual E2E functional testing and supplied the post-E2E repair queue. As of 2026-06-09, the human restructured the queue into a three-phase web-first strategy: (A) verify Docker plus browser baseline, (B) complete post-human-E2E repair tasks and additional human-filed fixes, (C) Electron packaging after the human declares the web product acceptable. See `docs/TASKS/README.md` for the active queue.
 
 The upload blocker is cleared only when:
 
@@ -39,13 +39,16 @@ The upload blocker is cleared only when:
 
 QA must run in this order:
 
-1. Agent module smoke tests.
-2. Agent module unit/functional tests.
-3. Agent integration tests.
-4. Human end-to-end functional tests.
-5. Post-human-E2E repair tasks for human-reported blockers and approved follow-ups.
+1. Agent module smoke tests. *(completed)*
+2. Agent module unit/functional tests. *(completed)*
+3. Agent integration tests. *(completed)*
+4. Human end-to-end functional tests. *(completed 2026-06-05)*
+5. Web browser QA baseline — verify Docker plus browser workflow without Electron. *(active, task 000)*
+6. Post-human-E2E repair tasks — high-priority blockers then medium-priority follow-ups. *(tasks 001–011)*
+7. Human E2E retest on web — loops with additional fix tasks until the human declares the web product acceptable.
+8. Electron packaging and desktop-specific QA — only after the human approves advancement from phase 7. *(task 012)*
 
-Do not begin QA until the pre-QA entry gate is closed. Do not advance to the next QA phase while open blockers remain in the current phase. Non-blocking risks may advance only after the human accepts them or asks an agent to fix them.
+Do not begin QA until the pre-QA entry gate is closed. Do not advance to the next QA phase while open blockers remain in the current phase. Non-blocking risks may advance only after the human accepts them or asks an agent to fix them. Do not begin Electron packaging (phase 8) until the human explicitly approves advancement from phase 7.
 
 ## Ownership
 
