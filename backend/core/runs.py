@@ -44,10 +44,20 @@ from backend.providers.base import TextGenerationProvider
 from backend.providers.mock import MockTextGenerationProvider
 from backend.providers.openai_compatible import OpenAICompatibleTextProvider
 from backend.storage.sqlite import SQLiteRepository
+from backend.timing import RunTimingRecorder
 
 VALID_INTENTS = set(SUPPORTED_INTENTS)
 VALID_SEARCH_MODES = {"auto", "on", "off"}
 MOCK_MODEL_PROVIDER_ENV = "AILA_MOCK_MODEL_PROVIDER"
+EVENT_TIMING_STAGES = {
+    "decide_search": "search",
+    "generate_source": "provider_generation",
+    "validate_python": "output_validation",
+    "validate_notebook": "output_validation",
+    "compile_pdf": "compile_pdf",
+    "repair_source": "repair_generation",
+    "write_manifest": "artifact_persistence",
+}
 
 
 @dataclass(frozen=True)
@@ -97,6 +107,7 @@ def _emit_run_event(
     message: str,
     preparation: RunPreparation | None = None,
     error: dict[str, str] | None = None,
+    timing: RunTimingRecorder | None = None,
 ) -> None:
     emit_run_event(
         run_id=run_id,
@@ -104,11 +115,20 @@ def _emit_run_event(
         stage=stage,
         message=message,
         context=preparation.context.estimate if preparation else None,
+        timings=(
+            timing.event_payload(EVENT_TIMING_STAGES.get(stage, stage))
+            if timing
+            else None
+        ),
         error=error,
     )
 
 
-def _running_event_sink(run_id: str, preparation: RunPreparation) -> Callable[[str, str], None]:
+def _running_event_sink(
+    run_id: str,
+    preparation: RunPreparation,
+    timing: RunTimingRecorder | None,
+) -> Callable[[str, str], None]:
     def _emit(stage: str, message: str) -> None:
         _emit_run_event(
             run_id=run_id,
@@ -116,6 +136,7 @@ def _running_event_sink(run_id: str, preparation: RunPreparation) -> Callable[[s
             stage=stage,
             message=message,
             preparation=preparation,
+            timing=timing,
         )
 
     return _emit
@@ -273,7 +294,8 @@ def execute_code_homework_run(
     model_provider: TextGenerationProvider,
 ) -> None:
     repo.update_run(run["id"], status="running", error_message=None)
-    emit_event = _running_event_sink(run["id"], preparation)
+    timing = artifact_run.timing
+    emit_event = _running_event_sink(run["id"], preparation, timing)
     try:
         result = run_code_homework_pipeline(
             artifact_run=artifact_run,
@@ -286,6 +308,7 @@ def execute_code_homework_run(
             search=artifact_run.search,
             max_output_tokens=preparation.context.estimate.estimated_output_tokens,
             emit_event=emit_event,
+            timing=timing,
         )
     except PipelineError as exc:
         repo.update_run(
@@ -293,7 +316,9 @@ def execute_code_homework_run(
             status="failed",
             error_message=f"{exc.code}: {exc.message}",
         )
-        artifact_run.write_log("generation.log", exc.to_log_text())
+        artifact_run.write_log(
+            "generation.log", exc.to_log_text() + artifact_run.timing_log_text()
+        )
         artifact_run.write_manifest(status="failed")
         _emit_run_event(
             run_id=run["id"],
@@ -302,11 +327,14 @@ def execute_code_homework_run(
             message=exc.message,
             preparation=preparation,
             error={"code": exc.code, "message": exc.message},
+            timing=timing,
         )
         return
 
     repo.update_run(run["id"], status="succeeded", error_message=None)
-    artifact_run.write_log("generation.log", result.log_text)
+    artifact_run.write_log(
+        "generation.log", result.log_text + artifact_run.timing_log_text()
+    )
     artifact_run.write_manifest(status="succeeded")
     _emit_run_event(
         run_id=run["id"],
@@ -314,6 +342,7 @@ def execute_code_homework_run(
         stage="write_manifest",
         message="Run succeeded.",
         preparation=preparation,
+        timing=timing,
     )
 
 
@@ -327,7 +356,8 @@ def execute_essay_latex_run(
     latex_compiler: LatexCompiler,
 ) -> None:
     repo.update_run(run["id"], status="running", error_message=None)
-    emit_event = _running_event_sink(run["id"], preparation)
+    timing = artifact_run.timing
+    emit_event = _running_event_sink(run["id"], preparation, timing)
     try:
         result = run_essay_latex_pipeline(
             artifact_run=artifact_run,
@@ -341,6 +371,7 @@ def execute_essay_latex_run(
             search=artifact_run.search,
             max_output_tokens=preparation.context.estimate.estimated_output_tokens,
             emit_event=emit_event,
+            timing=timing,
         )
     except PipelineError as exc:
         repo.update_run(
@@ -348,7 +379,9 @@ def execute_essay_latex_run(
             status="failed",
             error_message=f"{exc.code}: {exc.message}",
         )
-        artifact_run.write_log("generation.log", exc.to_log_text())
+        artifact_run.write_log(
+            "generation.log", exc.to_log_text() + artifact_run.timing_log_text()
+        )
         artifact_run.write_manifest(status="failed")
         _emit_run_event(
             run_id=run["id"],
@@ -357,11 +390,14 @@ def execute_essay_latex_run(
             message=exc.message,
             preparation=preparation,
             error={"code": exc.code, "message": exc.message},
+            timing=timing,
         )
         return
 
     repo.update_run(run["id"], status="succeeded", error_message=None)
-    artifact_run.write_log("generation.log", result.log_text)
+    artifact_run.write_log(
+        "generation.log", result.log_text + artifact_run.timing_log_text()
+    )
     artifact_run.write_manifest(status="succeeded")
     _emit_run_event(
         run_id=run["id"],
@@ -369,6 +405,7 @@ def execute_essay_latex_run(
         stage="write_manifest",
         message="Run succeeded.",
         preparation=preparation,
+        timing=timing,
     )
 
 
@@ -382,7 +419,8 @@ def execute_beamer_slides_run(
     latex_compiler: LatexCompiler,
 ) -> None:
     repo.update_run(run["id"], status="running", error_message=None)
-    emit_event = _running_event_sink(run["id"], preparation)
+    timing = artifact_run.timing
+    emit_event = _running_event_sink(run["id"], preparation, timing)
     try:
         result = run_beamer_slides_pipeline(
             artifact_run=artifact_run,
@@ -396,6 +434,7 @@ def execute_beamer_slides_run(
             search=artifact_run.search,
             max_output_tokens=preparation.context.estimate.estimated_output_tokens,
             emit_event=emit_event,
+            timing=timing,
         )
     except PipelineError as exc:
         repo.update_run(
@@ -403,7 +442,9 @@ def execute_beamer_slides_run(
             status="failed",
             error_message=f"{exc.code}: {exc.message}",
         )
-        artifact_run.write_log("generation.log", exc.to_log_text())
+        artifact_run.write_log(
+            "generation.log", exc.to_log_text() + artifact_run.timing_log_text()
+        )
         artifact_run.write_manifest(status="failed")
         _emit_run_event(
             run_id=run["id"],
@@ -412,11 +453,14 @@ def execute_beamer_slides_run(
             message=exc.message,
             preparation=preparation,
             error={"code": exc.code, "message": exc.message},
+            timing=timing,
         )
         return
 
     repo.update_run(run["id"], status="succeeded", error_message=None)
-    artifact_run.write_log("generation.log", result.log_text)
+    artifact_run.write_log(
+        "generation.log", result.log_text + artifact_run.timing_log_text()
+    )
     artifact_run.write_manifest(status="succeeded")
     _emit_run_event(
         run_id=run["id"],
@@ -424,6 +468,7 @@ def execute_beamer_slides_run(
         stage="write_manifest",
         message="Run succeeded.",
         preparation=preparation,
+        timing=timing,
     )
 
 
@@ -437,7 +482,8 @@ def execute_cheat_sheet_run(
     latex_compiler: LatexCompiler,
 ) -> None:
     repo.update_run(run["id"], status="running", error_message=None)
-    emit_event = _running_event_sink(run["id"], preparation)
+    timing = artifact_run.timing
+    emit_event = _running_event_sink(run["id"], preparation, timing)
     try:
         result = run_cheat_sheet_pipeline(
             artifact_run=artifact_run,
@@ -452,6 +498,7 @@ def execute_cheat_sheet_run(
             max_output_tokens=preparation.context.estimate.estimated_output_tokens,
             uploads=preparation.context.uploads,
             emit_event=emit_event,
+            timing=timing,
         )
     except PipelineError as exc:
         repo.update_run(
@@ -459,7 +506,9 @@ def execute_cheat_sheet_run(
             status="failed",
             error_message=f"{exc.code}: {exc.message}",
         )
-        artifact_run.write_log("generation.log", exc.to_log_text())
+        artifact_run.write_log(
+            "generation.log", exc.to_log_text() + artifact_run.timing_log_text()
+        )
         artifact_run.write_manifest(status="failed")
         _emit_run_event(
             run_id=run["id"],
@@ -468,11 +517,14 @@ def execute_cheat_sheet_run(
             message=exc.message,
             preparation=preparation,
             error={"code": exc.code, "message": exc.message},
+            timing=timing,
         )
         return
 
     repo.update_run(run["id"], status="succeeded", error_message=None)
-    artifact_run.write_log("generation.log", result.log_text)
+    artifact_run.write_log(
+        "generation.log", result.log_text + artifact_run.timing_log_text()
+    )
     artifact_run.write_manifest(status="succeeded")
     _emit_run_event(
         run_id=run["id"],
@@ -480,6 +532,7 @@ def execute_cheat_sheet_run(
         stage="write_manifest",
         message="Run succeeded.",
         preparation=preparation,
+        timing=timing,
     )
 
 
@@ -532,7 +585,9 @@ def create_run(
     executor: RunExecutor = default_run_executor,
     search_adapter: WebSearchAdapter | None = None,
 ) -> dict[str, Any]:
-    preparation = prepare_run_request(repo, current_user=current_user, request=request)
+    timing = RunTimingRecorder()
+    with timing.measure("preparation_context"):
+        preparation = prepare_run_request(repo, current_user=current_user, request=request)
     run_id = str(uuid.uuid4())
     task_text = request["task_text"].strip()
     intent = preparation.routing.resolved_intent
@@ -574,13 +629,15 @@ def create_run(
         },
         revision_of_run_id=revision_of_run_id,
     )
+    artifact_run.timing = timing
     run = repo.update_run(run_id, output_root=str(artifact_run.run_dir.resolve())) or run
-    search_result = _run_search_policy(
-        repo,
-        run_id=run_id,
-        decision=preparation.context.search_policy,
-        adapter=search_adapter or DuckDuckGoSearchAdapter(),
-    )
+    with timing.measure("search"):
+        search_result = _run_search_policy(
+            repo,
+            run_id=run_id,
+            decision=preparation.context.search_policy,
+            adapter=search_adapter or DuckDuckGoSearchAdapter(),
+        )
     artifact_run.search = search_result
 
     if preparation.context.search_policy.mode == "on" and search_result["decision"] == "forced_on_failed":
@@ -596,7 +653,8 @@ def create_run(
             "generation.log",
             "Run failed before generation.\n"
             + json.dumps({"error": {"code": "search_unavailable"}}, indent=2, sort_keys=True)
-            + "\n",
+            + "\n"
+            + artifact_run.timing_log_text(),
         )
         artifact_run.write_manifest(status="failed")
         _emit_run_event(
@@ -609,6 +667,7 @@ def create_run(
                 "code": "search_unavailable",
                 "message": "Web search is unavailable for forced search mode.",
             },
+            timing=timing,
         )
         return serialize_run(run, preparation=preparation)
 

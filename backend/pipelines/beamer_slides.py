@@ -16,11 +16,16 @@ from backend.pipelines.essay_latex import (
     LatexCompiler,
     compile_latex_with_repair,
 )
+from backend.pipelines.latex_diagrams import (
+    DIAGRAM_POLICY_INSTRUCTION,
+    sanitize_latex_diagram_placeholders,
+)
 from backend.providers.base import (
     ModelProviderError,
     TextGenerationProvider,
     TextGenerationRequest,
 )
+from backend.timing import RunTimingRecorder, measure_stage
 
 
 def run_beamer_slides_pipeline(
@@ -36,6 +41,7 @@ def run_beamer_slides_pipeline(
     search: dict[str, Any],
     max_output_tokens: int,
     emit_event: Callable[[str, str], None] | None = None,
+    timing: RunTimingRecorder | None = None,
 ) -> PipelineResult:
     log_lines = [
         "Pipeline: beamer_slides",
@@ -52,15 +58,16 @@ def run_beamer_slides_pipeline(
         emit_event("generate_source", "Generating Beamer LaTeX source")
 
     try:
-        raw_output = model_provider.generate_text(
-            TextGenerationRequest(
-                profile=model_profile,
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                max_output_tokens=max_output_tokens,
-                temperature=0.2,
+        with measure_stage(timing, "provider_generation"):
+            raw_output = model_provider.generate_text(
+                TextGenerationRequest(
+                    profile=model_profile,
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    max_output_tokens=max_output_tokens,
+                    temperature=0.2,
+                )
             )
-        )
     except ModelProviderError as exc:
         raise PipelineError(
             exc.code,
@@ -80,6 +87,7 @@ def run_beamer_slides_pipeline(
         raw_output,
         accepted_languages={"beamer", "latex", "tex"},
     )
+    source = sanitize_latex_diagram_placeholders(source)
     source = source.strip() + "\n"
     artifact_run.write_output(
         "slides.tex",
@@ -103,6 +111,7 @@ def run_beamer_slides_pipeline(
             max_output_tokens=max_output_tokens,
             accepted_languages={"beamer", "latex", "tex"},
             emit_event=emit_event,
+            timing=timing,
         )
     except LatexCompileError as exc:
         artifact_run.write_log("latex.log", exc.log_text)
@@ -155,7 +164,8 @@ def build_beamer_slides_prompt(
         "\\begin{document}, multiple complete \\begin{frame}...\\end{frame} blocks, "
         "and \\end{document}. Use a simple replaceable visual theme, cite any "
         "provided web sources in plain LaTeX, and do not wrap the answer in "
-        "Markdown fences."
+        "Markdown fences. "
+        + DIAGRAM_POLICY_INSTRUCTION
     )
     user_prompt = "\n\n".join(
         [

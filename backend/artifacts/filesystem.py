@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.storage.sqlite import SQLiteRepository
+from backend.timing import RunTimingRecorder, measure_stage
 
 WORKSPACE_ROOT_ENV = "WORKSPACE_ROOT"
 MANIFEST_SCHEMA_VERSION = 1
@@ -61,6 +62,7 @@ class ArtifactRun:
     search: dict[str, Any]
     revision_of_run_id: str | None = None
     repository: SQLiteRepository | None = None
+    timing: RunTimingRecorder | None = None
     created_at: str = field(default_factory=_created_at)
     inputs: list[dict[str, str]] = field(default_factory=list)
     outputs: list[dict[str, str]] = field(default_factory=list)
@@ -87,21 +89,23 @@ class ArtifactRun:
         path = self.run_dir / "output" / Path(*_safe_relative_parts(relative_path))
         _assert_under_root(self.root, path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        if isinstance(content, bytes):
-            path.write_bytes(content)
-        else:
-            path.write_text(content, encoding="utf-8")
-        rel_path = self.relative_path(path)
-        self.outputs.append({"path": rel_path, "kind": kind})
-        self._record_artifact(path, kind=kind, media_type=media_type)
+        with self._measure_persistence():
+            if isinstance(content, bytes):
+                path.write_bytes(content)
+            else:
+                path.write_text(content, encoding="utf-8")
+            rel_path = self.relative_path(path)
+            self.outputs.append({"path": rel_path, "kind": kind})
+            self._record_artifact(path, kind=kind, media_type=media_type)
         return path
 
     def write_log(self, relative_path: str | os.PathLike[str], content: str) -> Path:
         path = self.run_dir / "logs" / Path(*_safe_relative_parts(relative_path))
         _assert_under_root(self.root, path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
-        self._record_artifact(path, kind="log", media_type="text/plain")
+        with self._measure_persistence():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+            self._record_artifact(path, kind="log", media_type="text/plain")
         return path
 
     def write_manifest(self, *, status: str) -> Path:
@@ -119,9 +123,17 @@ class ArtifactRun:
             "outputs": self.outputs,
             "status": status,
         }
+        if self.timing is not None:
+            manifest["timings"] = self.timing.manifest_payload()
         path.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
         self._record_artifact(path, kind="manifest", media_type="application/json")
         return path
+
+    def timing_log_text(self) -> str:
+        return self.timing.log_text() if self.timing is not None else ""
+
+    def _measure_persistence(self):
+        return measure_stage(self.timing, "artifact_persistence")
 
     def _record_artifact(self, path: Path, *, kind: str, media_type: str | None = None) -> None:
         if not self.repository:

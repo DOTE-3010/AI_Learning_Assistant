@@ -18,6 +18,7 @@ from backend.providers.base import (
     TextGenerationProvider,
     TextGenerationRequest,
 )
+from backend.timing import RunTimingRecorder, measure_stage
 
 PYTHON_OUTPUT_ALIASES = {"py", "python", "script", "python-script"}
 NOTEBOOK_OUTPUT_ALIASES = {"ipynb", "notebook", "jupyter", "jupyter-notebook"}
@@ -35,6 +36,7 @@ def run_code_homework_pipeline(
     search: dict[str, Any],
     max_output_tokens: int,
     emit_event: Callable[[str, str], None] | None = None,
+    timing: RunTimingRecorder | None = None,
 ) -> PipelineResult:
     output_kind = normalize_output_preference(output_preference)
     log_lines = [
@@ -53,15 +55,16 @@ def run_code_homework_pipeline(
         emit_event("generate_source", "Generating homework code")
 
     try:
-        raw_output = model_provider.generate_text(
-            TextGenerationRequest(
-                profile=model_profile,
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                max_output_tokens=max_output_tokens,
-                temperature=0.2,
+        with measure_stage(timing, "provider_generation"):
+            raw_output = model_provider.generate_text(
+                TextGenerationRequest(
+                    profile=model_profile,
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    max_output_tokens=max_output_tokens,
+                    temperature=0.2,
+                )
             )
-        )
     except ModelProviderError as exc:
         raise PipelineError(
             exc.code,
@@ -78,8 +81,10 @@ def run_code_homework_pipeline(
         ) from exc
 
     if output_kind == "ipynb":
-        return _write_notebook_output(artifact_run, raw_output, log_lines, emit_event)
-    return _write_python_output(artifact_run, raw_output, log_lines, emit_event)
+        return _write_notebook_output(
+            artifact_run, raw_output, log_lines, emit_event, timing
+        )
+    return _write_python_output(artifact_run, raw_output, log_lines, emit_event, timing)
 
 
 def normalize_output_preference(output_preference: str | None) -> str:
@@ -133,6 +138,7 @@ def _write_python_output(
     raw_output: str,
     log_lines: list[str],
     emit_event: Callable[[str, str], None] | None = None,
+    timing: RunTimingRecorder | None = None,
 ) -> PipelineResult:
     source = extract_fenced_or_raw(raw_output, accepted_languages={"python", "py"})
     source = source.strip() + "\n"
@@ -146,7 +152,8 @@ def _write_python_output(
     if emit_event:
         emit_event("validate_python", "Validating generated Python")
     try:
-        compile(source, "solution.py", "exec")
+        with measure_stage(timing, "output_validation"):
+            compile(source, "solution.py", "exec")
     except SyntaxError as exc:
         raise PipelineError(
             "compile_failed",
@@ -164,6 +171,7 @@ def _write_notebook_output(
     raw_output: str,
     log_lines: list[str],
     emit_event: Callable[[str, str], None] | None = None,
+    timing: RunTimingRecorder | None = None,
 ) -> PipelineResult:
     candidate = extract_fenced_or_raw(
         raw_output,
@@ -174,8 +182,9 @@ def _write_notebook_output(
     if emit_event:
         emit_event("validate_notebook", "Validating generated notebook")
     try:
-        notebook = nbformat.reads(candidate, as_version=4)
-        nbformat.validate(notebook)
+        with measure_stage(timing, "output_validation"):
+            notebook = nbformat.reads(candidate, as_version=4)
+            nbformat.validate(notebook)
     except Exception as exc:
         artifact_run.write_output(
             "solution.ipynb",

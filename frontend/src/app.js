@@ -1,4 +1,5 @@
 import "./styles.css";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
 import { LOCALES, messages } from "./locales.js";
 import contextDialCriticalUrl from "./assets/previews/context-budget-dial-critical.png";
 import contextDialOkUrl from "./assets/previews/context-budget-dial-ok.png";
@@ -11,6 +12,7 @@ import {
     applyWorkbenchInteraction,
     buildRunRequest,
     canSubmitRun as canSubmitRunCore,
+    clampPdfPage,
     findArtifactByRole,
     isActiveRunStatus,
     isTextArtifact,
@@ -26,6 +28,7 @@ const USER_KEY = "ai_learning_assistant_user";
 const LOCALE_KEY = "ai_learning_assistant_locale";
 const CONTEXT_LIMIT = DEFAULT_MODEL_PROFILE.contextWindowHint;
 const RUN_POLL_INTERVAL_MS = 1200;
+const PDF_RENDER_WIDTH = 1120;
 const TERMINAL_RUN_STATUSES = new Set(["succeeded", "failed", "cancelled"]);
 const DEFAULT_LOCALE = "en";
 const contextDialAssets = {
@@ -108,6 +111,7 @@ const state = {
 
 const app = document.getElementById("app");
 let runPollTimerId = null;
+let pdfjsModulePromise = null;
 
 init();
 
@@ -571,6 +575,8 @@ function renderNotebookPreview() {
 }
 
 function renderEssayPreview() {
+    const realPdf = renderRealPdfPreview("essay");
+    if (realPdf) return realPdf;
     return `
         <div class="pdf-stage">
             <div class="page-rail">
@@ -599,6 +605,8 @@ function renderEssayPreview() {
 }
 
 function renderSlidesPreview() {
+    const realPdf = renderRealPdfPreview("slides");
+    if (realPdf) return realPdf;
     return `
         <div class="slide-product">
             <aside class="slide-thumbs" aria-label="${escapeHtml(t("preview.deckTitle"))}">
@@ -623,6 +631,8 @@ function renderSlidesPreview() {
 }
 
 function renderCheatSheetPreview() {
+    const realPdf = renderRealPdfPreview("sheet");
+    if (realPdf) return realPdf;
     const pageCount = Math.max(1, Math.round(Number(state.targetPages) || 1));
     return `
         <div class="cheat-product">
@@ -645,6 +655,121 @@ function renderCheatSheetPreview() {
                 `).join("")}
             </div>
             ${renderPreviewOverlay(t("preview.sheetTitle"), t("preview.sheetMessage"))}
+        </div>
+    `;
+}
+
+function renderRealPdfPreview(kind) {
+    const artifact = findArtifactByRole(state.artifacts.items, "primaryPdf", { intent: state.intent });
+    if (!artifact) return "";
+    const entry = pdfPreviewEntry(artifact.path);
+    const pageCount = entry.pageCount || 0;
+    const currentPage = clampPdfPage(entry.currentPage || 1, pageCount || 1);
+    const image = entry.pages?.[currentPage] || "";
+    const loading = entry.loading || (state.artifacts.loading && !image && !entry.error);
+    const titleKey = kind === "slides" ? "preview.deckTitle" : kind === "sheet" ? "preview.sheetTitle" : "preview.emptyPdfTitle";
+    const labelKey = kind === "slides" ? "preview.pdfSlidePosition" : kind === "sheet" ? "preview.pdfSheetPosition" : "preview.pdfPagePosition";
+    const pageLabel = t(labelKey, { page: currentPage, total: pageCount || "?" });
+    const alt = t("preview.pdfPageAlt", { page: currentPage, total: pageCount || "?" });
+
+    return `
+        <div class="pdf-render-product is-${escapeHtml(kind)}" data-pdf-path="${escapeHtml(artifact.path)}">
+            <div class="pdf-render-toolbar">
+                <div>
+                    <span>${escapeHtml(t(titleKey))}</span>
+                    <strong>${escapeHtml(artifactDisplayName(artifact, "artifact.pdf"))}</strong>
+                </div>
+                <div class="pdf-page-controls" aria-label="${escapeHtml(pageLabel)}">
+                    <button type="button" data-pdf-page-action="previous" data-pdf-path="${escapeHtml(artifact.path)}" ${currentPage <= 1 || loading ? "disabled" : ""}>${escapeHtml(t("preview.previousPage"))}</button>
+                    <span>${escapeHtml(pageLabel)}</span>
+                    <button type="button" data-pdf-page-action="next" data-pdf-path="${escapeHtml(artifact.path)}" ${(pageCount && currentPage >= pageCount) || loading ? "disabled" : ""}>${escapeHtml(t("preview.nextPage"))}</button>
+                </div>
+            </div>
+            <div class="pdf-render-frame">
+                ${renderPdfSideRail(kind, currentPage, pageCount, artifact.path, loading)}
+                <figure class="pdf-render-surface">
+                    ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(alt)}">` : renderPdfPlaceholder(kind)}
+                    ${loading ? renderPdfRendererOverlay(t("preview.pdfLoading"), t("preview.pdfLoadingMessage"), "loading") : ""}
+                    ${entry.error ? renderPdfRendererError(artifact, entry.error) : ""}
+                </figure>
+            </div>
+            <div class="pdf-render-note">${escapeHtml(entry.error ? t("preview.preservedForInspection") : t("preview.pdfRenderReady"))}</div>
+        </div>
+    `;
+}
+
+function renderPdfSideRail(kind, currentPage, pageCount, path, loading) {
+    const count = Math.max(1, Math.min(pageCount || state.targetPages || 1, kind === "sheet" ? 4 : 8));
+    return `
+        <div class="pdf-render-rail" data-kind="${escapeHtml(kind)}">
+            ${Array.from({ length: count }, (_, index) => {
+                const page = index + 1;
+                return `
+                    <button
+                        type="button"
+                        class="${page === currentPage ? "is-active" : ""}"
+                        data-pdf-page-action="go"
+                        data-pdf-page="${page}"
+                        data-pdf-path="${escapeHtml(path)}"
+                        ${loading || (pageCount && page > pageCount) ? "disabled" : ""}
+                        aria-label="${escapeHtml(t("preview.pdfGoToPage", { page }))}"
+                    >${page}</button>
+                `;
+            }).join("")}
+        </div>
+    `;
+}
+
+function renderPdfPlaceholder(kind) {
+    if (kind === "slides") {
+        return `
+            <div class="slide-page is-pdf-placeholder">
+                <span class="slide-kicker">${escapeHtml(intentText("beamer_slides", "title"))}</span>
+                <h3>${escapeHtml(briefTitle(t("preview.generatedSlides")))}</h3>
+                <div class="slide-columns"><span></span><span></span><span></span><span></span></div>
+            </div>
+        `;
+    }
+    if (kind === "sheet") {
+        return `
+            <article class="cheat-page is-pdf-placeholder">
+                <header><span></span><span></span></header>
+                <div class="cheat-grid">
+                    ${Array.from({ length: 48 }, (_, index) => `<i class="${index % 7 === 0 ? "is-strong" : ""}"></i>`).join("")}
+                </div>
+            </article>
+        `;
+    }
+    return `
+        <article class="pdf-page essay-page is-pdf-placeholder">
+            <header>
+                <span class="paper-overline">${escapeHtml(t("preview.latexReport"))}</span>
+                <h3>${escapeHtml(briefTitle(t("preview.generatedEssay")))}</h3>
+                <div class="paper-rule"></div>
+            </header>
+            <section>
+                <h4>${escapeHtml(t("preview.introduction"))}</h4>
+                <p></p><p class="short"></p>
+                <h4>${escapeHtml(t("preview.argument"))}</h4>
+                <p></p><p></p><p class="shorter"></p>
+            </section>
+        </article>
+    `;
+}
+
+function renderPdfRendererError(artifact, message) {
+    return renderPdfRendererOverlay(
+        t("preview.pdfRendererError"),
+        `${artifactDisplayName(artifact, "artifact.pdf")}: ${message}`,
+        "error",
+    );
+}
+
+function renderPdfRendererOverlay(title, message, tone) {
+    return `
+        <div class="preview-overlay is-${escapeHtml(tone)}">
+            <strong>${escapeHtml(title)}</strong>
+            <span>${escapeHtml(message)}</span>
         </div>
     `;
 }
@@ -1019,6 +1144,11 @@ function bindEvents() {
         button.addEventListener("click", () => {
             state.activeFile = button.dataset.activeFile;
             render();
+        });
+    });
+    document.querySelectorAll("[data-pdf-page-action]").forEach((button) => {
+        button.addEventListener("click", () => {
+            handlePdfPageAction(button).catch(() => {});
         });
     });
     document.querySelector("[data-action='copy-visible-preview']")?.addEventListener("click", copyVisiblePreview);
@@ -1502,6 +1632,7 @@ function initialArtifactState() {
         manifest: null,
         textByPath: {},
         errorsByPath: {},
+        pdfByPath: {},
     };
 }
 
@@ -1669,6 +1800,7 @@ async function hydrateRunArtifacts(runId) {
         };
         render();
         await hydrateTextArtifacts(runId, items);
+        await hydratePdfArtifacts(runId, items);
         if (state.run.id !== runId) return;
         state.artifacts = {
             ...state.artifacts,
@@ -1710,6 +1842,151 @@ async function hydrateTextArtifacts(runId, artifacts) {
         textByPath: nextText,
         errorsByPath: nextErrors,
     };
+}
+
+async function hydratePdfArtifacts(runId, artifacts) {
+    const pdfArtifacts = artifacts.filter((artifact) => artifact.kind === "pdf" || artifact.mediaType === "application/pdf");
+    if (!pdfArtifacts.length) return;
+    await Promise.all(pdfArtifacts.map(async (artifact) => {
+        const entry = pdfPreviewEntry(artifact.path);
+        const pageNumber = clampPdfPage(entry.currentPage || 1, entry.pageCount || 1);
+        await renderPdfPageToState(runId, artifact, pageNumber);
+    }));
+}
+
+async function handlePdfPageAction(button) {
+    const path = button.dataset.pdfPath || "";
+    const artifact = state.artifacts.items.find((item) => item.path === path);
+    if (!artifact || !state.run.id) return;
+    const entry = pdfPreviewEntry(path);
+    const pageCount = entry.pageCount || 1;
+    let nextPage = entry.currentPage || 1;
+    if (button.dataset.pdfPageAction === "previous") nextPage -= 1;
+    else if (button.dataset.pdfPageAction === "next") nextPage += 1;
+    else nextPage = Number(button.dataset.pdfPage || nextPage);
+    nextPage = clampPdfPage(nextPage, pageCount);
+    const hasPage = Boolean(entry.pages?.[nextPage]);
+    state.artifacts = {
+        ...state.artifacts,
+        pdfByPath: {
+            ...state.artifacts.pdfByPath,
+            [path]: {
+                ...entry,
+                currentPage: nextPage,
+                loading: !hasPage,
+                error: hasPage ? entry.error : "",
+            },
+        },
+    };
+    render();
+    if (!hasPage) {
+        await renderPdfPageToState(state.run.id, artifact, nextPage);
+    }
+}
+
+async function renderPdfPageToState(runId, artifact, pageNumber) {
+    const path = artifact.path;
+    const previous = pdfPreviewEntry(path);
+    state.artifacts = {
+        ...state.artifacts,
+        pdfByPath: {
+            ...state.artifacts.pdfByPath,
+            [path]: {
+                ...previous,
+                currentPage: pageNumber,
+                loading: true,
+                error: "",
+            },
+        },
+    };
+    render();
+    try {
+        const rendered = await renderPdfArtifactPage(runId, artifact, pageNumber);
+        if (state.run.id !== runId) return;
+        const latest = pdfPreviewEntry(path);
+        state.artifacts = {
+            ...state.artifacts,
+            pdfByPath: {
+                ...state.artifacts.pdfByPath,
+                [path]: {
+                    ...latest,
+                    loading: false,
+                    error: "",
+                    pageCount: rendered.pageCount,
+                    currentPage: rendered.pageNumber,
+                    pages: {
+                        ...(latest.pages || {}),
+                        [rendered.pageNumber]: rendered.dataUrl,
+                    },
+                    width: rendered.width,
+                    height: rendered.height,
+                },
+            },
+        };
+        render();
+    } catch (error) {
+        if (state.run.id !== runId) return;
+        const latest = pdfPreviewEntry(path);
+        state.artifacts = {
+            ...state.artifacts,
+            pdfByPath: {
+                ...state.artifacts.pdfByPath,
+                [path]: {
+                    ...latest,
+                    loading: false,
+                    error: safeDisplayMessage(error.message || t("preview.pdfRendererError")),
+                    currentPage: pageNumber,
+                    pages: latest.pages || {},
+                },
+            },
+        };
+        render();
+    }
+}
+
+async function renderPdfArtifactPage(runId, artifact, pageNumber) {
+    const response = await fetch(artifactUrl(runId, artifact), {
+        headers: { Authorization: `Bearer ${state.token}` },
+    });
+    if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        throw new Error(safeDisplayMessage(text || t("source.artifactReadFailed")));
+    }
+    const bytes = await response.arrayBuffer();
+    const pdfjsLib = await getPdfjsLib();
+    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(bytes) });
+    const documentProxy = await loadingTask.promise;
+    const pageCount = documentProxy.numPages;
+    const safePage = clampPdfPage(pageNumber, pageCount);
+    const page = await documentProxy.getPage(safePage);
+    const baseViewport = page.getViewport({ scale: 1 });
+    const scale = Math.min(2, PDF_RENDER_WIDTH / Math.max(1, baseViewport.width));
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) throw new Error(t("preview.pdfRendererError"));
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    await page.render({ canvasContext: context, viewport }).promise;
+    const dataUrl = canvas.toDataURL("image/png");
+    await documentProxy.destroy();
+    return {
+        dataUrl,
+        pageCount,
+        pageNumber: safePage,
+        width: canvas.width,
+        height: canvas.height,
+    };
+}
+
+async function getPdfjsLib() {
+    if (!pdfjsModulePromise) {
+        pdfjsModulePromise = import("pdfjs-dist/build/pdf.mjs").then((module) => {
+            module.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+            return module;
+        });
+    }
+    return pdfjsModulePromise;
 }
 
 function artifactUrl(runId, artifact) {
@@ -2118,6 +2395,16 @@ function renderLogLines(text) {
 
 function artifactText(path) {
     return state.artifacts.textByPath[path] || "";
+}
+
+function pdfPreviewEntry(path) {
+    return state.artifacts.pdfByPath[path] || {
+        loading: false,
+        error: "",
+        pageCount: 0,
+        currentPage: 1,
+        pages: {},
+    };
 }
 
 function artifactReadFailed(path) {

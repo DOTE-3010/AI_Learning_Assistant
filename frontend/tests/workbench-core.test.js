@@ -8,6 +8,7 @@ import {
     applyWorkbenchInteraction,
     buildRunRequest,
     canSubmitRun,
+    clampPdfPage,
     findArtifactByRole,
     isActiveRunStatus,
     normalizeActiveCodeFile,
@@ -30,6 +31,10 @@ const requiredLocaleKeys = [
     "preview.sourceTitle",
     "preview.logsTitle",
     "preview.manifestTitle",
+    "preview.pdfRendererError",
+    "preview.pdfLoading",
+    "preview.nextPage",
+    "preview.previousPage",
     "composer.progressLabel",
     "composer.progressNote",
     "composer.progressAria",
@@ -177,6 +182,14 @@ test("artifact metadata helpers pick real preview files by role", () => {
     assert.equal(findArtifactByRole(artifacts, "log")?.path, "logs/generation.log");
     assert.equal(findArtifactByRole(artifacts, "manifest")?.path, "manifest.json");
     assert.equal(findArtifactByRole(artifacts, "primaryPdf")?.path, "output/main.pdf");
+});
+
+test("pdf page navigation clamps to valid preview pages", () => {
+    assert.equal(clampPdfPage(0, 12), 1);
+    assert.equal(clampPdfPage(4.8, 12), 4);
+    assert.equal(clampPdfPage(30, 12), 12);
+    assert.equal(clampPdfPage("bad", 12), 1);
+    assert.equal(clampPdfPage(2, 0), 1);
 });
 
 function messageAt(catalog, path) {

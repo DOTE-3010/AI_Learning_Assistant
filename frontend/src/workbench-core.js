@@ -155,6 +155,14 @@ export function findArtifactByRole(artifacts, role, { intent = "code_homework", 
     return null;
 }
 
+export function clampPdfPage(page, pageCount) {
+    const normalizedPage = Number(page);
+    const normalizedCount = Number(pageCount);
+    const safeCount = Number.isFinite(normalizedCount) && normalizedCount > 0 ? Math.floor(normalizedCount) : 1;
+    if (!Number.isFinite(normalizedPage) || normalizedPage <= 1) return 1;
+    return Math.min(Math.floor(normalizedPage), safeCount);
+}
+
 export function isTextArtifact(artifact) {
     const mediaType = artifact?.mediaType || artifact?.media_type || "";
     const path = artifact?.path || "";

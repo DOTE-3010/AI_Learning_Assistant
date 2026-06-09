@@ -64,8 +64,8 @@ After the web product passes human QA, re-wrap into Electron. QA at this phase c
 | 002 | Add authenticated artifact access API | B | High | Pending | Agent |
 | 003 | Render real artifact preview content | B | High | Pending | Agent |
 | 004 | Add PDF page preview renderer | B | High | Pending | Agent |
-| 005 | Harden LaTeX diagram policy | B | High | Pending | Agent |
-| 006 | Add run timing instrumentation | B | Medium | Pending | Agent |
+| 005 | Harden LaTeX diagram policy | B | High | Complete | Agent |
+| 006 | Add run timing instrumentation | B | Medium | Complete | Agent |
 | 007 | Run performance bottleneck triage | B | Medium | Pending | Agent |
 | 008 | Add course container API | B | Medium | Pending | Agent |
 | 009 | Attach runs to courses | B | Medium | Pending | Agent |
@@ -87,6 +87,8 @@ After the web product passes human QA, re-wrap into Electron. QA at this phase c
 | Human E2E completion | All generation functions pass; repair queue populated. | `docs/QA_REPORTS/2026-06-05-human-e2e-completion.md` |
 | Web browser QA baseline | Docker plus browser workflow verified without Electron. | `docs/QA_REPORTS/2026-06-09-web-browser-qa-baseline.md` |
 | Task 001 run status/progress repair | Truthful run motion and approximate composer comfort progress implemented and verified. | `docs/QA_REPORTS/2026-06-09-task001-run-status-progress.md` |
+| Task 005 LaTeX diagram policy | Essay, Beamer, cheat-sheet, and repair flows now forbid and deterministically sanitize explicit diagram placeholders while preserving valid TikZ. | `docs/QA_REPORTS/2026-06-09-task005-latex-diagram-policy.md` |
+| Task 006 run timing instrumentation | Monotonic preparation, search, provider, validation, compile, repair, persistence, and total timing diagnostics are persisted in manifests/logs and exposed in status events. | `docs/QA_REPORTS/2026-06-09-task006-run-timing-instrumentation.md` |
 
 ## Acceptance Criteria
 

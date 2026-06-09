@@ -25,6 +25,7 @@ class RunStatusEvent:
     stage: str
     message: str
     context: dict[str, Any] | None = None
+    timings: dict[str, int] | None = None
     error: dict[str, str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -36,6 +37,8 @@ class RunStatusEvent:
         }
         if self.context is not None:
             payload["context"] = self.context
+        if self.timings is not None:
+            payload["timings"] = self.timings
         if self.error is not None:
             payload["error"] = self.error
         return payload
@@ -71,6 +74,7 @@ def emit_run_event(
     stage: str,
     message: str,
     context: ContextEstimate | dict[str, Any] | None = None,
+    timings: dict[str, int] | None = None,
     error: dict[str, str] | None = None,
     store: RunEventStore = default_run_event_store,
 ) -> RunStatusEvent:
@@ -80,6 +84,7 @@ def emit_run_event(
         stage=stage,
         message=message,
         context=context_event_payload(context),
+        timings=dict(timings) if timings is not None else None,
         error=error,
     )
     return store.emit(event)

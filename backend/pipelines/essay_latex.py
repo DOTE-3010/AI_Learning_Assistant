@@ -15,11 +15,16 @@ from backend.pipelines.common import (
     format_citations,
     format_log,
 )
+from backend.pipelines.latex_diagrams import (
+    DIAGRAM_POLICY_INSTRUCTION,
+    sanitize_latex_diagram_placeholders,
+)
 from backend.providers.base import (
     ModelProviderError,
     TextGenerationProvider,
     TextGenerationRequest,
 )
+from backend.timing import RunTimingRecorder, measure_stage
 
 
 @dataclass(frozen=True)
@@ -127,27 +132,30 @@ def compile_latex_with_repair(
     max_output_tokens: int,
     accepted_languages: set[str],
     emit_event: Callable[[str, str], None] | None = None,
+    timing: RunTimingRecorder | None = None,
 ) -> LatexCompileResult:
     try:
-        return latex_compiler.compile(
-            tex_path=tex_path,
-            output_dir=output_dir,
-            job_name=job_name,
-        )
+        with measure_stage(timing, "compile_pdf"):
+            return latex_compiler.compile(
+                tex_path=tex_path,
+                output_dir=output_dir,
+                job_name=job_name,
+            )
     except LatexCompileError as initial_error:
         if emit_event:
             emit_event("repair_source", "Repairing LaTeX source after compile failure")
 
         try:
-            repaired_source = repair_latex_source(
-                tex_path=tex_path,
-                compile_log=initial_error.log_text,
-                document_kind=document_kind,
-                model_profile=model_profile,
-                model_provider=model_provider,
-                max_output_tokens=max_output_tokens,
-                accepted_languages=accepted_languages,
-            )
+            with measure_stage(timing, "repair_generation"):
+                repaired_source = repair_latex_source(
+                    tex_path=tex_path,
+                    compile_log=initial_error.log_text,
+                    document_kind=document_kind,
+                    model_profile=model_profile,
+                    model_provider=model_provider,
+                    max_output_tokens=max_output_tokens,
+                    accepted_languages=accepted_languages,
+                )
         except ModelProviderError as exc:
             raise LatexCompileError(
                 initial_error.message,
@@ -165,16 +173,18 @@ def compile_latex_with_repair(
                 ),
             ) from exc
 
-        tex_path.write_text(repaired_source, encoding="utf-8")
+        with measure_stage(timing, "artifact_persistence"):
+            tex_path.write_text(repaired_source, encoding="utf-8")
         if emit_event:
             emit_event("compile_pdf", "Compiling repaired LaTeX PDF")
 
         try:
-            repaired_result = latex_compiler.compile(
-                tex_path=tex_path,
-                output_dir=output_dir,
-                job_name=job_name,
-            )
+            with measure_stage(timing, "compile_pdf"):
+                repaired_result = latex_compiler.compile(
+                    tex_path=tex_path,
+                    output_dir=output_dir,
+                    job_name=job_name,
+                )
         except LatexCompileError as repaired_error:
             raise LatexCompileError(
                 repaired_error.message,
@@ -222,7 +232,9 @@ def repair_latex_source(
             "sectioning, and citations where possible. Common fixes include "
             "table column alignment mismatches, unescaped special characters, "
             "missing package declarations, malformed environments, and broken "
-            "math delimiters. Return the full corrected source, not a patch.",
+            "math delimiters. "
+            + DIAGRAM_POLICY_INSTRUCTION
+            + " Return the full corrected source, not a patch.",
         ]
     )
     raw_output = model_provider.generate_text(
@@ -235,6 +247,7 @@ def repair_latex_source(
         )
     )
     repaired_source = extract_fenced_or_raw(raw_output, accepted_languages=accepted_languages)
+    repaired_source = sanitize_latex_diagram_placeholders(repaired_source)
     return repaired_source.strip() + "\n"
 
 
@@ -251,6 +264,7 @@ def run_essay_latex_pipeline(
     search: dict[str, Any],
     max_output_tokens: int,
     emit_event: Callable[[str, str], None] | None = None,
+    timing: RunTimingRecorder | None = None,
 ) -> PipelineResult:
     log_lines = [
         "Pipeline: essay_latex",
@@ -267,15 +281,16 @@ def run_essay_latex_pipeline(
         emit_event("generate_source", "Generating essay LaTeX source")
 
     try:
-        raw_output = model_provider.generate_text(
-            TextGenerationRequest(
-                profile=model_profile,
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                max_output_tokens=max_output_tokens,
-                temperature=0.2,
+        with measure_stage(timing, "provider_generation"):
+            raw_output = model_provider.generate_text(
+                TextGenerationRequest(
+                    profile=model_profile,
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    max_output_tokens=max_output_tokens,
+                    temperature=0.2,
+                )
             )
-        )
     except ModelProviderError as exc:
         raise PipelineError(
             exc.code,
@@ -292,6 +307,7 @@ def run_essay_latex_pipeline(
         ) from exc
 
     source = extract_fenced_or_raw(raw_output, accepted_languages={"latex", "tex"})
+    source = sanitize_latex_diagram_placeholders(source)
     source = source.strip() + "\n"
     artifact_run.write_output(
         "main.tex",
@@ -315,6 +331,7 @@ def run_essay_latex_pipeline(
             max_output_tokens=max_output_tokens,
             accepted_languages={"latex", "tex"},
             emit_event=emit_event,
+            timing=timing,
         )
     except LatexCompileError as exc:
         artifact_run.write_log("latex.log", exc.log_text)
@@ -365,7 +382,8 @@ def build_essay_latex_prompt(
         "Return one full compilable LaTeX article document. It must include "
         "\\documentclass, any needed packages, \\begin{document}, and \\end{document}. "
         "Use clear sectioning, cite any provided web sources in plain LaTeX, and do "
-        "not wrap the answer in Markdown fences."
+        "not wrap the answer in Markdown fences. "
+        + DIAGRAM_POLICY_INSTRUCTION
     )
     user_prompt = "\n\n".join(
         [
@@ -426,8 +444,6 @@ def _clip_for_repair_prompt(text: str, *, limit: int = 12000) -> str:
     head = stripped[: limit // 2]
     tail = stripped[-limit // 2 :]
     return head + "\n\n[...compiler log truncated...]\n\n" + tail
-
-
 def _coerce_text(value: str | bytes | None) -> str:
     if value is None:
         return ""

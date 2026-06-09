@@ -17,11 +17,16 @@ from backend.pipelines.essay_latex import (
     LatexCompiler,
     compile_latex_with_repair,
 )
+from backend.pipelines.latex_diagrams import (
+    DIAGRAM_POLICY_INSTRUCTION,
+    sanitize_latex_diagram_placeholders,
+)
 from backend.providers.base import (
     ModelProviderError,
     TextGenerationProvider,
     TextGenerationRequest,
 )
+from backend.timing import RunTimingRecorder, measure_stage
 
 
 def run_cheat_sheet_pipeline(
@@ -38,6 +43,7 @@ def run_cheat_sheet_pipeline(
     max_output_tokens: int,
     uploads: tuple[UploadExtraction, ...],
     emit_event: Callable[[str, str], None] | None = None,
+    timing: RunTimingRecorder | None = None,
 ) -> PipelineResult:
     options = options or {}
     target_pages = options.get("target_pages")
@@ -70,15 +76,16 @@ def run_cheat_sheet_pipeline(
         emit_event("generate_source", "Generating cheat-sheet LaTeX source")
 
     try:
-        raw_output = model_provider.generate_text(
-            TextGenerationRequest(
-                profile=model_profile,
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                max_output_tokens=max_output_tokens,
-                temperature=0.2,
+        with measure_stage(timing, "provider_generation"):
+            raw_output = model_provider.generate_text(
+                TextGenerationRequest(
+                    profile=model_profile,
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    max_output_tokens=max_output_tokens,
+                    temperature=0.2,
+                )
             )
-        )
     except ModelProviderError as exc:
         raise PipelineError(
             exc.code,
@@ -95,6 +102,7 @@ def run_cheat_sheet_pipeline(
         ) from exc
 
     source = extract_fenced_or_raw(raw_output, accepted_languages={"latex", "tex"})
+    source = sanitize_latex_diagram_placeholders(source)
     source = source.strip() + "\n"
     artifact_run.write_output(
         "cheat-sheet.tex",
@@ -118,6 +126,7 @@ def run_cheat_sheet_pipeline(
             max_output_tokens=max_output_tokens,
             accepted_languages={"latex", "tex"},
             emit_event=emit_event,
+            timing=timing,
         )
     except LatexCompileError as exc:
         artifact_run.write_log("latex.log", exc.log_text)
@@ -176,7 +185,8 @@ def build_cheat_sheet_prompt(
         "It must include \\documentclass, required packages such as geometry and "
         "multicol when useful, \\begin{document}, and \\end{document}. Preserve "
         "important caveats from extraction notes, cite any provided web sources in "
-        "plain LaTeX, and do not wrap the answer in Markdown fences."
+        "plain LaTeX, and do not wrap the answer in Markdown fences. "
+        + DIAGRAM_POLICY_INSTRUCTION
     )
     user_prompt = "\n\n".join(
         [
