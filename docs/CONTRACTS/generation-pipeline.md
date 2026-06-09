@@ -15,9 +15,9 @@ Route user intent to reliable artifact-specific generation instead of one generi
 | Intent | User Goal | Primary Outputs |
 | --- | --- | --- |
 | `code_homework` | Write assignment code from task/reference code | `.py` or `.ipynb` |
-| `essay_latex` | Write essay/report style assignment | `.tex`, `.pdf` |
-| `beamer_slides` | Create presentation slides | Beamer `.tex`, `.pdf` |
-| `cheat_sheet` | Compress course slides into N dense A4 pages | `.tex`, `.pdf` |
+| `essay_latex` | Write essay/report style assignment | `.html`, `.pdf` |
+| `beamer_slides` | Create presentation slides | `.html` (slide deck), `.pdf` |
+| `cheat_sheet` | Compress course slides into N dense A4 pages | `.html`, `.pdf` |
 
 ## Request Shape
 
@@ -152,11 +152,12 @@ Search citations must be stored in metadata and manifest when used.
 - Pipelines produce source files first; compiled/rendered outputs are secondary.
 - Code generation should prefer runnable, complete files over snippets.
 - Code generation writes either `solution.py` or `solution.ipynb`; notebook output must validate as nbformat JSON.
-- LaTeX generation should produce full compilable documents for essay, slides, and cheat-sheet intents.
-- When LaTeX compilation fails after source generation, the pipeline may run one bounded model-assisted repair pass using the generated source and sanitized compiler log, then recompile. It must overwrite the generated `.tex` with the repaired source only when a repair is attempted, must not change the external run API shape, and must still fail as `compile_failed` if the repaired source does not compile.
-- LaTeX prompts and repair flows must avoid final placeholder text for missing diagrams, including bracketed notes such as `[Diagram: Encoder-Decoder Schematic]`. Complex precision diagrams such as transformer encoder-decoder architecture should be omitted or summarized in prose unless the implementation can produce a complete, compiling LaTeX/TikZ representation. Simple TikZ diagrams are acceptable only when they compile in the Docker LaTeX runtime.
-- The Docker LaTeX runtime must include common article/Beamer dependencies used by phase-1 prompts and real model output, including `lmodern.sty`; missing runtime packages that make ordinary generated LaTeX fail are QA blockers, not accepted model-output risks.
-- Cheat-sheet layout may use aggressive typography, columns, and small fonts, but must target the requested A4 page count.
+- Essay, slides, and cheat-sheet pipelines generate self-contained HTML documents and convert them to PDF via Playwright (headless Chromium) inside the Docker container.
+- Generated HTML must be self-contained: inline CSS, inline KaTeX for math, no external stylesheet links or remote image URLs. This ensures reliable headless rendering.
+- Slides HTML must follow the `slides_html/shared/deck.css` layout vocabulary: 960×540 px slides in `<section class="slide">` containers, with CSS print pagination at `@page { size: 10in 5.625in; margin: 0; }`. No institutional branding or logos in generated output.
+- When HTML-to-PDF conversion fails, the pipeline persists the `.html` source and fails with `convert_failed`. No model-assisted repair pass is needed because HTML rendering is inherently tolerant.
+- Generated HTML must not include remote HTTP(S) image URLs. Use inline SVG, CSS-based diagrams, or uploaded local images only. Headless Chromium does not fetch external URLs during PDF generation.
+- Cheat-sheet layout may use aggressive CSS typography, multi-column grid layouts, and small fonts, but must target the requested A4 page count using `@page { size: A4; }` and CSS break controls.
 - Revision runs must be independent persisted runs. They may reference prior run metadata and files, but must not overwrite the prior run folder.
 - Model calls must be mockable in tests.
 
@@ -175,7 +176,7 @@ Uses the canonical envelope (`errors.md`). `POST /api/runs` validation errors ar
 | No usable model key | run `failed` | `missing_api_key` |
 | Provider rejects key / unreachable | run `failed` | `provider_auth_failed` / `provider_unavailable` |
 | Context too large after compression | run `failed` | `context_overflow` |
-| LaTeX/notebook compile fails | run `failed` (source kept) | `compile_failed` |
+| HTML-to-PDF conversion or notebook compile fails | run `failed` (source kept) | `convert_failed` |
 | Forced `search_mode = on` but search fails | run `failed` | `search_unavailable` |
 
 ## Validation Rules
@@ -203,11 +204,10 @@ Uses the canonical envelope (`errors.md`). `POST /api/runs` validation errors ar
 - Each intent has a pipeline entrypoint with mocked model tests.
 - Failed generation records sanitized error metadata and any partial source/logs.
 - Context stats can be consumed by the UI context dial.
-- Timing stats can distinguish local preparation, provider generation, LaTeX compilation/repair, and artifact persistence well enough for bottleneck triage.
+- Timing stats can distinguish local preparation, provider generation, HTML-to-PDF conversion, and artifact persistence well enough for bottleneck triage.
 - Course context, when used, is counted in context estimates and recorded in metadata without forcing the default "Just Asking" course to contribute context.
-- The Docker runtime resolves common LaTeX dependencies required by phase-1 PDF outputs, including `kpsewhich lmodern.sty`.
-- A LaTeX source-level compile error can be repaired once without adding duplicate source entries to the manifest or changing the run response contract.
-- Generated PDFs do not contain visible non-rendered diagram placeholders; complex diagrams are omitted or converted to prose unless a reliable compiling representation exists.
+- The Docker runtime includes Playwright and Chromium for HTML-to-PDF conversion.
+- Generated PDFs render all content visible in the HTML source; diagrams use inline SVG or CSS layouts rather than external image references.
 
 ## Open Questions
 

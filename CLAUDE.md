@@ -6,9 +6,9 @@ Follow `AGENTS.md` as the canonical project instruction source. Use `docs/TASKS/
 
 When reviewing or implementing, pay special attention to:
 
-- The project follows a web-first three-phase QA strategy. Read `docs/IMPLEMENTATION_SUMMARY.md`, `docs/QA_PLAN.md`, and start from `docs/TASKS/000-web-browser-qa-baseline.md`. All functional QA targets Docker plus browser; Electron packaging is deferred to Phase C (task 012).
-- Whether the change preserves the Docker plus browser QA surface in Phases A–B and the Electron packaging target in Phase C.
+- The project is migrating from LaTeX to HTML-native artifact generation with Playwright HTML-to-PDF. Read `docs/DECISIONS/009-html-native-artifact-generation.md` and `docs/TASKS/README.md` for the migration queue.
+- Whether the change preserves the Docker plus browser development surface and the Electron packaging target in Phase 4 (task 013).
 - Whether local auth and API key storage can later be replaced by stronger hosted equivalents.
 - Whether generated artifacts remain portable filesystem outputs instead of being trapped in the database.
 - Whether frontend changes preserve the split production-console plus artifact-preview workbench and keep generated artifacts preview-only in phase 1.
-- Whether QA findings are reported as blockers/risks before fixes, and whether risks have human disposition before being fixed.
+- Whether generated HTML is self-contained (inline CSS, no external resources) for reliable Playwright PDF conversion.

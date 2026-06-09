@@ -16,6 +16,7 @@ from backend.context.budget import (
     output_token_budget,
     section_kind_for_upload,
 )
+from backend.context.course_context import load_course_context
 from backend.context.extraction import UploadExtraction, extract_upload
 from backend.context.search_policy import SearchPolicyDecision, decide_search_policy
 from backend.storage.sqlite import SQLiteRepository
@@ -78,6 +79,7 @@ class PreparedContext:
     uploads: tuple[UploadExtraction, ...]
     search_policy: SearchPolicyDecision
     revision: dict[str, Any] | None = None
+    course_context: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload = {
@@ -88,6 +90,8 @@ class PreparedContext:
         }
         if self.revision:
             payload["revision"] = self.revision
+        if self.course_context:
+            payload["course_context"] = self.course_context
         return payload
 
 
@@ -102,10 +106,27 @@ def build_run_context(
     context_window_limit: int | None = None,
     revision_of_run_id: str | None = None,
     user_id: str | None = None,
+    course: dict[str, Any] | None = None,
 ) -> PreparedContext:
     uploads = tuple(_load_upload_contexts(repo, upload_ids or [], user_id=user_id))
     sections = [ContextSection(name="task_text", text=task_text, kind=_task_kind(intent))]
     bundle_parts = ["[Task]\n" + task_text]
+    course_context_text = load_course_context(course)
+
+    if course_context_text:
+        course_id = str(course.get("id") or "selected")
+        sections.append(
+            ContextSection(
+                name=f"course_context:{course_id}",
+                text=course_context_text,
+                kind="prose",
+            )
+        )
+        bundle_parts.append(
+            "[Course Context]\n"
+            "Use this compact course summary as low-priority reference only.\n"
+            + course_context_text
+        )
 
     for upload in uploads:
         upload_kind = section_kind_for_upload(upload.original_name, upload.media_type)
@@ -168,6 +189,15 @@ def build_run_context(
         uploads=_uploads_with_token_estimates(uploads),
         search_policy=search_policy,
         revision=revision["summary"] if revision else None,
+        course_context=(
+            {
+                "course_id": course.get("id"),
+                "included": True,
+                "chars": len(course_context_text),
+            }
+            if course and course_context_text
+            else None
+        ),
     )
 
 

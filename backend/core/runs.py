@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 from backend.artifacts.filesystem import ArtifactRun, ArtifactWriter
 from backend.context.builder import ContextBuildError, PreparedContext, build_run_context
+from backend.context.course_context import update_course_context_after_success
 from backend.context.search_policy import (
     DuckDuckGoSearchAdapter,
     SearchPolicyDecision,
@@ -65,12 +66,14 @@ class RunPreparation:
     routing: RoutingDecision
     context: PreparedContext
     model: dict[str, Any]
+    course: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "routing": self.routing.to_dict(),
             "context": self.context.to_dict(),
             "model": self.model,
+            "course": self.course,
         }
 
 
@@ -331,18 +334,12 @@ def execute_code_homework_run(
         )
         return
 
-    repo.update_run(run["id"], status="succeeded", error_message=None)
-    artifact_run.write_log(
-        "generation.log", result.log_text + artifact_run.timing_log_text()
-    )
-    artifact_run.write_manifest(status="succeeded")
-    _emit_run_event(
-        run_id=run["id"],
-        status="succeeded",
-        stage="write_manifest",
-        message="Run succeeded.",
-        preparation=preparation,
-        timing=timing,
+    _finish_successful_run(
+        repo,
+        artifact_run,
+        run,
+        preparation,
+        log_text=result.log_text,
     )
 
 
@@ -394,18 +391,12 @@ def execute_essay_latex_run(
         )
         return
 
-    repo.update_run(run["id"], status="succeeded", error_message=None)
-    artifact_run.write_log(
-        "generation.log", result.log_text + artifact_run.timing_log_text()
-    )
-    artifact_run.write_manifest(status="succeeded")
-    _emit_run_event(
-        run_id=run["id"],
-        status="succeeded",
-        stage="write_manifest",
-        message="Run succeeded.",
-        preparation=preparation,
-        timing=timing,
+    _finish_successful_run(
+        repo,
+        artifact_run,
+        run,
+        preparation,
+        log_text=result.log_text,
     )
 
 
@@ -457,18 +448,12 @@ def execute_beamer_slides_run(
         )
         return
 
-    repo.update_run(run["id"], status="succeeded", error_message=None)
-    artifact_run.write_log(
-        "generation.log", result.log_text + artifact_run.timing_log_text()
-    )
-    artifact_run.write_manifest(status="succeeded")
-    _emit_run_event(
-        run_id=run["id"],
-        status="succeeded",
-        stage="write_manifest",
-        message="Run succeeded.",
-        preparation=preparation,
-        timing=timing,
+    _finish_successful_run(
+        repo,
+        artifact_run,
+        run,
+        preparation,
+        log_text=result.log_text,
     )
 
 
@@ -521,10 +506,34 @@ def execute_cheat_sheet_run(
         )
         return
 
-    repo.update_run(run["id"], status="succeeded", error_message=None)
-    artifact_run.write_log(
-        "generation.log", result.log_text + artifact_run.timing_log_text()
+    _finish_successful_run(
+        repo,
+        artifact_run,
+        run,
+        preparation,
+        log_text=result.log_text,
     )
+
+
+def _finish_successful_run(
+    repo: SQLiteRepository,
+    artifact_run: ArtifactRun,
+    run: dict[str, Any],
+    preparation: RunPreparation,
+    *,
+    log_text: str,
+) -> None:
+    repo.update_run(run["id"], status="succeeded", error_message=None)
+    update_course_context_after_success(
+        repo,
+        course=preparation.course,
+        user={"id": run.get("user_id"), "email": artifact_run.run_dir.parts[-4]},
+        run=run,
+        artifact_run=artifact_run,
+        uploads=preparation.context.uploads,
+        timing=artifact_run.timing,
+    )
+    artifact_run.write_log("generation.log", log_text + artifact_run.timing_log_text())
     artifact_run.write_manifest(status="succeeded")
     _emit_run_event(
         run_id=run["id"],
@@ -532,7 +541,7 @@ def execute_cheat_sheet_run(
         stage="write_manifest",
         message="Run succeeded.",
         preparation=preparation,
-        timing=timing,
+        timing=artifact_run.timing,
     )
 
 
@@ -541,6 +550,7 @@ def prepare_run_request(
     *,
     current_user: dict[str, Any],
     request: dict[str, Any],
+    course: dict[str, Any] | None = None,
 ) -> RunPreparation:
     validate_run_request(request)
     revision_of_run_id = _clean_revision_of_run_id(request.get("revision_of_run_id"))
@@ -569,11 +579,17 @@ def prepare_run_request(
             context_window_limit=model.get("context_window_hint"),
             revision_of_run_id=revision_of_run_id,
             user_id=current_user["id"],
+            course=course,
         )
     except ContextBuildError as exc:
         raise RunError(exc.status_code, exc.code, exc.message, exc.fields) from exc
 
-    return RunPreparation(routing=routing, context=prepared_context, model=model)
+    return RunPreparation(
+        routing=routing,
+        context=prepared_context,
+        model=model,
+        course=course,
+    )
 
 
 def create_run(
@@ -592,7 +608,12 @@ def create_run(
             user_id=current_user["id"],
             course_id=request.get("course_id"),
         )
-        preparation = prepare_run_request(repo, current_user=current_user, request=request)
+        preparation = prepare_run_request(
+            repo,
+            current_user=current_user,
+            request=request,
+            course=course,
+        )
     run_id = str(uuid.uuid4())
     task_text = request["task_text"].strip()
     intent = preparation.routing.resolved_intent
@@ -622,7 +643,7 @@ def create_run(
     writer = ArtifactWriter(workspace_root, repository=repo)
     artifact_run = writer.start_run(
         user_label=current_user["email"],
-        project_title="local",
+        project_title=course.get("title") or "local",
         run_id=run_id,
         intent=intent,
         task_text=task_text,

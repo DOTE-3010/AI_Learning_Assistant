@@ -21,9 +21,9 @@ Start with these files before implementing or testing:
 - The pre-QA `/api/uploads` blocker, agent QA phases, and first human-selected E2E usability fixes were completed and recorded under `docs/QA_REPORTS/`.
 - On 2026-06-05 the human completed manual E2E functional testing. All generation functions passed, but the human promoted three high-priority product blockers into the active repair queue: truthful running/complete status motion with a comfort progress bar, real generated-output previews, and LaTeX diagram-placeholder/complex-diagram avoidance.
 - Medium-priority follow-up work now covers optional course context containers and performance bottleneck triage. Low-priority onboarding/tutorial work is recorded in `docs/SPEC.md` as future product direction, not an active implementation task.
-- On 2026-06-09 the human restructured the queue into a three-phase web-first strategy: (A) verify Docker plus browser baseline (`000`), (B) complete post-human-E2E repair tasks (`001`–`011`) and any additional human-filed fixes, (C) Electron packaging for release (`012`) only after the human declares the web product acceptable.
-- Active work starts at `docs/TASKS/000-web-browser-qa-baseline.md`. All functional QA targets Docker plus browser; Electron packaging is the final phase. See `docs/TASKS/README.md` for the full queue.
-- Preserve the core idea: a teaching-oriented artifact generator for homework code, essay PDFs, Beamer slides, and dense cheat sheets.
+- On 2026-06-09 the human decided to migrate all PDF-producing pipelines from LaTeX to HTML-native generation with Playwright HTML-to-PDF conversion (see `docs/DECISIONS/009-html-native-artifact-generation.md`). The active task queue has been replaced with a phased migration plan.
+- Active work starts at `docs/TASKS/README.md`. The migration covers: cleanup of the old LaTeX toolchain, rewrite of pipelines to HTML, Docker image rebuild, test migration, and Electron packaging. See `docs/TASKS/README.md` for the full queue.
+- Preserve the core idea: a teaching-oriented artifact generator for homework code, essay PDFs, HTML slide decks, and dense cheat sheets.
 - Preserve CUHK-style weak auth: `@cuhk.edu.hk` and `@link.cuhk.edu.hk` registration/login remain part of the product and should be shaped so stronger auth can replace it later.
 - Replace the default model path with Qwen through an OpenAI-compatible provider abstraction. Do not hard-code development API keys.
 - Use SQLite as the local default datastore. Generated files belong on disk; SQLite stores metadata and status.

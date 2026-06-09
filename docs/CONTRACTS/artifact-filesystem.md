@@ -34,17 +34,17 @@ workspace/
             task.md
             uploads/
           output/
-            main.tex
+            main.html
             main.pdf
             solution.py
             solution.ipynb
-            slides.tex
+            slides.html
             slides.pdf
-            cheat-sheet.tex
+            cheat-sheet.html
             cheat-sheet.pdf
           logs/
             generation.log
-            latex.log
+            convert.log
           manifest.json
 ```
 
@@ -77,7 +77,7 @@ Only files relevant to a run need to exist.
     {"path": "input/uploads/reference.pdf", "kind": "upload"}
   ],
   "outputs": [
-    {"path": "output/main.tex", "kind": "source"},
+    {"path": "output/main.html", "kind": "source"},
     {"path": "output/main.pdf", "kind": "pdf"}
   ],
   "timings": {
@@ -100,16 +100,16 @@ Only files relevant to a run need to exist.
 - Avoid overwriting by using run-specific folders.
 - Revision runs always create a new run-specific folder and may reference the prior run id in `manifest.json`; they never overwrite previous output.
 - Never write outside the configured root.
-- Keep `.tex` source even if PDF compilation fails.
+- Keep `.html` source even if PDF conversion fails.
 
 ## Artifact Kinds
 
 | Intent | Required Output | Optional Output |
 | --- | --- | --- |
 | `code_homework` | `.py` or `.ipynb` | README, tests |
-| `essay_latex` | `main.tex` | `main.pdf`, references |
-| `beamer_slides` | `slides.tex` | `slides.pdf`, speaker notes |
-| `cheat_sheet` | `cheat-sheet.tex` | `cheat-sheet.pdf`, extraction notes |
+| `essay_latex` | `main.html` | `main.pdf`, references |
+| `beamer_slides` | `slides.html` | `slides.pdf`, speaker notes |
+| `cheat_sheet` | `cheat-sheet.html` | `cheat-sheet.pdf`, extraction notes |
 
 Course context files are not run artifacts and are not listed in `manifest.outputs`. If a run used course context, the manifest may include an additive metadata key such as `context.course_id` or `context.used_course_context`.
 
@@ -118,7 +118,7 @@ Course context files are not run artifacts and are not listed in `manifest.outpu
 Filesystem failures are surfaced through the run, not as a separate transport. Uses the canonical envelope (`errors.md`):
 
 - A path-traversal or unsafe-segment attempt is refused and the run fails with `internal_error` (sanitized message; never echoes the offending absolute path).
-- A `compile_failed` run still writes `output/*.tex` and `logs/latex.log`, plus a `manifest.json` with `status: failed`.
+- A `convert_failed` run still writes `output/*.html` and `logs/convert.log`, plus a `manifest.json` with `status: failed`.
 
 ## Validation Rules
 
@@ -138,7 +138,7 @@ Filesystem failures are surfaced through the run, not as a separate transport. U
 ## Acceptance Checks
 
 - Every succeeded run has `manifest.json`.
-- Failed LaTeX runs still keep source and logs.
+- Failed conversion runs still keep HTML source and logs.
 - Electron can reveal the run folder in the host filesystem.
 - SQLite artifact rows point to files that exist.
 - Course context Markdown, when present, stays under the owning course/project folder and is not stored in SQLite as large text.

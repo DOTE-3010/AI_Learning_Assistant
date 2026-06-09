@@ -36,8 +36,8 @@ Release readiness requires the high-priority blockers to be fixed or explicitly 
 ## Goals
 
 - Generate complete homework code as `.py` or `.ipynb` from a task, optional reference code, and optional supporting material.
-- Generate essay-style assignments as full LaTeX source plus compiled PDF.
-- Generate presentation slides as LaTeX Beamer source plus compiled PDF.
+- Generate essay-style assignments as self-contained HTML source plus compiled PDF.
+- Generate presentation slides as HTML slide decks plus compiled PDF.
 - Generate dense A4 cheat-sheet PDFs from many course slide PDFs and a requested page count.
 - Let users explicitly choose one of the four artifact modes and route to the selected pipeline.
 - Treat uploads as optional and web search as `auto`, `on`, or `off`.
@@ -87,8 +87,8 @@ Release readiness requires the high-priority blockers to be fixed or explicitly 
 - Model settings must prefill every non-secret Qwen default before the user enters an API key, so first-time users are not required to know the provider endpoint, model id, context window, or streaming capability.
 - File upload parsing must support text, Markdown, Python, notebooks, and PDF text extraction as first-class inputs.
 - Cheat-sheet generation must accept multiple slide PDFs and a target A4 page count.
-- LaTeX pipelines must save `.tex` even when PDF compilation fails.
-- LaTeX pipelines must prevent non-rendered image placeholders such as bracketed diagram notes from appearing in final PDFs. Complex, high-precision diagrams should be omitted or converted to concise prose when reliable LaTeX/TikZ generation is unlikely; simple TikZ diagrams are acceptable only when they compile.
+- HTML-to-PDF pipelines must save the intermediate `.html` source even when PDF conversion fails.
+- Generated HTML must not include remote image URLs unless the user uploaded a local image; diagrams should use inline SVG or CSS-based layouts that render reliably in headless Chromium.
 - Every run must create durable metadata that links inputs, model profile, search mode, output files, and status.
 - Runs may optionally belong to a course container. Non-default courses can provide a compact Markdown context summary as low-priority reference input; the default "Just Asking" course never contributes course context.
 - The Electron shell must detect Docker Desktop availability and guide startup without requiring Python or Node on the host.
@@ -135,13 +135,13 @@ Release readiness requires the high-priority blockers to be fixed or explicitly 
 Product-observable outcomes for the first phase:
 
 - A teacher or student can register and log in with a CUHK email and land directly in the artifact studio.
-- A teacher or student can generate each artifact type -- homework code (`.py`/`.ipynb`), essay LaTeX + PDF, Beamer slides + PDF, and a dense A4 cheat sheet -- from a task and optional uploads.
+- A teacher or student can generate each artifact type -- homework code (`.py`/`.ipynb`), essay HTML + PDF, slides HTML + PDF, and a dense A4 cheat sheet -- from a task and optional uploads.
 - The authenticated first screen uses a split production workbench: prompt/control console beside a persistent artifact preview panel.
 - The selected artifact type is recorded in run metadata; prompt-only intent guessing is not part of the first-phase product.
-- Every run produces an inspectable output folder with `manifest.json`, source files, and a compiled PDF when applicable; `.tex` source survives even if PDF compilation fails.
-- Code artifacts preview with syntax highlighting and copy/file affordances; PDF-producing artifacts preview as rendered pages or PDF-like pages before falling back to file-only output.
+- Every run produces an inspectable output folder with `manifest.json`, source files, and a compiled PDF when applicable; `.html` source survives even if PDF conversion fails.
+- Code artifacts preview with syntax highlighting and copy/file affordances; HTML-producing artifacts preview as rendered HTML inline or as PDF pages before falling back to file-only output.
 - Idle and completed runs show static status indicators; only active queued/running generation uses looping motion. Long-running generation shows an approximate comfort progress bar in the composer/status area without claiming exact provider progress.
-- The artifact preview panel shows real generated code/source/log/manifest content after completion. Essay, Beamer, and cheat-sheet previews render real PDF pages when the artifact byte endpoint and browser renderer are available, with a clear fallback when PDF rendering fails.
+- The artifact preview panel shows real generated code/source/log/manifest content after completion. Essay, slides, and cheat-sheet previews render the generated HTML inline or as PDF pages when the artifact byte endpoint is available, with a clear fallback when rendering fails.
 - Web search mode (`auto`, `on`, `off`) is honored and recorded, with citations when search is used.
 - With Docker Desktop running, the Electron shell launches services and opens the workbench; without it, the shell shows a clear, actionable failure state.
 - A user can create and rename ordinary course containers, select one for generation, archive ordinary courses so they disappear from the frontend, and always fall back to the undeletable context-disabled "Just Asking" course.

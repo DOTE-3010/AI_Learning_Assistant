@@ -107,6 +107,39 @@ def test_diagram_sanitizer_preserves_references_and_complete_tikz():
     assert sanitize_latex_diagram_placeholders(source) == source
 
 
+def test_diagram_sanitizer_adds_alignment_for_multiline_tikz_nodes():
+    source = (
+        "\\begin{tikzpicture}\n"
+        "\\node[draw, rectangle, minimum width=2cm] (input) {Input\\\\Image};\n"
+        "\\node[draw, align=left] (out) {Output\\\\Class};\n"
+        "\\node (plain) {Conv\\\\ReLU};\n"
+        "\\end{tikzpicture}\n"
+    )
+
+    sanitized = sanitize_latex_diagram_placeholders(source)
+
+    assert (
+        "\\node[draw, rectangle, minimum width=2cm, align=center] "
+        "(input) {Input\\\\Image};"
+    ) in sanitized
+    assert "\\node[draw, align=left] (out) {Output\\\\Class};" in sanitized
+    assert "\\node[align=center] (plain) {Conv\\\\ReLU};" in sanitized
+
+
+def test_diagram_sanitizer_replaces_remote_includegraphics():
+    source = (
+        "\\begin{frame}\n"
+        "\\includegraphics[width=0.8\\textwidth]{https://example.com/diagram.png}\n"
+        "\\end{frame}\n"
+    )
+
+    sanitized = sanitize_latex_diagram_placeholders(source)
+
+    assert "includegraphics" not in sanitized
+    assert "https://example.com" not in sanitized
+    assert "External image omitted" in sanitized
+
+
 def test_latex_repair_sanitizes_reintroduced_diagram_placeholder(tmp_path):
     tex_path = tmp_path / "main.tex"
     tex_path.write_text(

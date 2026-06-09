@@ -5,7 +5,7 @@ alwaysApply: true
 
 `AGENTS.md` is canonical. Read it before implementation or QA, then identify the active task in `docs/TASKS/` and the contracts it cites.
 
-The project follows a web-first three-phase QA strategy: (A) Docker plus browser baseline, (B) post-E2E repair tasks 001–011, (C) Electron packaging after human approval. Read `docs/IMPLEMENTATION_SUMMARY.md` for the completed development ledger and `docs/QA_PLAN.md` for the required QA order. Start from `docs/TASKS/000-web-browser-qa-baseline.md`.
+The project is migrating from LaTeX to HTML-native artifact generation (Playwright HTML-to-PDF). Read `docs/DECISIONS/009-html-native-artifact-generation.md` for context and `docs/TASKS/README.md` for the four-phase migration queue: (1) cleanup, (2) pipeline migration, (3) testing, (4) Electron packaging.
 
 For frontend work, also read `docs/CONTRACTS/ui-workbench.md` and `docs/CONTRACTS/visual-assets.md`. The phase-1 UI is a preview-only conversational artifact workbench: production console beside a persistent artifact preview panel, with explicit artifact type selection and professional code/PDF previews.
 

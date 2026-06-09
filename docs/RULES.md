@@ -15,13 +15,12 @@ These are repo-specific rules. General programming hygiene and anything a linter
 - Prefer small repository/service interfaces over direct cross-module imports.
 - Do not add hard-coded API keys, default personal credentials, or real secrets.
 - Model settings defaults may include only documented non-secret provider values. The API key must remain empty by default, and missing-key states must be clear to non-expert users.
-- Preserve `.tex` source even when PDF compilation fails.
-- Use structured parsers for PDFs, notebooks, JSON, and LaTeX manifests when available.
+- Preserve `.html` source even when PDF conversion fails.
+- Use structured parsers for PDFs, notebooks, JSON, and manifests when available.
 - Do not keep new product behavior only in chat; update SPEC, ARCH, RULES, or CONTRACTS when durable knowledge changes.
 - During the QA phase, run the active QA checks first, report blockers and risks, then fix blockers and only human-approved risks.
 - Do not add new feature work during QA unless the human converts a QA finding into a follow-up task.
-- The 2026-06-05 human E2E findings are human-approved post-E2E repair work. Complete high-priority status/progress, real preview, and LaTeX diagram-safety tasks before medium-priority course context and performance triage unless the human changes the order.
-- Before performance optimization, add or use timing instrumentation that separates local preparation, upload/context work, model-provider calls, LaTeX compilation/repair, and artifact persistence. If live runs spend more than half of wall time inside the external model provider, report that bottleneck and avoid speculative local rewrites.
+- Before performance optimization, add or use timing instrumentation that separates local preparation, upload/context work, model-provider calls, HTML-to-PDF conversion, and artifact persistence. If live runs spend more than half of wall time inside the external model provider, report that bottleneck and avoid speculative local rewrites.
 - The macOS launcher stubs (`run_web.command`, `run_desktop.command`) are stable by design and must not be edited from Cursor or any other GUI app. To change launcher behavior, edit `scripts/launcher-web.sh` or `scripts/launcher-desktop.sh` instead. If a stub itself genuinely must change (e.g., the path to the real script changes), tell the human and ask them to apply the edit from their own Terminal.app, then run `bash scripts/bless-launchers.sh`. See `docs/DECISIONS/008-launcher-stub-split.md` and `.cursor/rules/launcher-stability.mdc`.
 
 ## Frontend Experience Rules
@@ -37,7 +36,7 @@ These are repo-specific rules. General programming hygiene and anything a linter
 - Chinese UI copy must use serious written language. Controls, chips, segmented buttons, tabs, and colored state blocks must fit at 100% browser zoom in English, Simplified Chinese, and Traditional Chinese; use stable dimensions, wrapping, concise labels, or tooltips instead of overflow.
 - Keep generated artifacts preview-only in phase 1. Add copy/open/reveal/regenerate affordances, but do not add direct source editing without a new task and contract update.
 - Code previews must use a real syntax-highlighting renderer and professional code chrome: file tabs, line numbers or stable gutters when useful, copy buttons, status/error panels, and readable monospace typography.
-- PDF-producing artifacts should lead with rendered/PDF-like previews. Raw LaTeX is an inspectable secondary file view, not the default artifact experience.
+- PDF-producing artifacts should lead with rendered HTML inline or PDF previews. Raw HTML source is an inspectable secondary file view, not the default artifact experience.
 - Motion is allowed when it clarifies generation state, panel focus, preview replacement, or refinement flow. Respect reduced-motion settings and keep animations from blocking task completion.
 - Do not execute generated JavaScript, notebooks, shell commands, or arbitrary HTML in the frontend renderer unless a later sandbox contract explicitly allows it.
 - Avoid UI text that explains the product in marketing language. The interface should show the workbench through controls, status, previews, and artifacts.
@@ -90,8 +89,8 @@ These are repo-specific rules. General programming hygiene and anything a linter
 - New frontend dependencies should serve the polished workbench experience or Electron packaging; avoid dashboard-heavy component kits unless they fit the product aesthetic.
 - Syntax highlighting, PDF preview, and animation dependencies are acceptable when they replace fragile homegrown renderers and stay inside the frontend boundary.
 - Do not add backend dependencies to satisfy frontend appearance work.
-- New LaTeX or PDF tooling must work inside the Docker runtime.
-- LaTeX prompts and repair flows must not allow final PDFs to contain unrendered diagram placeholders such as `[Diagram: ...]`. Complex precision diagrams should be omitted or summarized in prose unless the implementation can generate and compile a reliable LaTeX/TikZ representation.
+- HTML-to-PDF conversion must work inside the Docker runtime via Playwright/Chromium.
+- Generated HTML must not include remote image URLs unless a local uploaded image is available. Diagrams should use inline SVG or CSS-based layouts that render reliably in headless Chromium.
 
 ## Contract Rules
 

@@ -26,7 +26,7 @@ The system is intentionally portable. The same API, storage interfaces, and arti
                                    |--> workspace/ (artifact bytes)
                                    |--> Qwen / OpenAI-compatible API
                                    |--> optional web search
-                                   |--> LaTeX toolchain (in container)
+                                   |--> Playwright/Chromium (HTML-to-PDF)
 
 [Electron shell] wraps the same Docker-backed workbench in the final packaging phase.
 ```
@@ -41,7 +41,7 @@ Major versions below are the supported baseline; exact patch versions live in lo
 - Frontend: Vite 6 + vanilla/lightweight component layer (no heavy admin-dashboard kit); CSS-driven visual system.
 - Desktop shell: Electron 42 (Chromium renderer + Node main process), packaging via electron-builder (future-phase).
 - Model client: `openai` Python SDK in OpenAI-compatible mode, pointed at a configurable Qwen base URL.
-- Document tooling: TeX Live 2024 (scheme-medium), Debian `lmodern`, and `latexmk` inside the container for LaTeX/PDF; `nbformat` for `.ipynb` validation; `pypdf` for PDF text extraction (OCR/scanned PDFs are out of scope in phase 1).
+- Document tooling: Playwright (headless Chromium) inside the container for HTML-to-PDF conversion; KaTeX for math rendering in generated HTML; `nbformat` for `.ipynb` validation; `pypdf` for PDF text extraction (OCR/scanned PDFs are out of scope in phase 1). The `slides_html/shared/deck.css` layout system is the reference for generated slide decks.
 - Web search: pluggable provider behind an adapter; concrete provider is an open question (see below).
 - Container runtime: Docker Desktop (Compose v2) as the only host prerequisite for the packaged build.
 
@@ -58,9 +58,9 @@ Major versions below are the supported baseline; exact patch versions live in lo
 | Model Provider | OpenAI-compatible client, profile validation, secret loading, redaction | Pipeline/business logic, HTTP routes, SQLite schema | backend provider package | `model-settings.md` |
 | Course Context | User-visible course containers, undeletable context-disabled default course, soft archive, compact `course_context.md` summary policy | Primary navigation shell, raw upload storage, hard deletion by default, forcing context into every run | backend API/core/context package, `frontend/` selector | `course-context.md`, `sqlite-schema.md`, `generation-pipeline.md` |
 | Context Builder | File extraction, context-budget estimation, adaptive revision context budgeting, web-search policy decision | Artifact generation, model-call orchestration, UI rendering | backend context package | `generation-pipeline.md`, `uploads.md` |
-| Artifact Pipelines | Code/essay/Beamer/cheat-sheet generation + repair, intent routing | Secret loading, Electron internals, HTTP transport, raw SQL | backend pipeline package | `generation-pipeline.md`, `artifact-filesystem.md` |
+| Artifact Pipelines | Code/essay/slides/cheat-sheet generation, HTML-to-PDF conversion, intent routing | Secret loading, Electron internals, HTTP transport, raw SQL | backend pipeline package | `generation-pipeline.md`, `artifact-filesystem.md` |
 
-Legacy modules under `backend/` and `frontend/` are not authoritative if they conflict with these boundaries. They may be deleted, moved, or mined for useful parsing/LaTeX patterns during scoped tasks. For task 018, frontend UI modules, styling, placeholder assets, and layout code should be treated as replaceable rather than inherited design constraints.
+Legacy modules under `backend/` and `frontend/` are not authoritative if they conflict with these boundaries. They may be deleted, moved, or mined for useful patterns during scoped tasks. Frontend UI modules, styling, placeholder assets, and layout code should be treated as replaceable rather than inherited design constraints.
 
 ## Canonical Phase-1 Layout
 
@@ -111,8 +111,8 @@ The workbench is a preview-first conversational editor, not a direct editor in p
 - The frontend owns design-token application for the warm editorial visual system: serif display typography, warm graphite/ink surfaces, parchment preview surfaces, clay/terracotta primary accents, restrained sage/amber/coral states, and mono code/run chrome.
 - A user follow-up creates a new generation run or revision. It must not mutate generated files only in frontend memory.
 - Code previews are rendered with syntax highlighting and editor-grade chrome, but generated code is not executed by the browser unless a later task adds a sandboxed execution contract.
-- PDF, slide, and cheat-sheet previews use generated PDFs when available; while a run is in progress, they show PDF-like skeleton/pages rather than raw LaTeX as the default view.
-- Raw `.tex`, logs, and manifests remain inspectable through file affordances, but preview surfaces should lead with the human artifact.
+- PDF, slide, and cheat-sheet previews use generated HTML directly or rendered PDFs when available; while a run is in progress, they show skeleton/pages rather than raw source as the default view.
+- Raw `.html` source, logs, and manifests remain inspectable through file affordances, but preview surfaces should lead with the rendered artifact.
 
 ## Frontend Rebuild Boundary
 
@@ -153,7 +153,7 @@ Backend API container
   -> workspace/output volume
   -> Qwen/OpenAI-compatible remote API
   -> optional web search
-  -> local LaTeX toolchain inside container
+  -> Playwright/Chromium for HTML-to-PDF
 ```
 
 Future runtimes must preserve the same contracts:
