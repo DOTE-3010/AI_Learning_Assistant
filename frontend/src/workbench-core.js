@@ -100,6 +100,7 @@ export function buildRunRequest({
     outputPreference,
     searchMode,
     modelProfileId = null,
+    courseId = null,
     uploadIds = [],
     targetPages = 1,
     revisionOfRunId = null,
@@ -111,11 +112,33 @@ export function buildRunRequest({
         output_preference: outputPreferenceForIntent(normalizedIntent, outputPreference),
         search_mode: normalizeSearchMode(searchMode),
         model_profile_id: modelProfileId || null,
+        course_id: courseId || null,
         upload_ids: Array.isArray(uploadIds) ? uploadIds.filter(Boolean) : [],
         options: optionsForIntent(normalizedIntent, targetPages),
     };
     if (revisionOfRunId) payload.revision_of_run_id = revisionOfRunId;
     return payload;
+}
+
+export function normalizeCourseMetadata(rawCourses) {
+    if (!Array.isArray(rawCourses)) return [];
+    return rawCourses
+        .map((course) => ({
+            id: String(course?.id || ""),
+            title: String(course?.title || "").trim(),
+            isDefault: Boolean(course?.is_default),
+            isArchived: Boolean(course?.is_archived),
+            contextEnabled: Boolean(course?.context_enabled),
+            contextUpdatedAt: course?.context_updated_at ? String(course.context_updated_at) : null,
+        }))
+        .filter((course) => course.id && course.title && !course.isArchived)
+        .sort((left, right) => Number(right.isDefault) - Number(left.isDefault));
+}
+
+export function resolveSelectedCourseId(courses, selectedCourseId) {
+    const selectable = Array.isArray(courses) ? courses.filter((course) => !course.isArchived) : [];
+    if (selectable.some((course) => course.id === selectedCourseId)) return selectedCourseId;
+    return selectable.find((course) => course.isDefault)?.id || selectable[0]?.id || "";
 }
 
 export function normalizeArtifactMetadata(rawArtifacts) {

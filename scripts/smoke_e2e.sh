@@ -210,6 +210,23 @@ assert manifest["run_id"] == run["id"], manifest
 assert manifest["intent"] == "code_homework", manifest
 assert manifest["status"] == "succeeded", manifest
 assert {"path": "output/solution.py", "kind": "script"} in manifest["outputs"], manifest
+stage_timings = {
+    stage["name"]: stage["duration_ms"]
+    for stage in manifest["timings"]["stages"]
+}
+timing_groups = {
+    "provider_generation_ms": stage_timings.get("provider_generation", 0)
+    + stage_timings.get("repair_generation", 0),
+    "latex_compile_repair_ms": stage_timings.get("compile_pdf", 0),
+    "context_upload_search_ms": stage_timings.get("preparation_context", 0)
+    + stage_timings.get("search", 0),
+    "artifact_persistence_ms": stage_timings.get("artifact_persistence", 0),
+}
+timing_groups["other_local_ms"] = max(
+    0,
+    manifest["timings"]["total_ms"] - sum(timing_groups.values()),
+)
+timing_groups["total_ms"] = manifest["timings"]["total_ms"]
 
 solution_path = host_run_root / "output" / "solution.py"
 assert solution_path.exists(), solution_path
@@ -232,6 +249,7 @@ print(json.dumps({
     "run_id": run["id"],
     "manifest": str(manifest_path),
     "workbench_assets_checked": len(asset_paths[:2]),
+    "timing_summary": timing_groups,
 }, indent=2, sort_keys=True))
 PY
 

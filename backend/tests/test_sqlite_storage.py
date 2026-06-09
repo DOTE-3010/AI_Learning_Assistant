@@ -40,9 +40,20 @@ def test_initialize_database_creates_contract_tables(tmp_path):
             row._mapping["name"]
             for row in connection.exec_driver_sql("PRAGMA table_info(uploads)").all()
         }
+        project_columns = {
+            row._mapping["name"]
+            for row in connection.exec_driver_sql("PRAGMA table_info(projects)").all()
+        }
     assert EXPECTED_TABLES.issubset(table_names)
     assert "revision_of_run_id" in run_columns
     assert "user_id" in upload_columns
+    assert {
+        "is_default",
+        "is_archived",
+        "context_enabled",
+        "context_path",
+        "context_updated_at",
+    }.issubset(project_columns)
 
 
 def test_repository_inserts_and_reads_representative_metadata(tmp_path):
@@ -130,6 +141,10 @@ def test_repository_inserts_and_reads_representative_metadata(tmp_path):
     assert repo.get_session(session["id"])["token_hash"] == "sha256:token"
     assert repo.get_model_profile(profile["id"])["api_key_ref"] == "env:MODEL_API_KEY"
     assert repo.get_project(project["id"])["root_path"] == "workspace/project-1"
+    default_project = repo.get_default_project(user["id"])
+    assert default_project["title"] == "Just Asking"
+    assert default_project["is_default"] == 1
+    assert default_project["context_enabled"] == 0
     assert repo.get_run(run["id"])["status"] == "queued"
     assert repo.get_run(run["id"])["revision_of_run_id"] is None
     assert repo.get_run(revision_run["id"])["revision_of_run_id"] == run["id"]
@@ -205,3 +220,65 @@ def test_initialize_database_migrates_v2_uploads_with_user_id_column(tmp_path):
             for row in connection.exec_driver_sql("PRAGMA table_info(uploads)").all()
         }
     assert "user_id" in upload_columns
+
+
+def test_initialize_database_migrates_v3_projects_and_backfills_default_course(tmp_path):
+    db_path = tmp_path / "legacy-v3.sqlite"
+    engine = create_sqlite_engine(db_path)
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            """
+            create table users (
+                id text primary key,
+                email text unique not null,
+                role text not null,
+                password_hash text not null,
+                created_at text not null
+            )
+            """
+        )
+        connection.exec_driver_sql(
+            """
+            create table projects (
+                id text primary key,
+                user_id text not null,
+                title text not null,
+                root_path text not null,
+                created_at text not null,
+                updated_at text not null
+            )
+            """
+        )
+        connection.exec_driver_sql(
+            """
+            insert into users (id, email, role, password_hash, created_at)
+            values ('user-legacy', 'legacy@cuhk.edu.hk', 'teacher', 'hash', '2026-06-01T00:00:00Z')
+            """
+        )
+        connection.exec_driver_sql(
+            """
+            insert into projects (id, user_id, title, root_path, created_at, updated_at)
+            values (
+                'project-legacy',
+                'user-legacy',
+                'Legacy Project',
+                'workspace/project-legacy',
+                '2026-06-01T00:00:00Z',
+                '2026-06-01T00:00:00Z'
+            )
+            """
+        )
+        connection.exec_driver_sql("PRAGMA user_version = 3")
+
+    initialize_database(engine)
+    repo = SQLiteRepository(engine)
+
+    assert get_schema_version(engine) == SCHEMA_VERSION
+    legacy = repo.get_project("project-legacy")
+    assert legacy["is_default"] == 0
+    assert legacy["is_archived"] == 0
+    assert legacy["context_enabled"] == 1
+    default_course = repo.get_default_project("user-legacy")
+    assert default_course["title"] == "Just Asking"
+    assert default_course["context_enabled"] == 0
+    assert len([row for row in repo.list_projects_for_user("user-legacy") if row["is_default"]]) == 1

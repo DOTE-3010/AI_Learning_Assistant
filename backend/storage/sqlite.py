@@ -21,7 +21,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.engine import Engine
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 SQLITE_PATH_ENV = "APP_SQLITE_PATH"
 DEFAULT_SQLITE_PATH = Path("data/app.sqlite")
 
@@ -74,8 +74,16 @@ projects = Table(
     Column("user_id", Text, ForeignKey("users.id"), nullable=False),
     Column("title", Text, nullable=False),
     Column("root_path", Text, nullable=False),
+    Column("is_default", Integer, nullable=False, default=0),
+    Column("is_archived", Integer, nullable=False, default=0),
+    Column("context_enabled", Integer, nullable=False, default=1),
+    Column("context_path", Text, nullable=True),
+    Column("context_updated_at", Text, nullable=True),
     Column("created_at", Text, nullable=False),
     Column("updated_at", Text, nullable=False),
+    CheckConstraint("is_default in (0, 1)", name="projects_default_check"),
+    CheckConstraint("is_archived in (0, 1)", name="projects_archived_check"),
+    CheckConstraint("context_enabled in (0, 1)", name="projects_context_enabled_check"),
 )
 
 runs = Table(
@@ -178,6 +186,7 @@ def initialize_database(engine: Engine) -> None:
 
     if current_version == 0:
         with engine.begin() as connection:
+            _ensure_course_default_index(connection)
             connection.exec_driver_sql(f"PRAGMA user_version = {SCHEMA_VERSION}")
         return
 
@@ -189,7 +198,12 @@ def initialize_database(engine: Engine) -> None:
     if current_version < 3:
         with engine.begin() as connection:
             _migrate_2_to_3(connection)
-            connection.exec_driver_sql("PRAGMA user_version = 3")
+            current_version = 3
+
+    if current_version < 4:
+        with engine.begin() as connection:
+            _migrate_3_to_4(connection)
+            connection.exec_driver_sql("PRAGMA user_version = 4")
 
 
 def _migrate_1_to_2(connection: Any) -> None:
@@ -210,12 +224,96 @@ def _migrate_2_to_3(connection: Any) -> None:
         connection.exec_driver_sql("ALTER TABLE uploads ADD COLUMN user_id text")
 
 
+def _migrate_3_to_4(connection: Any) -> None:
+    columns = {
+        row._mapping["name"]
+        for row in connection.exec_driver_sql("PRAGMA table_info(projects)").all()
+    }
+    additions = {
+        "is_default": "integer NOT NULL DEFAULT 0",
+        "is_archived": "integer NOT NULL DEFAULT 0",
+        "context_enabled": "integer NOT NULL DEFAULT 1",
+        "context_path": "text",
+        "context_updated_at": "text",
+    }
+    for name, definition in additions.items():
+        if name not in columns:
+            connection.exec_driver_sql(
+                f"ALTER TABLE projects ADD COLUMN {name} {definition}"
+            )
+
+    now = _now()
+    user_ids = connection.exec_driver_sql("SELECT id FROM users").scalars().all()
+    for user_id in user_ids:
+        has_default = connection.exec_driver_sql(
+            "SELECT 1 FROM projects WHERE user_id = ? AND is_default = 1 LIMIT 1",
+            (user_id,),
+        ).first()
+        if has_default:
+            continue
+        values = _default_project_values(str(user_id), now=now)
+        connection.exec_driver_sql(
+            """
+            INSERT INTO projects (
+                id, user_id, title, root_path, is_default, is_archived,
+                context_enabled, context_path, context_updated_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                values["id"],
+                values["user_id"],
+                values["title"],
+                values["root_path"],
+                values["is_default"],
+                values["is_archived"],
+                values["context_enabled"],
+                values["context_path"],
+                values["context_updated_at"],
+                values["created_at"],
+                values["updated_at"],
+            ),
+        )
+    _ensure_course_default_index(connection)
+
+
+def _ensure_course_default_index(connection: Any) -> None:
+    connection.exec_driver_sql(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_projects_user_default
+        ON projects(user_id)
+        WHERE is_default = 1
+        """
+    )
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
 def _new_id() -> str:
     return str(uuid.uuid4())
+
+
+def _new_course_id() -> str:
+    return f"course_{uuid.uuid4().hex}"
+
+
+def _default_project_values(user_id: str, *, now: str | None = None) -> dict[str, Any]:
+    timestamp = now or _now()
+    course_id = _new_course_id()
+    return {
+        "id": course_id,
+        "user_id": user_id,
+        "title": "Just Asking",
+        "root_path": f"workspace/courses/{course_id}",
+        "is_default": 1,
+        "is_archived": 0,
+        "context_enabled": 0,
+        "context_path": None,
+        "context_updated_at": None,
+        "created_at": timestamp,
+        "updated_at": timestamp,
+    }
 
 
 def _row_to_dict(row: Any) -> dict[str, Any] | None:
@@ -252,16 +350,23 @@ class SQLiteRepository:
         id: str | None = None,
         created_at: str | None = None,
     ) -> dict[str, Any]:
-        return self._insert(
-            users,
-            {
-                "id": id or _new_id(),
-                "email": email,
-                "role": role,
-                "password_hash": password_hash,
-                "created_at": created_at or _now(),
-            },
-        )
+        user_id = id or _new_id()
+        timestamp = created_at or _now()
+        with self.engine.begin() as connection:
+            connection.execute(
+                users.insert().values(
+                    id=user_id,
+                    email=email,
+                    role=role,
+                    password_hash=password_hash,
+                    created_at=timestamp,
+                )
+            )
+            connection.execute(
+                projects.insert().values(**_default_project_values(user_id, now=timestamp))
+            )
+            row = connection.execute(select(users).where(users.c.id == user_id)).one()
+            return dict(row._mapping)
 
     def get_user(self, user_id: str) -> dict[str, Any] | None:
         return self._get_by_id(users, user_id)
@@ -429,6 +534,11 @@ class SQLiteRepository:
         user_id: str,
         title: str,
         root_path: str,
+        is_default: bool = False,
+        is_archived: bool = False,
+        context_enabled: bool = True,
+        context_path: str | None = None,
+        context_updated_at: str | None = None,
         id: str | None = None,
         created_at: str | None = None,
         updated_at: str | None = None,
@@ -441,6 +551,11 @@ class SQLiteRepository:
                 "user_id": user_id,
                 "title": title,
                 "root_path": root_path,
+                "is_default": int(is_default),
+                "is_archived": int(is_archived),
+                "context_enabled": int(context_enabled),
+                "context_path": context_path,
+                "context_updated_at": context_updated_at,
                 "created_at": created_at or now,
                 "updated_at": updated_at or now,
             },
@@ -448,6 +563,67 @@ class SQLiteRepository:
 
     def get_project(self, project_id: str) -> dict[str, Any] | None:
         return self._get_by_id(projects, project_id)
+
+    def get_project_for_user(self, project_id: str, user_id: str) -> dict[str, Any] | None:
+        with self.engine.connect() as connection:
+            row = connection.execute(
+                select(projects).where(
+                    projects.c.id == project_id,
+                    projects.c.user_id == user_id,
+                )
+            ).first()
+            return _row_to_dict(row)
+
+    def get_default_project(self, user_id: str) -> dict[str, Any] | None:
+        with self.engine.connect() as connection:
+            row = connection.execute(
+                select(projects).where(
+                    projects.c.user_id == user_id,
+                    projects.c.is_default == 1,
+                )
+            ).first()
+            return _row_to_dict(row)
+
+    def get_or_create_default_project(self, user_id: str) -> dict[str, Any]:
+        with self.engine.begin() as connection:
+            row = connection.execute(
+                select(projects).where(
+                    projects.c.user_id == user_id,
+                    projects.c.is_default == 1,
+                )
+            ).first()
+            if row:
+                return dict(row._mapping)
+            values = _default_project_values(user_id)
+            connection.execute(projects.insert().values(**values))
+            return values
+
+    def list_projects_for_user(
+        self,
+        user_id: str,
+        *,
+        include_archived: bool = False,
+    ) -> list[dict[str, Any]]:
+        query = select(projects).where(projects.c.user_id == user_id)
+        if not include_archived:
+            query = query.where(projects.c.is_archived == 0)
+        query = query.order_by(projects.c.is_default.desc(), projects.c.created_at, projects.c.id)
+        with self.engine.connect() as connection:
+            rows = connection.execute(query).all()
+            return [dict(row._mapping) for row in rows]
+
+    def update_project(self, project_id: str, **values: Any) -> dict[str, Any] | None:
+        if not values:
+            return self.get_project(project_id)
+        values["updated_at"] = _now()
+        with self.engine.begin() as connection:
+            connection.execute(
+                update(projects).where(projects.c.id == project_id).values(**values)
+            )
+            row = connection.execute(
+                select(projects).where(projects.c.id == project_id)
+            ).first()
+            return _row_to_dict(row)
 
     def create_run(
         self,

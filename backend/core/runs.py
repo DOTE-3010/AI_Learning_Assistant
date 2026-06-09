@@ -587,6 +587,11 @@ def create_run(
 ) -> dict[str, Any]:
     timing = RunTimingRecorder()
     with timing.measure("preparation_context"):
+        course = _resolve_course_for_run(
+            repo,
+            user_id=current_user["id"],
+            course_id=request.get("course_id"),
+        )
         preparation = prepare_run_request(repo, current_user=current_user, request=request)
     run_id = str(uuid.uuid4())
     task_text = request["task_text"].strip()
@@ -602,6 +607,7 @@ def create_run(
         task_text=task_text,
         search_mode=search_mode,
         status="queued",
+        project_id=course["id"],
         model_profile_id=model_profile_id,
         revision_of_run_id=revision_of_run_id,
     )
@@ -708,6 +714,7 @@ def serialize_run(
         "search_mode": run["search_mode"],
         "model_profile_id": run.get("model_profile_id"),
         "revision_of_run_id": run.get("revision_of_run_id"),
+        "course_id": run.get("project_id"),
         "output_root": run.get("output_root"),
         "error_message": run.get("error_message"),
         "created_at": run["created_at"],
@@ -724,6 +731,25 @@ def _clean_revision_of_run_id(value: Any) -> str | None:
         return None
     stripped = value.strip()
     return stripped or None
+
+
+def _resolve_course_for_run(
+    repo: SQLiteRepository,
+    *,
+    user_id: str,
+    course_id: Any,
+) -> dict[str, Any]:
+    if course_id is None:
+        return repo.get_or_create_default_project(user_id)
+
+    course = (
+        repo.get_project_for_user(course_id, user_id)
+        if isinstance(course_id, str)
+        else None
+    )
+    if not course or course["is_archived"]:
+        raise RunError(404, "not_found", "Course was not found.")
+    return course
 
 
 def _default_model_provider() -> TextGenerationProvider:

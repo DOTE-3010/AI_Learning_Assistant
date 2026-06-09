@@ -13,8 +13,10 @@ import {
     isActiveRunStatus,
     normalizeActiveCodeFile,
     normalizeArtifactMetadata,
+    normalizeCourseMetadata,
     optionsForIntent,
     outputPreferenceForIntent,
+    resolveSelectedCourseId,
 } from "../src/workbench-core.js";
 
 const requiredLocaleKeys = [
@@ -22,6 +24,12 @@ const requiredLocaleKeys = [
     "actions.runArtifact",
     "controls.artifactType",
     "controls.searchMode.auto",
+    "course.label",
+    "course.defaultTitle",
+    "course.contextDisabled",
+    "course.create",
+    "course.rename",
+    "course.archive",
     "intents.code_homework.label",
     "intents.essay_latex.label",
     "intents.beamer_slides.label",
@@ -89,6 +97,7 @@ test("run payload builder preserves backend contract fields", () => {
         outputPreference: "ipynb",
         searchMode: "on",
         modelProfileId: "default-qwen",
+        courseId: "course_ml",
         uploadIds: ["upl_1", "", "upl_2"],
         targetPages: 2,
     });
@@ -99,6 +108,7 @@ test("run payload builder preserves backend contract fields", () => {
         output_preference: "pdf",
         search_mode: "on",
         model_profile_id: "default-qwen",
+        course_id: "course_ml",
         upload_ids: ["upl_1", "upl_2"],
         options: { target_pages: 2, paper_size: "A4", density: "dense" },
     });
@@ -112,8 +122,40 @@ test("run payload builder preserves backend contract fields", () => {
     });
 
     assert.equal(revision.output_preference, "ipynb");
+    assert.equal(revision.course_id, null);
     assert.equal(revision.revision_of_run_id, "run_prior");
     assert.deepEqual(revision.options, {});
+});
+
+test("course helpers hide archived courses and keep the default selectable", () => {
+    const courses = normalizeCourseMetadata([
+        {
+            id: "course_ml",
+            title: "Machine Learning",
+            is_default: false,
+            is_archived: false,
+            context_enabled: true,
+        },
+        {
+            id: "course_default",
+            title: "Just Asking",
+            is_default: true,
+            is_archived: false,
+            context_enabled: false,
+        },
+        {
+            id: "course_old",
+            title: "Old Course",
+            is_default: false,
+            is_archived: true,
+            context_enabled: true,
+        },
+    ]);
+
+    assert.deepEqual(courses.map((course) => course.id), ["course_default", "course_ml"]);
+    assert.equal(courses[0].contextEnabled, false);
+    assert.equal(resolveSelectedCourseId(courses, "course_ml"), "course_ml");
+    assert.equal(resolveSelectedCourseId(courses, "course_old"), "course_default");
 });
 
 test("default Qwen profile only omits the API key", () => {

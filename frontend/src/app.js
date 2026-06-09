@@ -18,8 +18,10 @@ import {
     isTextArtifact,
     normalizeActiveCodeFile,
     normalizeArtifactMetadata,
+    normalizeCourseMetadata,
     optionsForIntent as optionsForIntentCore,
     outputPreferenceForIntent as outputPreferenceForIntentCore,
+    resolveSelectedCourseId,
 } from "./workbench-core.js";
 
 const API_URL = window.__AI_LEARNING_ASSISTANT_API_URL || window.location.origin;
@@ -92,6 +94,7 @@ const state = {
     previewTab: "primary",
     activeFile: "solution.py",
     notice: { message: "", tone: "neutral" },
+    course: initialCourseState(),
     model: {
         editorOpen: false,
         profiles: [],
@@ -208,6 +211,8 @@ function renderConsolePane(isAuthenticated) {
                 </div>
             </div>
 
+            ${renderCourseControl()}
+
             <div class="console-utility-row">
                 ${renderContextDial()}
                 ${renderSearchModeControl()}
@@ -242,6 +247,60 @@ function renderConsolePane(isAuthenticated) {
 
             ${renderRefinementComposer(isAuthenticated)}
             ${renderCommandHistory()}
+        </section>
+    `;
+}
+
+function renderCourseControl() {
+    const selected = selectedCourse();
+    const ordinarySelected = selected && !selected.isDefault;
+    const disabled = state.course.loading || !state.course.items.length || isActiveRunStatus(state.run.status);
+    const courseMutationDisabled = Boolean(state.course.busy || isActiveRunStatus(state.run.status));
+    return `
+        <section class="course-control ${state.course.panelOpen ? "is-open" : ""}" aria-label="${escapeHtml(t("course.label"))}">
+            <div class="course-select-row">
+                <label class="course-select-field">
+                    <span class="field-label">${escapeHtml(t("course.label"))}</span>
+                    <select data-course-select ${disabled ? "disabled" : ""}>
+                        ${state.course.items.length
+                            ? state.course.items.map((course) => `
+                                <option value="${escapeHtml(course.id)}" ${course.id === state.course.selectedId ? "selected" : ""}>
+                                    ${escapeHtml(courseDisplayTitle(course))}
+                                </option>
+                            `).join("")
+                            : `<option value="">${escapeHtml(state.course.loading ? t("course.loading") : t("course.unavailable"))}</option>`
+                        }
+                    </select>
+                </label>
+                <div class="course-context-note">
+                    <strong>${escapeHtml(selected?.isDefault ? t("course.contextDisabled") : t("course.contextEnabled"))}</strong>
+                    <span>${escapeHtml(selected?.isDefault ? t("course.defaultNote") : t("course.contextNote"))}</span>
+                </div>
+                <button class="secondary-action course-manage-button" type="button" data-action="toggle-course-manager">
+                    ${escapeHtml(state.course.panelOpen ? t("course.done") : t("course.manage"))}
+                </button>
+            </div>
+            ${state.course.panelOpen ? `
+                <div class="course-manager">
+                    <form class="course-create-form" data-course-form="create">
+                        <label>
+                            <span class="field-label">${escapeHtml(t("course.newTitle"))}</span>
+                            <input type="text" maxlength="200" data-course-create-title value="${escapeHtml(state.course.createTitle)}" placeholder="${escapeHtml(t("course.newPlaceholder"))}">
+                        </label>
+                        <button class="secondary-action" type="submit" ${courseMutationDisabled ? "disabled" : ""}>${escapeHtml(t("course.create"))}</button>
+                    </form>
+                    <div class="course-edit-row">
+                        <label>
+                            <span class="field-label">${escapeHtml(t("course.selectedTitle"))}</span>
+                            <input type="text" maxlength="200" data-course-rename-title value="${escapeHtml(selected?.isDefault ? courseDisplayTitle(selected) : state.course.renameTitle)}" ${ordinarySelected ? "" : "disabled"}>
+                        </label>
+                        <button class="secondary-action" type="button" data-action="rename-course" ${ordinarySelected && !courseMutationDisabled ? "" : "disabled"}>${escapeHtml(t("course.rename"))}</button>
+                        <button class="secondary-action is-danger" type="button" data-action="archive-course" ${ordinarySelected && !courseMutationDisabled ? "" : "disabled"}>${escapeHtml(t("course.archive"))}</button>
+                    </div>
+                    ${selected?.isDefault ? `<p class="course-default-lock">${escapeHtml(t("course.defaultLocked"))}</p>` : ""}
+                    ${state.course.message ? `<div class="inline-notice is-${escapeHtml(state.course.tone)}">${escapeHtml(state.course.message)}</div>` : ""}
+                </div>
+            ` : ""}
         </section>
     `;
 }
@@ -1080,6 +1139,27 @@ function bindEvents() {
             render();
         });
     });
+    document.querySelector("[data-course-select]")?.addEventListener("change", (event) => {
+        state.course.selectedId = resolveSelectedCourseId(state.course.items, event.target.value);
+        syncCourseRenameTitle();
+        state.course.message = "";
+        render();
+    });
+    document.querySelector("[data-action='toggle-course-manager']")?.addEventListener("click", () => {
+        state.course.panelOpen = !state.course.panelOpen;
+        state.course.message = "";
+        syncCourseRenameTitle();
+        render();
+    });
+    document.querySelector("[data-course-create-title]")?.addEventListener("input", (event) => {
+        state.course.createTitle = event.target.value;
+    });
+    document.querySelector("[data-course-rename-title]")?.addEventListener("input", (event) => {
+        state.course.renameTitle = event.target.value;
+    });
+    document.querySelector("[data-course-form='create']")?.addEventListener("submit", handleCourseCreate);
+    document.querySelector("[data-action='rename-course']")?.addEventListener("click", handleCourseRename);
+    document.querySelector("[data-action='archive-course']")?.addEventListener("click", handleCourseArchive);
     document.querySelectorAll("[data-output-preference]").forEach((button) => {
         button.addEventListener("click", () => {
             applyInteraction({
@@ -1376,6 +1456,140 @@ async function uploadFilesIfNeeded() {
     return state.files.map((file) => file.uploadId).filter(Boolean);
 }
 
+async function loadCourses({ preserveSelection = true } = {}) {
+    if (!state.token) return;
+    const previousSelection = preserveSelection ? state.course.selectedId : "";
+    state.course.loading = true;
+    state.course.message = "";
+    render();
+    try {
+        const response = await fetch(`${API_URL}/api/courses`, {
+            headers: { Authorization: `Bearer ${state.token}` },
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(errorMessage(data, t("course.loadFailed")));
+        const items = normalizeCourseMetadata(data.courses);
+        state.course.items = items;
+        state.course.selectedId = resolveSelectedCourseId(items, previousSelection);
+        state.course.tone = "neutral";
+        syncCourseRenameTitle();
+    } catch (error) {
+        state.course.items = [];
+        state.course.selectedId = "";
+        state.course.message = safeDisplayMessage(error.message || t("course.loadFailed"));
+        state.course.tone = "error";
+    } finally {
+        state.course.loading = false;
+        render();
+    }
+}
+
+async function handleCourseCreate(event) {
+    event.preventDefault();
+    const title = state.course.createTitle.trim();
+    if (!title) {
+        setCourseMessage(t("course.titleRequired"), "error");
+        return;
+    }
+    state.course.busy = "create";
+    setCourseMessage(t("course.creating"), "neutral");
+    try {
+        const course = await courseRequest("/api/courses", {
+            method: "POST",
+            body: JSON.stringify({ title }),
+        }, t("course.createFailed"));
+        state.course.createTitle = "";
+        await loadCourses();
+        state.course.selectedId = resolveSelectedCourseId(state.course.items, course.id);
+        syncCourseRenameTitle();
+        setCourseMessage(t("course.created"), "success");
+    } catch (error) {
+        setCourseMessage(error.message || t("course.createFailed"), "error");
+    } finally {
+        state.course.busy = "";
+        render();
+    }
+}
+
+async function handleCourseRename() {
+    const course = selectedCourse();
+    const title = state.course.renameTitle.trim();
+    if (!course || course.isDefault) return;
+    if (!title) {
+        setCourseMessage(t("course.titleRequired"), "error");
+        return;
+    }
+    state.course.busy = "rename";
+    setCourseMessage(t("course.renaming"), "neutral");
+    try {
+        await courseRequest(`/api/courses/${encodeURIComponent(course.id)}`, {
+            method: "PATCH",
+            body: JSON.stringify({ title }),
+        }, t("course.renameFailed"));
+        await loadCourses();
+        setCourseMessage(t("course.renamed"), "success");
+    } catch (error) {
+        setCourseMessage(error.message || t("course.renameFailed"), "error");
+    } finally {
+        state.course.busy = "";
+        render();
+    }
+}
+
+async function handleCourseArchive() {
+    const course = selectedCourse();
+    if (!course || course.isDefault) return;
+    state.course.busy = "archive";
+    setCourseMessage(t("course.archiving"), "neutral");
+    try {
+        await courseRequest(`/api/courses/${encodeURIComponent(course.id)}`, {
+            method: "PATCH",
+            body: JSON.stringify({ is_archived: true }),
+        }, t("course.archiveFailed"));
+        await loadCourses({ preserveSelection: false });
+        setCourseMessage(t("course.archived"), "success");
+    } catch (error) {
+        setCourseMessage(error.message || t("course.archiveFailed"), "error");
+    } finally {
+        state.course.busy = "";
+        render();
+    }
+}
+
+async function courseRequest(path, options, fallback) {
+    const response = await fetch(`${API_URL}${path}`, {
+        ...options,
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${state.token}`,
+            ...(options?.headers || {}),
+        },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(errorMessage(data, fallback));
+    return data;
+}
+
+function setCourseMessage(message, tone) {
+    state.course.message = safeDisplayMessage(message);
+    state.course.tone = tone;
+    render();
+}
+
+function selectedCourse() {
+    return state.course.items.find((course) => course.id === state.course.selectedId)
+        || state.course.items.find((course) => course.isDefault)
+        || null;
+}
+
+function syncCourseRenameTitle() {
+    state.course.renameTitle = selectedCourse()?.title || "";
+}
+
+function courseDisplayTitle(course) {
+    return course.isDefault ? t("course.defaultTitle") : course.title;
+}
+
 function setUser(user, token) {
     state.user = user;
     state.token = token;
@@ -1384,9 +1598,11 @@ function setUser(user, token) {
     state.authMessage = "";
     state.run = initialRunState();
     state.artifacts = initialArtifactState();
+    state.course = initialCourseState();
     refreshLocalContext();
     render();
     loadModelProfiles();
+    loadCourses();
 }
 
 function clearSession() {
@@ -1394,6 +1610,7 @@ function clearSession() {
     state.user = null;
     state.token = "";
     state.artifacts = initialArtifactState();
+    state.course = initialCourseState();
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
 }
@@ -1636,6 +1853,20 @@ function initialArtifactState() {
     };
 }
 
+function initialCourseState() {
+    return {
+        items: [],
+        selectedId: "",
+        panelOpen: false,
+        createTitle: "",
+        renameTitle: "",
+        loading: false,
+        busy: "",
+        message: "",
+        tone: "neutral",
+    };
+}
+
 function buildRunPayload({ promptText, uploadIds, revisionOfRunId }) {
     return buildRunRequest({
         promptText,
@@ -1645,6 +1876,7 @@ function buildRunPayload({ promptText, uploadIds, revisionOfRunId }) {
         outputPreference: state.outputPreference,
         searchMode: state.searchMode,
         modelProfileId: state.model.profile?.id || null,
+        courseId: state.course.selectedId || null,
         targetPages: state.targetPages,
     });
 }
@@ -2662,6 +2894,8 @@ function setLocale(locale) {
     if (state.locale === nextLocale) return;
     state.locale = nextLocale;
     localStorage.setItem(LOCALE_KEY, nextLocale);
+    state.course.message = "";
+    state.course.tone = "neutral";
     refreshLocalizedHistory();
     if (state.run.status === "idle" && state.run.stage === "compose") {
         state.run.message = t("run.ready");

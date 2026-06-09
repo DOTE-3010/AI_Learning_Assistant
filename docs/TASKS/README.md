@@ -66,10 +66,10 @@ After the web product passes human QA, re-wrap into Electron. QA at this phase c
 | 004 | Add PDF page preview renderer | B | High | Pending | Agent |
 | 005 | Harden LaTeX diagram policy | B | High | Complete | Agent |
 | 006 | Add run timing instrumentation | B | Medium | Complete | Agent |
-| 007 | Run performance bottleneck triage | B | Medium | Pending | Agent |
-| 008 | Add course container API | B | Medium | Pending | Agent |
-| 009 | Attach runs to courses | B | Medium | Pending | Agent |
-| 010 | Add course selector workbench UI | B | Medium | Pending | Agent |
+| 007 | Run performance bottleneck triage | B | Medium | Complete | Agent |
+| 008 | Add course container API | B | Medium | Complete | Agent |
+| 009 | Attach runs to courses | B | Medium | Complete | Agent |
+| 010 | Add course selector workbench UI | B | Medium | Complete | Agent |
 | 011 | Integrate compact course context | B | Medium | Pending | Agent |
 | — | Additional human E2E fix tasks | B | On demand | Created as needed | Agent/Human |
 | 012 | Electron packaging for release | C | — | Blocked on Phase B | Agent/Human |
@@ -89,6 +89,10 @@ After the web product passes human QA, re-wrap into Electron. QA at this phase c
 | Task 001 run status/progress repair | Truthful run motion and approximate composer comfort progress implemented and verified. | `docs/QA_REPORTS/2026-06-09-task001-run-status-progress.md` |
 | Task 005 LaTeX diagram policy | Essay, Beamer, cheat-sheet, and repair flows now forbid and deterministically sanitize explicit diagram placeholders while preserving valid TikZ. | `docs/QA_REPORTS/2026-06-09-task005-latex-diagram-policy.md` |
 | Task 006 run timing instrumentation | Monotonic preparation, search, provider, validation, compile, repair, persistence, and total timing diagnostics are persisted in manifests/logs and exposed in status events. | `docs/QA_REPORTS/2026-06-09-task006-run-timing-instrumentation.md` |
+| Task 007 performance bottleneck triage | Mocked generation showed no meaningful local bottleneck; live classification remains inconclusive because no untracked Qwen credential was available. | `docs/QA_REPORTS/2026-06-09-task007-performance-bottleneck-triage.md` |
+| Task 008 course container API | SQLite schema v4, default course backfill, authenticated course CRUD, and soft archive behavior implemented and verified. | `docs/QA_REPORTS/2026-06-09-task008-course-container-api.md` |
+| Task 009 run course attachment | Run creation now assigns the default course when omitted, validates owned selectable courses, and persists the selection in `runs.project_id`. | `docs/QA_REPORTS/2026-06-09-task009-attach-runs-to-courses.md` |
+| Task 010 course selector UI | The workbench now supports localized default/ordinary course selection, compact create/rename/archive management, and course-linked run submission across desktop and narrow layouts. | `docs/QA_REPORTS/2026-06-09-task010-course-selector-ui.md` |
 
 ## Acceptance Criteria
 

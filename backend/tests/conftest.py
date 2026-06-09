@@ -29,6 +29,9 @@ class ASGISyncClient:
     def put(self, url: str, **kwargs):
         return self.request("PUT", url, **kwargs)
 
+    def patch(self, url: str, **kwargs):
+        return self.request("PATCH", url, **kwargs)
+
     def request(self, method: str, url: str, **kwargs):
         return asyncio.run(self._request(method, url, **kwargs))
 
