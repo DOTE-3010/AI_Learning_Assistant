@@ -11,14 +11,10 @@ from backend.pipelines.common import (
     format_citations,
     format_log,
 )
-from backend.pipelines.essay_latex import (
-    LatexCompileError,
-    LatexCompiler,
-    compile_latex_with_repair,
-)
-from backend.pipelines.latex_diagrams import (
-    DIAGRAM_POLICY_INSTRUCTION,
-    sanitize_latex_diagram_placeholders,
+from backend.pipelines.html_to_pdf import (
+    A4_PAGE,
+    ConvertError,
+    HtmlToPdfConverter,
 )
 from backend.providers.base import (
     ModelProviderError,
@@ -28,12 +24,12 @@ from backend.providers.base import (
 from backend.timing import RunTimingRecorder, measure_stage
 
 
-def run_beamer_slides_pipeline(
+def run_essay_html_pipeline(
     *,
     artifact_run: ArtifactRun,
     model_profile: dict[str, Any],
     model_provider: TextGenerationProvider,
-    latex_compiler: LatexCompiler,
+    pdf_converter: HtmlToPdfConverter,
     task_text: str,
     context_bundle: str,
     output_preference: str | None,
@@ -44,18 +40,18 @@ def run_beamer_slides_pipeline(
     timing: RunTimingRecorder | None = None,
 ) -> PipelineResult:
     log_lines = [
-        "Pipeline: beamer_slides",
+        "Pipeline: essay_html",
         f"Output preference: {output_preference or 'pdf'}",
         "Stage: generate_source",
     ]
-    system_prompt, user_prompt = build_beamer_slides_prompt(
+    system_prompt, user_prompt = build_essay_html_prompt(
         task_text=task_text,
         context_bundle=context_bundle,
         options=options or {},
         search=search,
     )
     if emit_event:
-        emit_event("generate_source", "Generating Beamer LaTeX source")
+        emit_event("generate_source", "Generating essay HTML source")
 
     try:
         with measure_stage(timing, "provider_generation"):
@@ -83,70 +79,58 @@ def run_beamer_slides_pipeline(
             log_lines=log_lines,
         ) from exc
 
-    source = extract_fenced_or_raw(
-        raw_output,
-        accepted_languages={"beamer", "latex", "tex"},
-    )
-    source = sanitize_latex_diagram_placeholders(source)
+    source = extract_fenced_or_raw(raw_output, accepted_languages={"html", "htm"})
     source = source.strip() + "\n"
-    artifact_run.write_output(
-        "slides.tex",
+    html_path = artifact_run.write_output(
+        "main.html",
         source,
         kind="source",
-        media_type="text/x-tex",
+        media_type="text/html",
     )
-    log_lines.extend(["Output: output/slides.tex", "Stage: compile_pdf"])
+    log_lines.extend(["Output: output/main.html", "Stage: convert_pdf"])
     if emit_event:
-        emit_event("compile_pdf", "Compiling Beamer PDF")
+        emit_event("convert_pdf", "Converting essay HTML to PDF")
 
+    pdf_path = artifact_run.run_dir / "output" / "main.pdf"
     try:
-        compile_result = compile_latex_with_repair(
-            tex_path=artifact_run.run_dir / "output" / "slides.tex",
-            output_dir=artifact_run.run_dir / "output",
-            job_name="slides",
-            document_kind="beamer_slides deck",
-            model_profile=model_profile,
-            model_provider=model_provider,
-            latex_compiler=latex_compiler,
-            max_output_tokens=max_output_tokens,
-            accepted_languages={"beamer", "latex", "tex"},
-            emit_event=emit_event,
-            timing=timing,
-        )
-    except LatexCompileError as exc:
-        artifact_run.write_log("latex.log", exc.log_text)
+        with measure_stage(timing, "convert_pdf"):
+            convert_result = pdf_converter.convert(
+                html_path=html_path,
+                pdf_path=pdf_path,
+                page_config=A4_PAGE,
+            )
+    except ConvertError as exc:
+        artifact_run.write_log("convert.log", exc.log_text)
         raise PipelineError(
-            "compile_failed",
+            "convert_failed",
             exc.message,
-            stage="compile_pdf",
+            stage="convert_pdf",
             log_lines=log_lines,
         ) from exc
     except Exception as exc:
         artifact_run.write_log(
-            "latex.log",
-            "LaTeX compiler raised an unexpected error.\n",
+            "convert.log",
+            "HTML-to-PDF converter raised an unexpected error.\n",
         )
         raise PipelineError(
-            "compile_failed",
-            "LaTeX PDF compilation failed.",
-            stage="compile_pdf",
+            "convert_failed",
+            "HTML-to-PDF conversion failed.",
+            stage="convert_pdf",
             log_lines=log_lines,
         ) from exc
 
-    artifact_run.write_log("latex.log", compile_result.log_text)
-    if compile_result.repaired:
-        log_lines.append("Repair: source_repaired")
+    artifact_run.write_log("convert.log", convert_result.log_text)
     artifact_run.write_output(
-        "slides.pdf",
-        compile_result.pdf_path.read_bytes(),
+        "main.pdf",
+        convert_result.pdf_path.read_bytes(),
         kind="pdf",
         media_type="application/pdf",
     )
-    log_lines.extend(["Compile: pdf_ok", "Output: output/slides.pdf"])
+    log_lines.extend(["Convert: pdf_ok", "Output: output/main.pdf"])
     return PipelineResult(log_text=format_log(log_lines))
 
 
-def build_beamer_slides_prompt(
+def build_essay_html_prompt(
     *,
     task_text: str,
     context_bundle: str,
@@ -154,22 +138,26 @@ def build_beamer_slides_prompt(
     search: dict[str, Any],
 ) -> tuple[str, str]:
     system_prompt = (
-        "You are an expert teaching assistant writing complete presentation "
-        "deliverables in LaTeX Beamer. Return only the requested LaTeX source, "
-        "with no surrounding explanation."
+        "You are an expert teaching assistant writing complete academic essay and "
+        "report deliverables as self-contained HTML documents. Return only the "
+        "requested HTML source, with no surrounding explanation."
     )
     output_instruction = (
-        "Return one full compilable LaTeX Beamer document. It must include "
-        "\\documentclass{beamer}, any needed packages, \\title/\\author when useful, "
-        "\\begin{document}, multiple complete \\begin{frame}...\\end{frame} blocks, "
-        "and \\end{document}. Use a simple replaceable visual theme, cite any "
-        "provided web sources in plain LaTeX, and do not wrap the answer in "
-        "Markdown fences. "
-        + DIAGRAM_POLICY_INSTRUCTION
+        "Return one complete self-contained HTML document. It must start with "
+        "<!doctype html> and include <html>, <head>, and <body>. Include all CSS "
+        "inside a <style> element: use a readable serif academic print layout, "
+        "clear heading hierarchy, careful paragraph spacing, and CSS "
+        "@page { size: A4; margin: 20mm; }. Do not use external stylesheet links, "
+        "remote images, or remote HTTP(S) assets. If mathematical notation is "
+        "needed, include inline KaTeX-compatible markup and any needed minimal "
+        "KaTeX styling inline in the document; do not fetch KaTeX from a CDN at "
+        "render time. Use inline SVG or CSS for diagrams. Cite any provided web "
+        "sources in a References section using ordinary HTML. Do not wrap the "
+        "answer in Markdown fences."
     )
     user_prompt = "\n\n".join(
         [
-            "[Presentation Task]\n" + task_text.strip(),
+            "[Assignment Task]\n" + task_text.strip(),
             "[Prepared Context]\n" + context_bundle.strip(),
             "[Search Citations]\n" + format_citations(search),
             "[Options]\n" + json.dumps(options, sort_keys=True),

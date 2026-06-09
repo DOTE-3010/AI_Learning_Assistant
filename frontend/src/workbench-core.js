@@ -175,6 +175,11 @@ export function findArtifactByRole(artifacts, role, { intent = "code_homework", 
     if (role === "primaryPdf") {
         return normalized.find((artifact) => artifact.kind === "pdf" || artifact.mediaType === "application/pdf") || null;
     }
+    if (role === "primaryHtml") {
+        return findFirstByPath(normalized, preferredSourcePaths(intent, outputPreference, activeFile))
+            || normalized.find((artifact) => isHtmlArtifact(artifact))
+            || null;
+    }
     return null;
 }
 
@@ -196,8 +201,20 @@ export function isTextArtifact(artifact) {
         || path.endsWith(".py")
         || path.endsWith(".ipynb")
         || path.endsWith(".md")
-        || path.endsWith(".tex")
+        || path.endsWith(".html")
+        || path.endsWith(".htm")
         || path.endsWith(".log")
+    );
+}
+
+export function isHtmlArtifact(artifact) {
+    const mediaType = artifact?.mediaType || artifact?.media_type || "";
+    const path = artifact?.path || "";
+    return Boolean(
+        mediaType === "text/html"
+        || mediaType === "application/xhtml+xml"
+        || path.endsWith(".html")
+        || path.endsWith(".htm")
     );
 }
 
@@ -221,14 +238,14 @@ function preferredCodePaths(outputPreference, activeFile) {
 
 function preferredSourcePaths(intent, outputPreference, activeFile) {
     if (intent === "code_homework") return preferredCodePaths(outputPreference, activeFile);
-    if (intent === "beamer_slides") return ["output/slides.tex", "slides.tex"];
-    if (intent === "cheat_sheet") return ["output/cheat-sheet.tex", "cheat-sheet.tex"];
-    return ["output/main.tex", "main.tex"];
+    if (intent === "beamer_slides") return ["output/slides.html", "slides.html"];
+    if (intent === "cheat_sheet") return ["output/cheat-sheet.html", "cheat-sheet.html"];
+    return ["output/main.html", "main.html"];
 }
 
 function preferredLogPaths(intent) {
     if (intent === "code_homework") return ["logs/generation.log", "generation.log"];
-    return ["logs/latex.log", "logs/generation.log", "latex.log", "generation.log"];
+    return ["logs/convert.log", "logs/generation.log", "convert.log", "generation.log"];
 }
 
 function sourceKinds() {

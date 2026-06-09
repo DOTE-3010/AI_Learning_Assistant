@@ -17,6 +17,7 @@ from backend.core.model_settings import SettingsError
 from backend.core.runs import RunError
 from backend.core.uploads import UploadError
 from backend.core.weak_auth import AuthError
+from backend.pipelines.html_to_pdf import PlaywrightPdfConverter
 from backend.storage.sqlite import SQLiteRepository
 
 LOCAL_CORS_ORIGINS = [
@@ -33,6 +34,7 @@ LOCAL_CORS_ORIGINS = [
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    _app.state.pdf_converter = PlaywrightPdfConverter()
     if not os.getenv("TESTING"):
         validate_config()
         SQLiteRepository.from_path()

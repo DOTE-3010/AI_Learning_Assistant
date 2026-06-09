@@ -1546,6 +1546,14 @@ button.identity-chip {
     padding: 16px;
 }
 
+.html-render-product {
+    min-height: 100%;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 16px;
+}
+
 .pdf-render-toolbar {
     min-height: 46px;
     display: flex;
@@ -1558,19 +1566,63 @@ button.identity-chip {
     background: rgb(21 20 17 / 62%);
 }
 
+.html-render-toolbar {
+    min-height: 46px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid rgb(255 248 232 / 12%);
+    border-radius: var(--radius-md);
+    background: rgb(21 20 17 / 62%);
+}
+
 .pdf-render-toolbar span,
-.pdf-render-note {
+.pdf-render-note,
+.html-render-toolbar span {
     color: var(--studio-ink-muted);
     font-size: 12px;
 }
 
-.pdf-render-toolbar strong {
+.pdf-render-toolbar strong,
+.html-render-toolbar strong {
     display: block;
     margin-top: 2px;
     color: var(--studio-ink);
     font-family: var(--font-serif);
     font-size: 15px;
     line-height: 1.15;
+}
+
+.html-render-frame {
+    position: relative;
+    min-height: 420px;
+    display: grid;
+    place-items: stretch;
+    overflow: hidden;
+    border: 1px solid rgb(255 248 232 / 12%);
+    border-radius: var(--radius-md);
+    background: rgb(13 13 11 / 58%);
+    box-shadow: inset 0 0 0 1px rgb(255 248 232 / 6%);
+}
+
+.html-render-product.is-slides .html-render-frame {
+    aspect-ratio: 16 / 9;
+    min-height: 0;
+}
+
+.html-preview-frame {
+    width: 100%;
+    height: 100%;
+    min-height: 420px;
+    border: 0;
+    background: var(--studio-paper);
+    box-shadow: var(--shadow-paper);
+}
+
+.html-render-product.is-slides .html-preview-frame {
+    min-height: 0;
 }
 
 .pdf-page-controls {

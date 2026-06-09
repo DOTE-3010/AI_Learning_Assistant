@@ -1,51 +1,38 @@
 import json
 from pathlib import Path
 
-from backend.core.runs import create_run, make_run_executor
-from backend.pipelines.essay_latex import LatexCompileError, LatexCompileResult
+import pytest
+
+from backend.core.runs import RunError, create_run, make_run_executor
+from backend.pipelines.html_to_pdf import A4_NO_MARGIN
+from backend.providers.base import ModelProviderError
 from backend.storage.sqlite import SQLiteRepository
 
 
-class FakeModelProvider:
-    def __init__(self, output: str):
-        self.output = output
-        self.requests = []
-
-    def generate_text(self, request):
-        self.requests.append(request)
-        return self.output
-
-
-class FakeLatexCompiler:
-    def __init__(
-        self,
-        *,
-        error: LatexCompileError | None = None,
-        log_text: str = "cheat-sheet compile ok\n",
-    ):
-        self.error = error
-        self.log_text = log_text
-        self.calls = []
-
-    def compile(self, *, tex_path: Path, output_dir: Path, job_name: str):
-        self.calls.append(
-            {"tex_path": tex_path, "output_dir": output_dir, "job_name": job_name}
-        )
-        assert tex_path.exists()
-        if self.error:
-            raise self.error
-        pdf_path = output_dir / f"{job_name}.pdf"
-        pdf_path.write_bytes(b"%PDF-1.4\n% fake cheat sheet pdf\n")
-        return LatexCompileResult(pdf_path=pdf_path, log_text=self.log_text)
+CHEAT_SHEET_HTML = """```html
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    @page { size: A4; margin: 8mm; }
+    main { column-count: 4; column-gap: 8px; font-size: 10px; }
+    section { break-inside: avoid; }
+  </style>
+</head>
+<body><main><section><h1>Optimization</h1><p>Gradient descent.</p></section></main></body>
+</html>
+```"""
 
 
-class NoopSearchAdapter:
-    def search(self, query: str, *, max_results: int = 3):
-        raise AssertionError("search should not run in these tests")
-
-
-def test_cheat_sheet_pipeline_accepts_multiple_pdfs_and_compiles_pdf(tmp_path):
-    repo, user = _repo_with_user(tmp_path)
+def test_cheat_sheet_html_pipeline_accepts_multiple_pdfs_and_converts_pdf(
+    tmp_path,
+    repo_with_user,
+    fake_model_provider_factory,
+    mock_pdf_converter,
+    noop_search_adapter,
+):
+    repo, user = repo_with_user
     lecture_one = tmp_path / "lecture-01.pdf"
     lecture_two = tmp_path / "lecture-02.pdf"
     _write_text_pdf(lecture_one, "Lecture one covers gradient descent.")
@@ -53,20 +40,7 @@ def test_cheat_sheet_pipeline_accepts_multiple_pdfs_and_compiles_pdf(tmp_path):
     _create_pdf_upload(repo, "upload-1", lecture_one)
     _create_pdf_upload(repo, "upload-2", lecture_two)
 
-    provider = FakeModelProvider(
-        "```latex\n"
-        "\\documentclass[a4paper]{article}\n"
-        "\\usepackage[margin=0.35in]{geometry}\n"
-        "\\usepackage{multicol}\n"
-        "\\begin{document}\n"
-        "\\begin{multicols}{3}\n"
-        "\\section*{Optimization}Gradient descent.\n"
-        "\\section*{DP}Dynamic programming.\n"
-        "\\end{multicols}\n"
-        "\\end{document}\n"
-        "```"
-    )
-    compiler = FakeLatexCompiler()
+    provider = fake_model_provider_factory(CHEAT_SHEET_HTML)
 
     body = create_run(
         repo,
@@ -79,26 +53,32 @@ def test_cheat_sheet_pipeline_accepts_multiple_pdfs_and_compiles_pdf(tmp_path):
             "options": {"target_pages": 2, "paper_size": "A4", "density": "dense"},
         },
         workspace_root=str(tmp_path / "workspace"),
-        executor=make_run_executor(provider, latex_compiler=compiler),
-        search_adapter=NoopSearchAdapter(),
+        executor=make_run_executor(provider, pdf_converter=mock_pdf_converter),
+        search_adapter=noop_search_adapter,
     )
 
     assert body["status"] == "succeeded"
     output_root = Path(body["output_root"])
-    assert (output_root / "output" / "cheat-sheet.tex").read_text(
-        encoding="utf-8"
-    ).startswith("\\documentclass[a4paper]{article}")
+    source = (output_root / "output" / "cheat-sheet.html").read_text(encoding="utf-8")
+    assert source.startswith("<!doctype html>")
+    assert "column-count" in source
     assert (output_root / "output" / "cheat-sheet.pdf").read_bytes().startswith(b"%PDF")
-    assert (output_root / "logs" / "latex.log").read_text(encoding="utf-8") == (
-        "cheat-sheet compile ok\n"
+    assert (output_root / "logs" / "convert.log").read_text(encoding="utf-8") == (
+        "mock convert OK\n"
     )
-    assert compiler.calls[0]["tex_path"] == output_root / "output" / "cheat-sheet.tex"
-    assert compiler.calls[0]["job_name"] == "cheat-sheet"
+    assert mock_pdf_converter.calls[0]["html_path"] == (
+        output_root / "output" / "cheat-sheet.html"
+    )
+    assert mock_pdf_converter.calls[0]["pdf_path"] == (
+        output_root / "output" / "cheat-sheet.pdf"
+    )
+    assert mock_pdf_converter.calls[0]["page_config"] == A4_NO_MARGIN
 
     user_prompt = provider.requests[0].user_prompt
     assert "Lecture one covers gradient descent." in user_prompt
     assert "Lecture two covers dynamic programming." in user_prompt
     assert "targeting exactly 2 A4 page(s)" in user_prompt
+    assert "self-contained HTML document" in user_prompt
 
     extraction_log = (output_root / "logs" / "extraction.log").read_text(
         encoding="utf-8"
@@ -111,30 +91,55 @@ def test_cheat_sheet_pipeline_accepts_multiple_pdfs_and_compiles_pdf(tmp_path):
     manifest = json.loads((output_root / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["intent"] == "cheat_sheet"
     assert manifest["status"] == "succeeded"
-    assert {"path": "output/cheat-sheet.tex", "kind": "source"} in manifest["outputs"]
+    assert {"path": "output/cheat-sheet.html", "kind": "source"} in manifest["outputs"]
     assert {"path": "output/cheat-sheet.pdf", "kind": "pdf"} in manifest["outputs"]
 
     artifact_kinds = {row["kind"] for row in repo.list_artifacts_for_run(body["id"])}
     assert {"source", "pdf", "log", "manifest"}.issubset(artifact_kinds)
 
 
-def test_cheat_sheet_pipeline_failure_preserves_source_log_and_manifest(tmp_path):
-    repo, user = _repo_with_user(tmp_path)
+def test_cheat_sheet_pipeline_rejects_missing_target_pages(
+    tmp_path,
+    repo_with_user,
+    fake_model_provider_factory,
+    mock_pdf_converter,
+    noop_search_adapter,
+):
+    repo, user = repo_with_user
+    provider = fake_model_provider_factory(CHEAT_SHEET_HTML)
+
+    with pytest.raises(RunError) as exc_info:
+        create_run(
+            repo,
+            current_user=user,
+            request={
+                "task_text": "Make a cheat sheet.",
+                "intent": "cheat_sheet",
+                "search_mode": "off",
+            },
+            workspace_root=str(tmp_path / "workspace"),
+            executor=make_run_executor(provider, pdf_converter=mock_pdf_converter),
+            search_adapter=noop_search_adapter,
+        )
+
+    assert exc_info.value.code == "validation_error"
+    assert {"field": "options.target_pages", "rule": "required"} in exc_info.value.fields
+    assert not mock_pdf_converter.calls
+    assert not (tmp_path / "workspace").exists()
+
+
+def test_cheat_sheet_html_pipeline_conversion_failure_preserves_source_logs_and_manifest(
+    tmp_path,
+    repo_with_user,
+    fake_model_provider_factory,
+    failing_pdf_converter,
+    noop_search_adapter,
+):
+    repo, user = repo_with_user
     blank_pdf = tmp_path / "image-only-slides.pdf"
     _write_blank_pdf(blank_pdf)
     _create_pdf_upload(repo, "upload-blank", blank_pdf)
-    provider = FakeModelProvider(
-        "\\documentclass[a4paper]{article}\n"
-        "\\begin{document}\n"
-        "\\badcommand\n"
-        "\\end{document}\n"
-    )
-    compiler = FakeLatexCompiler(
-        error=LatexCompileError(
-            "LaTeX PDF compilation failed.",
-            log_text="! Undefined control sequence.\n",
-        )
-    )
+    provider = fake_model_provider_factory(CHEAT_SHEET_HTML)
 
     body = create_run(
         repo,
@@ -147,21 +152,18 @@ def test_cheat_sheet_pipeline_failure_preserves_source_log_and_manifest(tmp_path
             "options": {"target_pages": 1},
         },
         workspace_root=str(tmp_path / "workspace"),
-        executor=make_run_executor(provider, latex_compiler=compiler),
-        search_adapter=NoopSearchAdapter(),
+        executor=make_run_executor(provider, pdf_converter=failing_pdf_converter),
+        search_adapter=noop_search_adapter,
     )
 
     assert body["status"] == "failed"
-    assert body["error_message"] == "compile_failed: LaTeX PDF compilation failed."
+    assert body["error_message"] == "convert_failed: Mock conversion failure"
     output_root = Path(body["output_root"])
-    assert (output_root / "output" / "cheat-sheet.tex").exists()
+    assert (output_root / "output" / "cheat-sheet.html").exists()
     assert not (output_root / "output" / "cheat-sheet.pdf").exists()
-    latex_log = (output_root / "logs" / "latex.log").read_text(encoding="utf-8")
-    assert "[initial compile failure]" in latex_log
-    assert "Repair source written; repaired compile still failed." in latex_log
-    assert "! Undefined control sequence." in latex_log
-    assert len(provider.requests) == 2
-    assert len(compiler.calls) == 2
+    assert (output_root / "logs" / "convert.log").read_text(encoding="utf-8") == (
+        "mock error log\n"
+    )
     assert "PDF contained no extractable text." in (
         output_root / "logs" / "extraction.log"
     ).read_text(encoding="utf-8")
@@ -169,25 +171,57 @@ def test_cheat_sheet_pipeline_failure_preserves_source_log_and_manifest(tmp_path
     manifest = json.loads((output_root / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["intent"] == "cheat_sheet"
     assert manifest["status"] == "failed"
-    assert {"path": "output/cheat-sheet.tex", "kind": "source"} in manifest["outputs"]
+    assert {"path": "output/cheat-sheet.html", "kind": "source"} in manifest["outputs"]
     assert {"path": "output/cheat-sheet.pdf", "kind": "pdf"} not in manifest["outputs"]
 
     generation_log = (output_root / "logs" / "generation.log").read_text(
         encoding="utf-8"
     )
-    assert "compile_failed" in generation_log
+    assert "convert_failed" in generation_log
     assert "Traceback" not in generation_log
 
 
-def _repo_with_user(tmp_path):
-    repo = SQLiteRepository.from_path(tmp_path / "app.sqlite")
-    user = repo.create_user(
-        id="user-1",
-        email="teacher@cuhk.edu.hk",
-        role="teacher",
-        password_hash="hash",
+def test_cheat_sheet_html_pipeline_model_provider_failure_preserves_extraction_log(
+    tmp_path,
+    repo_with_user,
+    fake_model_provider_factory,
+    mock_pdf_converter,
+    noop_search_adapter,
+):
+    repo, user = repo_with_user
+    blank_pdf = tmp_path / "blank.pdf"
+    _write_blank_pdf(blank_pdf)
+    _create_pdf_upload(repo, "upload-blank", blank_pdf)
+    provider = fake_model_provider_factory(
+        error=ModelProviderError("provider_unavailable", "Provider is offline.")
     )
-    return repo, user
+
+    body = create_run(
+        repo,
+        current_user=user,
+        request={
+            "task_text": "Make a one-page cheat sheet while provider is unavailable.",
+            "intent": "cheat_sheet",
+            "search_mode": "off",
+            "upload_ids": ["upload-blank"],
+            "options": {"target_pages": 1},
+        },
+        workspace_root=str(tmp_path / "workspace"),
+        executor=make_run_executor(provider, pdf_converter=mock_pdf_converter),
+        search_adapter=noop_search_adapter,
+    )
+
+    assert body["status"] == "failed"
+    assert body["error_message"] == "provider_unavailable: Provider is offline."
+    output_root = Path(body["output_root"])
+    assert (output_root / "logs" / "extraction.log").exists()
+    assert not (output_root / "output" / "cheat-sheet.html").exists()
+    assert not mock_pdf_converter.calls
+
+    manifest = json.loads((output_root / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["intent"] == "cheat_sheet"
+    assert manifest["status"] == "failed"
+    assert manifest["outputs"] == []
 
 
 def _create_pdf_upload(

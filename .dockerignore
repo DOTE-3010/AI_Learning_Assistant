@@ -20,3 +20,5 @@ Qwen_API
 data
 workspace
 backend/tests
+!backend/tests
+!backend/tests/**

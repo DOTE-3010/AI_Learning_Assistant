@@ -58,19 +58,19 @@ const intents = [
     },
     {
         id: "essay_latex",
-        outputs: ["main.pdf", "main.tex"],
+        outputs: ["main.html", "main.pdf"],
         stages: ["route", "context", "write", "compile"],
         accent: "sage",
     },
     {
         id: "beamer_slides",
-        outputs: ["slides.pdf", "slides.tex"],
+        outputs: ["slides.html", "slides.pdf"],
         stages: ["route", "outline", "write", "compile"],
         accent: "amber",
     },
     {
         id: "cheat_sheet",
-        outputs: ["cheat-sheet.pdf", "cheat-sheet.tex"],
+        outputs: ["cheat-sheet.html", "cheat-sheet.pdf"],
         stages: ["ingest", "compress", "layout", "compile"],
         accent: "coral",
     },
@@ -634,6 +634,8 @@ function renderNotebookPreview() {
 }
 
 function renderEssayPreview() {
+    const realHtml = renderRealHtmlPreview("essay");
+    if (realHtml) return realHtml;
     const realPdf = renderRealPdfPreview("essay");
     if (realPdf) return realPdf;
     return `
@@ -645,7 +647,7 @@ function renderEssayPreview() {
             </div>
             <article class="pdf-page essay-page">
                 <header>
-                    <span class="paper-overline">${escapeHtml(t("preview.latexReport"))}</span>
+                    <span class="paper-overline">${escapeHtml(t("preview.htmlReport"))}</span>
                     <h3>${escapeHtml(briefTitle(t("preview.generatedEssay")))}</h3>
                     <div class="paper-rule"></div>
                 </header>
@@ -664,6 +666,8 @@ function renderEssayPreview() {
 }
 
 function renderSlidesPreview() {
+    const realHtml = renderRealHtmlPreview("slides");
+    if (realHtml) return realHtml;
     const realPdf = renderRealPdfPreview("slides");
     if (realPdf) return realPdf;
     return `
@@ -690,6 +694,8 @@ function renderSlidesPreview() {
 }
 
 function renderCheatSheetPreview() {
+    const realHtml = renderRealHtmlPreview("sheet");
+    if (realHtml) return realHtml;
     const realPdf = renderRealPdfPreview("sheet");
     if (realPdf) return realPdf;
     const pageCount = Math.max(1, Math.round(Number(state.targetPages) || 1));
@@ -716,6 +722,43 @@ function renderCheatSheetPreview() {
             ${renderPreviewOverlay(t("preview.sheetTitle"), t("preview.sheetMessage"))}
         </div>
     `;
+}
+
+function renderRealHtmlPreview(kind) {
+    const artifact = findArtifactByRole(state.artifacts.items, "primaryHtml", { intent: state.intent });
+    if (!artifact) return "";
+    const html = artifactText(artifact.path);
+    const error = state.artifacts.errorsByPath[artifact.path] || "";
+    const loading = state.artifacts.loading && !html && !error;
+    const titleKey = kind === "slides" ? "preview.deckTitle" : kind === "sheet" ? "preview.sheetTitle" : "preview.htmlDocumentTitle";
+    const frameClass = kind === "slides" ? "is-slides" : kind === "sheet" ? "is-sheet" : "is-essay";
+    return `
+        <div class="html-render-product ${frameClass}" data-html-path="${escapeHtml(artifact.path)}">
+            <div class="html-render-toolbar">
+                <div>
+                    <span>${escapeHtml(t(titleKey))}</span>
+                    <strong>${escapeHtml(artifactDisplayName(artifact, "artifact.html"))}</strong>
+                </div>
+                <span>${escapeHtml(error ? t("preview.preservedForInspection") : t("preview.htmlRenderReady"))}</span>
+            </div>
+            <div class="html-render-frame">
+                ${
+                    html
+                        ? `<iframe class="html-preview-frame" title="${escapeHtml(t("preview.htmlFrameTitle"))}" sandbox="allow-same-origin" srcdoc="${escapeHtml(html)}"></iframe>`
+                        : renderHtmlPlaceholder(kind)
+                }
+                ${loading ? renderPdfRendererOverlay(t("preview.htmlLoading"), t("preview.htmlLoadingMessage"), "loading") : ""}
+                ${error ? renderPdfRendererOverlay(t("preview.htmlRendererError"), `${artifactDisplayName(artifact, "artifact.html")}: ${error}`, "error") : ""}
+            </div>
+            <div class="pdf-render-note">${escapeHtml(error ? t("preview.pdfFallbackAvailable") : t("preview.htmlRenderReady"))}</div>
+        </div>
+    `;
+}
+
+function renderHtmlPlaceholder(kind) {
+    if (kind === "slides") return renderPdfPlaceholder("slides");
+    if (kind === "sheet") return renderPdfPlaceholder("sheet");
+    return renderPdfPlaceholder("essay");
 }
 
 function renderRealPdfPreview(kind) {
@@ -802,7 +845,7 @@ function renderPdfPlaceholder(kind) {
     return `
         <article class="pdf-page essay-page is-pdf-placeholder">
             <header>
-                <span class="paper-overline">${escapeHtml(t("preview.latexReport"))}</span>
+                <span class="paper-overline">${escapeHtml(t("preview.htmlReport"))}</span>
                 <h3>${escapeHtml(briefTitle(t("preview.generatedEssay")))}</h3>
                 <div class="paper-rule"></div>
             </header>
@@ -862,7 +905,11 @@ function renderPreviewOverlay(title, message) {
 function renderSourceInspection() {
     const source = sourceInspectionModel();
     const filename = artifactDisplayName(source.artifact, sourceFilenameForIntent());
-    const language = filename.endsWith(".tex") ? "latex" : filename.endsWith(".json") ? "json" : "python";
+    const language = filename.endsWith(".html") || filename.endsWith(".htm")
+        ? "html"
+        : filename.endsWith(".json")
+            ? "json"
+            : "python";
     return `
         <div class="inspection-product">
             ${renderInspectionIntro(t("preview.sourceTitle"), source.message, source.tone)}
@@ -2417,24 +2464,24 @@ function getExpectedFiles() {
     }
     if (state.intent === "essay_latex") {
         return [
+            { name: "main.html", relativePath: "output/main.html", kind: "source", badge: "HTML", readyLabel: t("files.sourceReady"), pendingLabel: t("files.pending") },
             { name: "main.pdf", relativePath: "output/main.pdf", kind: "pdf", badge: "PDF", readyLabel: t("files.pdfReady"), pendingLabel: t("files.compilePending") },
-            { name: "main.tex", relativePath: "output/main.tex", kind: "source", badge: "TEX", readyLabel: t("files.sourceReady"), pendingLabel: t("files.pending") },
-            { name: "latex.log", relativePath: "logs/latex.log", kind: "log", badge: "LOG", readyLabel: t("files.compileLogReady"), pendingLabel: t("files.pending") },
+            { name: "convert.log", relativePath: "logs/convert.log", kind: "log", badge: "LOG", readyLabel: t("files.compileLogReady"), pendingLabel: t("files.pending") },
             { name: "manifest.json", relativePath: "manifest.json", kind: "manifest", badge: "JS", readyLabel: t("files.metadataReady"), pendingLabel: t("files.pending") },
         ];
     }
     if (state.intent === "beamer_slides") {
         return [
+            { name: "slides.html", relativePath: "output/slides.html", kind: "source", badge: "HTML", readyLabel: t("files.sourceReady"), pendingLabel: t("files.pending") },
             { name: "slides.pdf", relativePath: "output/slides.pdf", kind: "pdf", badge: "PDF", readyLabel: t("files.deckReady"), pendingLabel: t("files.compilePending") },
-            { name: "slides.tex", relativePath: "output/slides.tex", kind: "source", badge: "TEX", readyLabel: t("files.sourceReady"), pendingLabel: t("files.pending") },
-            { name: "latex.log", relativePath: "logs/latex.log", kind: "log", badge: "LOG", readyLabel: t("files.compileLogReady"), pendingLabel: t("files.pending") },
+            { name: "convert.log", relativePath: "logs/convert.log", kind: "log", badge: "LOG", readyLabel: t("files.compileLogReady"), pendingLabel: t("files.pending") },
             { name: "manifest.json", relativePath: "manifest.json", kind: "manifest", badge: "JS", readyLabel: t("files.metadataReady"), pendingLabel: t("files.pending") },
         ];
     }
     return [
+        { name: "cheat-sheet.html", relativePath: "output/cheat-sheet.html", kind: "source", badge: "HTML", readyLabel: t("files.sourceReady"), pendingLabel: t("files.pending") },
         { name: "cheat-sheet.pdf", relativePath: "output/cheat-sheet.pdf", kind: "pdf", badge: "PDF", readyLabel: t("files.sheetReady"), pendingLabel: t("files.compilePending") },
-        { name: "cheat-sheet.tex", relativePath: "output/cheat-sheet.tex", kind: "source", badge: "TEX", readyLabel: t("files.sourceReady"), pendingLabel: t("files.pending") },
-        { name: "latex.log", relativePath: "logs/latex.log", kind: "log", badge: "LOG", readyLabel: t("files.compileLogReady"), pendingLabel: t("files.pending") },
+        { name: "convert.log", relativePath: "logs/convert.log", kind: "log", badge: "LOG", readyLabel: t("files.compileLogReady"), pendingLabel: t("files.pending") },
         { name: "manifest.json", relativePath: "manifest.json", kind: "manifest", badge: "JS", readyLabel: t("files.metadataReady"), pendingLabel: t("files.pending") },
     ];
 }
@@ -2479,9 +2526,9 @@ function readyLabelForArtifact(artifact) {
 
 function sourceFilenameForIntent() {
     if (state.intent === "code_homework") return state.outputPreference === "ipynb" ? "solution.ipynb" : "solution.py";
-    if (state.intent === "beamer_slides") return "slides.tex";
-    if (state.intent === "cheat_sheet") return "cheat-sheet.tex";
-    return "main.tex";
+    if (state.intent === "beamer_slides") return "slides.html";
+    if (state.intent === "cheat_sheet") return "cheat-sheet.html";
+    return "main.html";
 }
 
 function codePreviewText(filename) {
@@ -2597,12 +2644,19 @@ function notebookPreviewModel() {
 function sourceSkeletonText() {
     if (state.intent === "code_homework") return codePreviewText("solution.py");
     if (state.intent === "beamer_slides") {
-        return `\\documentclass{beamer}\n\\title{${briefTitle(t("preview.generatedSlidesSource"))}}\n\\begin{document}\n\\begin{frame}{Overview}\n  \\begin{itemize}\n    \\item Motivation\n    \\item Method\n    \\item Result\n  \\end{itemize}\n\\end{frame}\n\\end{document}\n`;
+        return `<!doctype html>\n<html lang="${state.locale}">\n<head>\n  <meta charset="utf-8">\n  <style>\n    @page { size: 10in 5.625in; margin: 0; }\n    .slide { width: 960px; height: 540px; page-break-after: always; }\n  </style>\n</head>\n<body>\n  <section class="slide">\n    <h1>${escapeHtmlForSkeleton(briefTitle(t("preview.generatedSlidesSource")))}</h1>\n    <ul><li>Motivation</li><li>Method</li><li>Result</li></ul>\n  </section>\n</body>\n</html>\n`;
     }
     if (state.intent === "cheat_sheet") {
-        return `\\documentclass[a4paper]{article}\n\\usepackage[margin=0.45cm]{geometry}\n\\usepackage{multicol}\n\\begin{document}\n\\begin{multicols}{4}\n\\section*{Dense Review}\nKey definitions, formulas, and proof templates.\n\\end{multicols}\n\\end{document}\n`;
+        return `<!doctype html>\n<html lang="${state.locale}">\n<head>\n  <meta charset="utf-8">\n  <style>\n    @page { size: A4; margin: 8mm; }\n    main { columns: 4; font-size: 8px; }\n  </style>\n</head>\n<body><main><h1>Dense Review</h1><p>Key definitions, formulas, and proof templates.</p></main></body>\n</html>\n`;
     }
-    return `\\documentclass{article}\n\\title{${briefTitle(t("preview.generatedEssay"))}}\n\\begin{document}\n\\maketitle\n\\section{Introduction}\nThe generated source is preserved even if PDF compilation fails.\n\\section{Discussion}\nEvidence and citations are recorded in the run manifest.\n\\end{document}\n`;
+    return `<!doctype html>\n<html lang="${state.locale}">\n<head>\n  <meta charset="utf-8">\n  <style>@page { size: A4; margin: 20mm; } body { font-family: serif; }</style>\n</head>\n<body>\n  <article>\n    <h1>${escapeHtmlForSkeleton(briefTitle(t("preview.generatedEssay")))}</h1>\n    <h2>${escapeHtmlForSkeleton(t("preview.introduction"))}</h2>\n    <p>The generated HTML source is preserved even if PDF conversion fails.</p>\n    <h2>${escapeHtmlForSkeleton(t("preview.argument"))}</h2>\n    <p>Evidence and citations are recorded in the run manifest.</p>\n  </article>\n</body>\n</html>\n`;
+}
+
+function escapeHtmlForSkeleton(value) {
+    return String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
 }
 
 function liveLogText() {
@@ -2655,7 +2709,7 @@ function artifactDisplayName(artifact, fallback) {
 
 function languageForFilename(filename) {
     if (filename.endsWith(".json") || filename.endsWith(".ipynb")) return "json";
-    if (filename.endsWith(".tex")) return "latex";
+    if (filename.endsWith(".html") || filename.endsWith(".htm")) return "html";
     return "python";
 }
 
@@ -2699,7 +2753,7 @@ function renderHighlightedCode(text, language = "python") {
 
 function highlightLine(line, language) {
     if (language === "json") return highlightJson(line);
-    if (language === "latex") return highlightLatex(line);
+    if (language === "html") return highlightHtml(line);
     return highlightPython(line);
 }
 
@@ -2731,12 +2785,13 @@ function highlightJson(line) {
     }).join("") || " ";
 }
 
-function highlightLatex(line) {
-    const tokens = line.match(/%.*$|\\[A-Za-z*]+|\{[^}]*\}|\s+|./g) || [];
+function highlightHtml(line) {
+    const tokens = line.match(/<!--.*?-->|<\/?[A-Za-z][^>]*>|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|&[A-Za-z0-9#]+;|\s+|./g) || [];
     return tokens.map((token) => {
-        if (token.startsWith("%")) return `<span class="syntax-comment">${escapeHtml(token)}</span>`;
-        if (token.startsWith("\\")) return `<span class="syntax-keyword">${escapeHtml(token)}</span>`;
-        if (token.startsWith("{") && token.endsWith("}")) return `<span class="syntax-string">${escapeHtml(token)}</span>`;
+        if (token.startsWith("<!--")) return `<span class="syntax-comment">${escapeHtml(token)}</span>`;
+        if (/^<\/?[A-Za-z]/u.test(token)) return `<span class="syntax-keyword">${escapeHtml(token)}</span>`;
+        if (token.startsWith("\"") || token.startsWith("'")) return `<span class="syntax-string">${escapeHtml(token)}</span>`;
+        if (/^&[A-Za-z0-9#]+;$/u.test(token)) return `<span class="syntax-number">${escapeHtml(token)}</span>`;
         return escapeHtml(token);
     }).join("") || " ";
 }
@@ -2757,8 +2812,13 @@ async function copyVisiblePreview() {
                 ? sourcePreviewText()
                 : state.intent === "code_homework"
                     ? state.outputPreference === "ipynb" ? notebookCodeText() : codePreviewText(state.activeFile)
-                    : state.run.outputRoot || artifactAccessNote();
+                    : primaryHtmlPreviewText() || state.run.outputRoot || artifactAccessNote();
     await copyText(text, t("run.previewCopied"));
+}
+
+function primaryHtmlPreviewText() {
+    const artifact = findArtifactByRole(state.artifacts.items, "primaryHtml", { intent: state.intent });
+    return artifact ? artifactText(artifact.path) : "";
 }
 
 async function copyText(text, message) {

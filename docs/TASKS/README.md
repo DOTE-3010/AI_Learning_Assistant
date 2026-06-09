@@ -43,17 +43,17 @@ Re-wrap the verified web product into the Electron shell for release distributio
 
 | # | Task | Phase | State | Owner |
 | --- | --- | --- | --- | --- |
-| 001 | Remove LaTeX toolchain from Docker | 1 | Pending | Agent |
-| 002 | Add Playwright HTML-to-PDF infrastructure | 1 | Pending | Agent |
-| 003 | Clean workspace and database for fresh start | 1 | Pending | Agent |
-| 004 | Rewrite essay pipeline to HTML | 2 | Pending | Agent |
-| 005 | Rewrite slides pipeline to HTML | 2 | Pending | Agent |
-| 006 | Rewrite cheat-sheet pipeline to HTML | 2 | Pending | Agent |
-| 007 | Remove LaTeX sanitizer and repair modules | 2 | Pending | Agent |
-| 008 | Update context builder and run orchestration | 2 | Pending | Agent |
-| 009 | Update frontend preview for HTML artifacts | 2 | Pending | Agent |
-| 010 | Migrate pipeline unit tests | 3 | Pending | Agent |
-| 011 | Add integration tests for HTML-to-PDF | 3 | Pending | Agent |
+| 001 | Remove LaTeX toolchain from Docker | 1 | Completed | Agent |
+| 002 | Add Playwright HTML-to-PDF infrastructure | 1 | Completed | Agent |
+| 003 | Clean workspace and database for fresh start | 1 | Completed | Agent |
+| 004 | Rewrite essay pipeline to HTML | 2 | Completed | Agent |
+| 005 | Rewrite slides pipeline to HTML | 2 | Completed | Agent |
+| 006 | Rewrite cheat-sheet pipeline to HTML | 2 | Completed | Agent |
+| 007 | Remove LaTeX sanitizer and repair modules | 2 | Completed | Agent |
+| 008 | Update context builder and run orchestration | 2 | Completed | Agent |
+| 009 | Update frontend preview for HTML artifacts | 2 | Completed | Agent |
+| 010 | Migrate pipeline unit tests | 3 | Completed | Agent |
+| 011 | Add integration tests for HTML-to-PDF | 3 | Completed | Agent |
 | 012 | Update E2E smoke script | 3 | Pending | Agent |
 | 013 | Electron packaging for release | 4 | Pending | Agent/Human |
 

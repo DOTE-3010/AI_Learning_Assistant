@@ -8,7 +8,7 @@ from typing import Any, Iterable
 DEFAULT_CONTEXT_WINDOW_LIMIT = 128000
 
 CODE_EXTENSIONS = {".py", ".ipynb", ".js", ".ts", ".tsx", ".jsx", ".java", ".cpp", ".c", ".r"}
-LATEX_EXTENSIONS = {".tex", ".bib", ".sty", ".cls"}
+MARKUP_EXTENSIONS = {".html", ".htm", ".css", ".svg"}
 
 
 @dataclass(frozen=True)
@@ -56,15 +56,15 @@ def section_kind_for_upload(original_name: str, media_type: str | None) -> str:
     extension = Path(original_name).suffix.lower()
     if extension in CODE_EXTENSIONS or media_type in {"text/x-python", "application/x-ipynb+json"}:
         return "code"
-    if extension in LATEX_EXTENSIONS:
-        return "latex"
+    if extension in MARKUP_EXTENSIONS:
+        return "markup"
     return "prose"
 
 
 def estimate_text_tokens(text: str, *, kind: str = "prose") -> int:
     if not text:
         return 0
-    divisor = 3 if kind in {"code", "latex"} else 4
+    divisor = 3 if kind in {"code", "markup"} else 4
     return max(1, ceil(len(text) / divisor))
 
 

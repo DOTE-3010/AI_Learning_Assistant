@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 MAX_EXTRACTED_CHARS_PER_UPLOAD = 50000
-TEXT_EXTENSIONS = {".txt", ".md", ".markdown", ".py", ".tex", ".bib", ".csv", ".json"}
+TEXT_EXTENSIONS = {".txt", ".md", ".markdown", ".py", ".html", ".htm", ".css", ".csv", ".json"}
 NOTEBOOK_EXTENSIONS = {".ipynb"}
 PDF_EXTENSIONS = {".pdf"}
 

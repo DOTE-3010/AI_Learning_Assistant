@@ -15,9 +15,9 @@ from backend.core.runs import (
     RunError,
     RunExecutor,
     create_run,
-    default_run_executor,
     get_run_status_event_for_user,
     get_run_for_user,
+    make_default_run_executor,
     run_error_envelope,
 )
 from backend.core.run_events import RunEventStore, default_run_event_store
@@ -54,8 +54,10 @@ def get_workspace_root() -> str | None:
     return None
 
 
-def get_run_executor() -> RunExecutor:
-    return default_run_executor
+def get_run_executor(request: Request) -> RunExecutor:
+    return make_default_run_executor(
+        pdf_converter=getattr(request.app.state, "pdf_converter", None)
+    )
 
 
 def get_run_search_adapter() -> WebSearchAdapter:

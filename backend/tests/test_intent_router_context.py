@@ -9,14 +9,26 @@ from backend.storage.sqlite import SQLiteRepository
 
 
 def test_explicit_intents_route_to_exactly_one_pipeline_target():
+    expected_pipelines = {
+        "code_homework": "code_homework",
+        "essay_latex": "essay_html",
+        "beamer_slides": "slides_html",
+        "cheat_sheet": "cheat_sheet_html",
+    }
+    expected_outputs = {
+        "code_homework": ("solution.py", "solution.ipynb"),
+        "essay_latex": ("main.html", "main.pdf"),
+        "beamer_slides": ("slides.html", "slides.pdf"),
+        "cheat_sheet": ("cheat-sheet.html", "cheat-sheet.pdf"),
+    }
     for intent in SUPPORTED_INTENTS:
         decision = route_intent(intent)
 
         assert decision.requested_intent == intent
         assert decision.resolved_intent == intent
         assert decision.target.intent == intent
-        assert decision.target.pipeline == intent
-        assert len(decision.target.primary_outputs) >= 1
+        assert decision.target.pipeline == expected_pipelines[intent]
+        assert decision.target.primary_outputs == expected_outputs[intent]
 
 
 def test_router_rejects_auto_or_missing_intent():

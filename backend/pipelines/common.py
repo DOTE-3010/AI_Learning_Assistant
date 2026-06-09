@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 FENCE_PATTERN = re.compile(r"```([A-Za-z0-9_-]*)[^\n`]*\n(.*?)```", re.DOTALL)
 
@@ -70,3 +70,34 @@ def format_citations(search: dict[str, Any]) -> str:
 
 def format_log(lines: list[str]) -> str:
     return "\n".join(lines).rstrip() + "\n"
+
+
+class ExtractionSummary(Protocol):
+    original_name: str
+    media_type: str | None
+    extracted_chars: int
+    notes: list[str]
+
+
+def format_extraction_log(uploads: tuple[ExtractionSummary, ...]) -> str:
+    lines = [
+        "Cheat-sheet PDF extraction summary",
+        f"Upload count: {len(uploads)}",
+    ]
+    if not uploads:
+        lines.append("No uploads were supplied; generation will use task text only.")
+        return format_log(lines)
+
+    for upload in uploads:
+        lines.extend(
+            [
+                f"Upload: {upload.original_name}",
+                f"Media type: {upload.media_type or 'unknown'}",
+                f"Extracted characters: {upload.extracted_chars}",
+            ]
+        )
+        if upload.notes:
+            lines.extend(f"Note: {note}" for note in upload.notes)
+        else:
+            lines.append("Notes: none")
+    return format_log(lines)

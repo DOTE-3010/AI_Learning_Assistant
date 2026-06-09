@@ -10,7 +10,9 @@ import {
     canSubmitRun,
     clampPdfPage,
     findArtifactByRole,
+    isHtmlArtifact,
     isActiveRunStatus,
+    isTextArtifact,
     normalizeActiveCodeFile,
     normalizeArtifactMetadata,
     normalizeCourseMetadata,
@@ -214,16 +216,21 @@ test("artifact metadata helpers pick real preview files by role", () => {
         { path: "/output/solution.py", kind: "script", media_type: "text/x-python", size_bytes: 24 },
         { path: "logs/generation.log", kind: "log", media_type: "text/plain" },
         { path: "manifest.json", kind: "manifest", media_type: "application/json" },
+        { path: "output/main.html", kind: "source", media_type: "text/html" },
         { path: "output/main.pdf", kind: "pdf", media_type: "application/pdf" },
         { path: "", kind: "source" },
     ]);
 
-    assert.equal(artifacts.length, 4);
+    assert.equal(artifacts.length, 5);
     assert.equal(artifacts[0].path, "output/solution.py");
     assert.equal(findArtifactByRole(artifacts, "primaryCode", { activeFile: "solution.py" })?.path, "output/solution.py");
     assert.equal(findArtifactByRole(artifacts, "log")?.path, "logs/generation.log");
     assert.equal(findArtifactByRole(artifacts, "manifest")?.path, "manifest.json");
+    assert.equal(findArtifactByRole(artifacts, "source", { intent: "essay_latex" })?.path, "output/main.html");
+    assert.equal(findArtifactByRole(artifacts, "primaryHtml", { intent: "essay_latex" })?.path, "output/main.html");
     assert.equal(findArtifactByRole(artifacts, "primaryPdf")?.path, "output/main.pdf");
+    assert.equal(isTextArtifact(artifacts[3]), true);
+    assert.equal(isHtmlArtifact(artifacts[3]), true);
 });
 
 test("pdf page navigation clamps to valid preview pages", () => {

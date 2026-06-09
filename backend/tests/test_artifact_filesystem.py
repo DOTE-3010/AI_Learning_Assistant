@@ -19,7 +19,11 @@ def test_writer_creates_contract_folder_shape_and_manifest(tmp_path):
         model={"provider": "openai_compatible", "model": "qwen-placeholder"},
         search={"mode": "auto", "used": False, "citations": []},
     )
-    output_path = run.write_output("Main Answer!.tex", "\\documentclass{article}", kind="source")
+    output_path = run.write_output(
+        "Main Answer!.html",
+        "<!doctype html><html><body>Answer</body></html>",
+        kind="source",
+    )
     log_path = run.write_log("generation.log", "started\n")
     manifest_path = run.write_manifest(status="succeeded")
 
@@ -27,7 +31,7 @@ def test_writer_creates_contract_folder_shape_and_manifest(tmp_path):
     assert (run.run_dir / "input" / "task.md").read_text(encoding="utf-8") == "Write an essay."
     assert (run.run_dir / "input" / "uploads").is_dir()
     assert output_path.exists()
-    assert output_path.name == "Main-Answer-.tex"
+    assert output_path.name == "Main-Answer-.html"
     assert log_path.exists()
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -36,7 +40,7 @@ def test_writer_creates_contract_folder_shape_and_manifest(tmp_path):
     assert manifest["revision_of_run_id"] is None
     assert manifest["intent"] == "essay_latex"
     assert manifest["inputs"] == [{"path": "input/task.md", "kind": "task"}]
-    assert manifest["outputs"] == [{"path": "output/Main-Answer-.tex", "kind": "source"}]
+    assert manifest["outputs"] == [{"path": "output/Main-Answer-.html", "kind": "source"}]
     assert manifest["status"] == "succeeded"
 
 

@@ -165,19 +165,19 @@ def test_run_events_endpoint_exposes_failed_shape(event_client):
         repo.update_run(
             run["id"],
             status="failed",
-            error_message="compile_failed: LaTeX PDF compilation failed.",
+            error_message="convert_failed: HTML-to-PDF conversion failed.",
         )
         artifact_run.write_log("generation.log", "failed\n")
         artifact_run.write_manifest(status="failed")
         emit_run_event(
             run_id=run["id"],
             status="failed",
-            stage="compile_pdf",
-            message="LaTeX PDF compilation failed.",
+            stage="convert_pdf",
+            message="HTML-to-PDF conversion failed.",
             context=preparation.context.estimate,
             error={
-                "code": "compile_failed",
-                "message": "LaTeX PDF compilation failed.",
+                "code": "convert_failed",
+                "message": "HTML-to-PDF conversion failed.",
             },
         )
 
@@ -196,11 +196,11 @@ def test_run_events_endpoint_exposes_failed_shape(event_client):
     assert event.status_code == 200
     body = event.json()
     assert body["status"] == "failed"
-    assert body["stage"] == "compile_pdf"
-    assert body["message"] == "LaTeX PDF compilation failed."
+    assert body["stage"] == "convert_pdf"
+    assert body["message"] == "HTML-to-PDF conversion failed."
     assert body["error"] == {
-        "code": "compile_failed",
-        "message": "LaTeX PDF compilation failed.",
+        "code": "convert_failed",
+        "message": "HTML-to-PDF conversion failed.",
     }
     assert _context_keys_present(body["context"])
 

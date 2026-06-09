@@ -23,18 +23,15 @@ from backend.core.run_events import (
     emit_run_event,
     latest_event_for_run,
 )
-from backend.pipelines.beamer_slides import run_beamer_slides_pipeline
-from backend.pipelines.cheat_sheet import run_cheat_sheet_pipeline
+from backend.pipelines.cheat_sheet_html import run_cheat_sheet_html_pipeline
 from backend.pipelines.code_homework import (
     normalize_output_preference,
     run_code_homework_pipeline,
 )
 from backend.pipelines.common import PipelineError
-from backend.pipelines.essay_latex import (
-    LatexCompiler,
-    LatexMkCompiler,
-    run_essay_latex_pipeline,
-)
+from backend.pipelines.essay_html import run_essay_html_pipeline
+from backend.pipelines.html_to_pdf import HtmlToPdfConverter, PlaywrightPdfConverter
+from backend.pipelines.slides_html import run_slides_html_pipeline
 from backend.pipelines.router import (
     SUPPORTED_INTENTS,
     RoutingDecision,
@@ -55,8 +52,7 @@ EVENT_TIMING_STAGES = {
     "generate_source": "provider_generation",
     "validate_python": "output_validation",
     "validate_notebook": "output_validation",
-    "compile_pdf": "compile_pdf",
-    "repair_source": "repair_generation",
+    "convert_pdf": "convert_pdf",
     "write_manifest": "artifact_persistence",
 }
 
@@ -194,7 +190,17 @@ def default_run_executor(
             run,
             preparation,
             model_provider=model_provider,
-            latex_compiler=LatexMkCompiler(),
+            pdf_converter=PlaywrightPdfConverter(),
+        )
+        return
+    if preparation.routing.target.pipeline == "essay_html":
+        execute_essay_latex_run(
+            repo,
+            artifact_run,
+            run,
+            preparation,
+            model_provider=model_provider,
+            pdf_converter=PlaywrightPdfConverter(),
         )
         return
     if preparation.routing.target.pipeline == "beamer_slides":
@@ -204,7 +210,17 @@ def default_run_executor(
             run,
             preparation,
             model_provider=model_provider,
-            latex_compiler=LatexMkCompiler(),
+            pdf_converter=PlaywrightPdfConverter(),
+        )
+        return
+    if preparation.routing.target.pipeline == "slides_html":
+        execute_beamer_slides_run(
+            repo,
+            artifact_run,
+            run,
+            preparation,
+            model_provider=model_provider,
+            pdf_converter=PlaywrightPdfConverter(),
         )
         return
     if preparation.routing.target.pipeline == "cheat_sheet":
@@ -214,7 +230,17 @@ def default_run_executor(
             run,
             preparation,
             model_provider=model_provider,
-            latex_compiler=LatexMkCompiler(),
+            pdf_converter=PlaywrightPdfConverter(),
+        )
+        return
+    if preparation.routing.target.pipeline == "cheat_sheet_html":
+        execute_cheat_sheet_run(
+            repo,
+            artifact_run,
+            run,
+            preparation,
+            model_provider=model_provider,
+            pdf_converter=PlaywrightPdfConverter(),
         )
         return
 
@@ -236,7 +262,7 @@ def default_run_executor(
 def make_run_executor(
     model_provider: TextGenerationProvider,
     *,
-    latex_compiler: LatexCompiler | None = None,
+    pdf_converter: HtmlToPdfConverter | None = None,
 ) -> RunExecutor:
     def _executor(
         repo: SQLiteRepository,
@@ -260,7 +286,17 @@ def make_run_executor(
                 run,
                 preparation,
                 model_provider=model_provider,
-                latex_compiler=latex_compiler or LatexMkCompiler(),
+                pdf_converter=pdf_converter or PlaywrightPdfConverter(),
+            )
+            return
+        if preparation.routing.target.pipeline == "essay_html":
+            execute_essay_latex_run(
+                repo,
+                artifact_run,
+                run,
+                preparation,
+                model_provider=model_provider,
+                pdf_converter=pdf_converter or PlaywrightPdfConverter(),
             )
             return
         if preparation.routing.target.pipeline == "beamer_slides":
@@ -270,7 +306,17 @@ def make_run_executor(
                 run,
                 preparation,
                 model_provider=model_provider,
-                latex_compiler=latex_compiler or LatexMkCompiler(),
+                pdf_converter=pdf_converter or PlaywrightPdfConverter(),
+            )
+            return
+        if preparation.routing.target.pipeline == "slides_html":
+            execute_beamer_slides_run(
+                repo,
+                artifact_run,
+                run,
+                preparation,
+                model_provider=model_provider,
+                pdf_converter=pdf_converter or PlaywrightPdfConverter(),
             )
             return
         if preparation.routing.target.pipeline == "cheat_sheet":
@@ -280,10 +326,38 @@ def make_run_executor(
                 run,
                 preparation,
                 model_provider=model_provider,
-                latex_compiler=latex_compiler or LatexMkCompiler(),
+                pdf_converter=pdf_converter or PlaywrightPdfConverter(),
+            )
+            return
+        if preparation.routing.target.pipeline == "cheat_sheet_html":
+            execute_cheat_sheet_run(
+                repo,
+                artifact_run,
+                run,
+                preparation,
+                model_provider=model_provider,
+                pdf_converter=pdf_converter or PlaywrightPdfConverter(),
             )
             return
         default_run_executor(repo, artifact_run, run, preparation)
+
+    return _executor
+
+
+def make_default_run_executor(
+    *,
+    pdf_converter: HtmlToPdfConverter | None = None,
+) -> RunExecutor:
+    def _executor(
+        repo: SQLiteRepository,
+        artifact_run: ArtifactRun,
+        run: dict[str, Any],
+        preparation: RunPreparation,
+    ) -> None:
+        return make_run_executor(
+            _default_model_provider(),
+            pdf_converter=pdf_converter or PlaywrightPdfConverter(),
+        )(repo, artifact_run, run, preparation)
 
     return _executor
 
@@ -350,17 +424,17 @@ def execute_essay_latex_run(
     preparation: RunPreparation,
     *,
     model_provider: TextGenerationProvider,
-    latex_compiler: LatexCompiler,
+    pdf_converter: HtmlToPdfConverter,
 ) -> None:
     repo.update_run(run["id"], status="running", error_message=None)
     timing = artifact_run.timing
     emit_event = _running_event_sink(run["id"], preparation, timing)
     try:
-        result = run_essay_latex_pipeline(
+        result = run_essay_html_pipeline(
             artifact_run=artifact_run,
             model_profile=preparation.model,
             model_provider=model_provider,
-            latex_compiler=latex_compiler,
+            pdf_converter=pdf_converter,
             task_text=run["task_text"],
             context_bundle=preparation.context.context_bundle,
             output_preference=preparation.routing.output_preference,
@@ -407,17 +481,17 @@ def execute_beamer_slides_run(
     preparation: RunPreparation,
     *,
     model_provider: TextGenerationProvider,
-    latex_compiler: LatexCompiler,
+    pdf_converter: HtmlToPdfConverter,
 ) -> None:
     repo.update_run(run["id"], status="running", error_message=None)
     timing = artifact_run.timing
     emit_event = _running_event_sink(run["id"], preparation, timing)
     try:
-        result = run_beamer_slides_pipeline(
+        result = run_slides_html_pipeline(
             artifact_run=artifact_run,
             model_profile=preparation.model,
             model_provider=model_provider,
-            latex_compiler=latex_compiler,
+            pdf_converter=pdf_converter,
             task_text=run["task_text"],
             context_bundle=preparation.context.context_bundle,
             output_preference=preparation.routing.output_preference,
@@ -464,17 +538,17 @@ def execute_cheat_sheet_run(
     preparation: RunPreparation,
     *,
     model_provider: TextGenerationProvider,
-    latex_compiler: LatexCompiler,
+    pdf_converter: HtmlToPdfConverter,
 ) -> None:
     repo.update_run(run["id"], status="running", error_message=None)
     timing = artifact_run.timing
     emit_event = _running_event_sink(run["id"], preparation, timing)
     try:
-        result = run_cheat_sheet_pipeline(
+        result = run_cheat_sheet_html_pipeline(
             artifact_run=artifact_run,
             model_profile=preparation.model,
             model_provider=model_provider,
-            latex_compiler=latex_compiler,
+            pdf_converter=pdf_converter,
             task_text=run["task_text"],
             context_bundle=preparation.context.context_bundle,
             output_preference=preparation.routing.output_preference,

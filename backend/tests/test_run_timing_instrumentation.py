@@ -3,7 +3,7 @@ from pathlib import Path
 
 from backend.core.run_events import default_run_event_store
 from backend.core.runs import create_run, make_run_executor
-from backend.pipelines.essay_latex import LatexCompileError, LatexCompileResult
+from backend.pipelines.html_to_pdf import ConvertError, ConvertResult
 from backend.storage.sqlite import SQLiteRepository
 from backend.timing import RunTimingRecorder
 
@@ -29,19 +29,19 @@ class FakeModelProvider:
         return self.outputs[min(len(self.requests) - 1, len(self.outputs) - 1)]
 
 
-class FakeLatexCompiler:
-    def __init__(self, errors: list[LatexCompileError | None] | None = None):
+class FakePdfConverter:
+    def __init__(self, errors: list[ConvertError | None] | None = None):
         self.errors = errors or [None]
         self.calls = 0
 
-    def compile(self, *, tex_path: Path, output_dir: Path, job_name: str):
+    def convert(self, *, html_path: Path, pdf_path: Path, page_config):
         self.calls += 1
         error = self.errors[min(self.calls - 1, len(self.errors) - 1)]
         if error is not None:
             raise error
-        pdf_path = output_dir / f"{job_name}.pdf"
+        assert html_path.exists()
         pdf_path.write_bytes(b"%PDF-1.4\n% timing test\n")
-        return LatexCompileResult(pdf_path=pdf_path, log_text="compile ok\n")
+        return ConvertResult(pdf_path=pdf_path, log_text="convert ok\n")
 
 
 class NoopSearchAdapter:
@@ -115,23 +115,12 @@ def test_code_run_persists_provider_and_local_stage_timings(tmp_path):
     assert event_body["timings"]["stage_ms"] >= 0
 
 
-def test_pdf_run_records_compile_and_repair_generation_timings(tmp_path):
+def test_pdf_run_records_provider_and_conversion_timings(tmp_path):
     repo, user = _repo_with_user(tmp_path)
     provider = FakeModelProvider(
-        [
-            "\\documentclass{article}\\begin{document}\\badcommand\\end{document}",
-            "\\documentclass{article}\\begin{document}Fixed\\end{document}",
-        ]
+        "<!doctype html><html><body><h1>Timing</h1></body></html>"
     )
-    compiler = FakeLatexCompiler(
-        [
-            LatexCompileError(
-                "LaTeX PDF compilation failed.",
-                log_text="Undefined control sequence.\n",
-            ),
-            None,
-        ]
-    )
+    converter = FakePdfConverter()
 
     body = create_run(
         repo,
@@ -142,33 +131,29 @@ def test_pdf_run_records_compile_and_repair_generation_timings(tmp_path):
             "search_mode": "off",
         },
         workspace_root=str(tmp_path / "workspace"),
-        executor=make_run_executor(provider, latex_compiler=compiler),
+        executor=make_run_executor(provider, pdf_converter=converter),
         search_adapter=NoopSearchAdapter(),
     )
 
     assert body["status"] == "succeeded"
     stages = _stage_map(_read_manifest(Path(body["output_root"])))
     assert "provider_generation" in stages
-    assert "compile_pdf" in stages
-    assert "repair_generation" in stages
+    assert "convert_pdf" in stages
     assert "artifact_persistence" in stages
-    assert compiler.calls == 2
-    assert len(provider.requests) == 2
+    assert converter.calls == 1
+    assert len(provider.requests) == 1
 
 
 def test_failed_pdf_run_keeps_completed_stage_timings(tmp_path):
     repo, user = _repo_with_user(tmp_path)
     provider = FakeModelProvider(
-        [
-            "\\documentclass{article}\\begin{document}\\badcommand\\end{document}",
-            "\\documentclass{article}\\begin{document}\\stillbad\\end{document}",
-        ]
+        "<!doctype html><html><body><h1>Timing failure</h1></body></html>"
     )
-    compile_error = LatexCompileError(
-        "LaTeX PDF compilation failed.",
-        log_text="Undefined control sequence.\n",
+    convert_error = ConvertError(
+        "HTML-to-PDF conversion failed.",
+        log_text="conversion failed\n",
     )
-    compiler = FakeLatexCompiler([compile_error, compile_error])
+    converter = FakePdfConverter([convert_error])
 
     body = create_run(
         repo,
@@ -179,7 +164,7 @@ def test_failed_pdf_run_keeps_completed_stage_timings(tmp_path):
             "search_mode": "off",
         },
         workspace_root=str(tmp_path / "workspace"),
-        executor=make_run_executor(provider, latex_compiler=compiler),
+        executor=make_run_executor(provider, pdf_converter=converter),
         search_adapter=NoopSearchAdapter(),
     )
 
@@ -188,8 +173,7 @@ def test_failed_pdf_run_keeps_completed_stage_timings(tmp_path):
     assert manifest["status"] == "failed"
     stages = _stage_map(manifest)
     assert "provider_generation" in stages
-    assert "compile_pdf" in stages
-    assert "repair_generation" in stages
+    assert "convert_pdf" in stages
     assert "artifact_persistence" in stages
 
 

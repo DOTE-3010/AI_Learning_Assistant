@@ -10,16 +10,13 @@ from backend.pipelines.common import (
     PipelineResult,
     extract_fenced_or_raw,
     format_citations,
+    format_extraction_log,
     format_log,
 )
-from backend.pipelines.essay_latex import (
-    LatexCompileError,
-    LatexCompiler,
-    compile_latex_with_repair,
-)
-from backend.pipelines.latex_diagrams import (
-    DIAGRAM_POLICY_INSTRUCTION,
-    sanitize_latex_diagram_placeholders,
+from backend.pipelines.html_to_pdf import (
+    A4_NO_MARGIN,
+    ConvertError,
+    HtmlToPdfConverter,
 )
 from backend.providers.base import (
     ModelProviderError,
@@ -29,12 +26,12 @@ from backend.providers.base import (
 from backend.timing import RunTimingRecorder, measure_stage
 
 
-def run_cheat_sheet_pipeline(
+def run_cheat_sheet_html_pipeline(
     *,
     artifact_run: ArtifactRun,
     model_profile: dict[str, Any],
     model_provider: TextGenerationProvider,
-    latex_compiler: LatexCompiler,
+    pdf_converter: HtmlToPdfConverter,
     task_text: str,
     context_bundle: str,
     output_preference: str | None,
@@ -59,13 +56,13 @@ def run_cheat_sheet_pipeline(
     if emit_event:
         emit_event("extract_context", "Summarizing PDF extraction")
     log_lines = [
-        "Pipeline: cheat_sheet",
+        "Pipeline: cheat_sheet_html",
         f"Output preference: {output_preference or 'pdf'}",
         f"Target pages: {target_pages}",
         "Log: logs/extraction.log",
         "Stage: generate_source",
     ]
-    system_prompt, user_prompt = build_cheat_sheet_prompt(
+    system_prompt, user_prompt = build_cheat_sheet_html_prompt(
         task_text=task_text,
         context_bundle=context_bundle,
         options=options,
@@ -73,7 +70,7 @@ def run_cheat_sheet_pipeline(
         extraction_log=extraction_log,
     )
     if emit_event:
-        emit_event("generate_source", "Generating cheat-sheet LaTeX source")
+        emit_event("generate_source", "Generating cheat-sheet HTML source")
 
     try:
         with measure_stage(timing, "provider_generation"):
@@ -101,67 +98,58 @@ def run_cheat_sheet_pipeline(
             log_lines=log_lines,
         ) from exc
 
-    source = extract_fenced_or_raw(raw_output, accepted_languages={"latex", "tex"})
-    source = sanitize_latex_diagram_placeholders(source)
+    source = extract_fenced_or_raw(raw_output, accepted_languages={"html", "htm"})
     source = source.strip() + "\n"
-    artifact_run.write_output(
-        "cheat-sheet.tex",
+    html_path = artifact_run.write_output(
+        "cheat-sheet.html",
         source,
         kind="source",
-        media_type="text/x-tex",
+        media_type="text/html",
     )
-    log_lines.extend(["Output: output/cheat-sheet.tex", "Stage: compile_pdf"])
+    log_lines.extend(["Output: output/cheat-sheet.html", "Stage: convert_pdf"])
     if emit_event:
-        emit_event("compile_pdf", "Compiling cheat-sheet PDF")
+        emit_event("convert_pdf", "Converting cheat-sheet HTML to PDF")
 
+    pdf_path = artifact_run.run_dir / "output" / "cheat-sheet.pdf"
     try:
-        compile_result = compile_latex_with_repair(
-            tex_path=artifact_run.run_dir / "output" / "cheat-sheet.tex",
-            output_dir=artifact_run.run_dir / "output",
-            job_name="cheat-sheet",
-            document_kind="cheat_sheet article",
-            model_profile=model_profile,
-            model_provider=model_provider,
-            latex_compiler=latex_compiler,
-            max_output_tokens=max_output_tokens,
-            accepted_languages={"latex", "tex"},
-            emit_event=emit_event,
-            timing=timing,
-        )
-    except LatexCompileError as exc:
-        artifact_run.write_log("latex.log", exc.log_text)
+        with measure_stage(timing, "convert_pdf"):
+            convert_result = pdf_converter.convert(
+                html_path=html_path,
+                pdf_path=pdf_path,
+                page_config=A4_NO_MARGIN,
+            )
+    except ConvertError as exc:
+        artifact_run.write_log("convert.log", exc.log_text)
         raise PipelineError(
-            "compile_failed",
+            "convert_failed",
             exc.message,
-            stage="compile_pdf",
+            stage="convert_pdf",
             log_lines=log_lines,
         ) from exc
     except Exception as exc:
         artifact_run.write_log(
-            "latex.log",
-            "LaTeX compiler raised an unexpected error.\n",
+            "convert.log",
+            "HTML-to-PDF converter raised an unexpected error.\n",
         )
         raise PipelineError(
-            "compile_failed",
-            "LaTeX PDF compilation failed.",
-            stage="compile_pdf",
+            "convert_failed",
+            "HTML-to-PDF conversion failed.",
+            stage="convert_pdf",
             log_lines=log_lines,
         ) from exc
 
-    artifact_run.write_log("latex.log", compile_result.log_text)
-    if compile_result.repaired:
-        log_lines.append("Repair: source_repaired")
+    artifact_run.write_log("convert.log", convert_result.log_text)
     artifact_run.write_output(
         "cheat-sheet.pdf",
-        compile_result.pdf_path.read_bytes(),
+        convert_result.pdf_path.read_bytes(),
         kind="pdf",
         media_type="application/pdf",
     )
-    log_lines.extend(["Compile: pdf_ok", "Output: output/cheat-sheet.pdf"])
+    log_lines.extend(["Convert: pdf_ok", "Output: output/cheat-sheet.pdf"])
     return PipelineResult(log_text=format_log(log_lines))
 
 
-def build_cheat_sheet_prompt(
+def build_cheat_sheet_html_prompt(
     *,
     task_text: str,
     context_bundle: str,
@@ -173,20 +161,30 @@ def build_cheat_sheet_prompt(
     paper_size = options.get("paper_size") or "A4"
     density = options.get("density") or "dense"
     system_prompt = (
-        "You are an expert teaching assistant compressing course slide material "
-        "into complete, print-ready LaTeX cheat sheets. Return only the requested "
-        "LaTeX source, with no surrounding explanation."
+        "You are an expert teaching assistant compressing course material into "
+        "dense, print-ready HTML cheat sheets. Return only the requested HTML "
+        "source, with no surrounding explanation."
     )
     output_instruction = (
-        f"Return one full compilable LaTeX article document targeting exactly "
+        f"Return one complete self-contained HTML document targeting exactly "
         f"{target_pages} {paper_size} page(s) with {density} information density. "
-        "Use compact margins, small but readable type, multiple columns, tight "
-        "sectioning, equations, definitions, algorithms, and tables where useful. "
-        "It must include \\documentclass, required packages such as geometry and "
-        "multicol when useful, \\begin{document}, and \\end{document}. Preserve "
-        "important caveats from extraction notes, cite any provided web sources in "
-        "plain LaTeX, and do not wrap the answer in Markdown fences. "
-        + DIAGRAM_POLICY_INSTRUCTION
+        "It must start with <!doctype html> and include <html>, <head>, and "
+        "<body>. Put all styling inside one inline <style> block. Use CSS "
+        "multi-column layout such as column-count and column-gap, or CSS Grid, "
+        "to pack content densely. Target @page { size: A4; margin: 8mm; } and "
+        "use the page area aggressively. Use small but readable typography: "
+        "10-11px body text and 8-9px minimum for labels, formulas, table cells, "
+        "and footnotes. Apply break-inside: avoid to logical sections, tables, "
+        "definition blocks, and code blocks to prevent awkward column breaks. "
+        "Use compact sectioning, tables, definition lists, formula blocks, "
+        "algorithm summaries, and code blocks where useful. Include inline "
+        "KaTeX-compatible math markup and minimal inline styling when formulas "
+        "are needed; do not fetch KaTeX from a CDN at render time. Do not use "
+        "external stylesheet links, remote images, or remote HTTP(S) assets. "
+        "Use inline SVG or CSS-only diagrams if diagrams are needed. Cite any "
+        "provided web sources in a compact references area. Do not wrap the "
+        "answer in Markdown fences. Exact page count is a target: fill the "
+        "requested pages densely without leaving large blank areas."
     )
     user_prompt = "\n\n".join(
         [
@@ -199,27 +197,3 @@ def build_cheat_sheet_prompt(
         ]
     )
     return system_prompt, user_prompt
-
-
-def format_extraction_log(uploads: tuple[UploadExtraction, ...]) -> str:
-    lines = [
-        "Cheat-sheet PDF extraction summary",
-        f"Upload count: {len(uploads)}",
-    ]
-    if not uploads:
-        lines.append("No uploads were supplied; generation will use task text only.")
-        return format_log(lines)
-
-    for upload in uploads:
-        lines.extend(
-            [
-                f"Upload: {upload.original_name}",
-                f"Media type: {upload.media_type or 'unknown'}",
-                f"Extracted characters: {upload.extracted_chars}",
-            ]
-        )
-        if upload.notes:
-            lines.extend(f"Note: {note}" for note in upload.notes)
-        else:
-            lines.append("Notes: none")
-    return format_log(lines)

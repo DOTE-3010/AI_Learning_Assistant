@@ -35,8 +35,8 @@ REVISION_CODE_CHARS_PER_TOKEN = 3
 REVISION_SOURCE_EXTRA_CONTEXT_TOKEN_RATIO = 0.15
 REVISION_LOG_EXTRA_CONTEXT_TOKEN_RATIO = 0.01
 REVISION_SOURCE_KINDS = {"source", "script", "notebook"}
-REVISION_SOURCE_SUFFIXES = {".py", ".ipynb", ".tex", ".bib", ".sty", ".cls"}
-REVISION_LOG_PATHS = ("logs/generation.log", "logs/latex.log")
+REVISION_SOURCE_SUFFIXES = {".py", ".ipynb", ".html", ".htm", ".css", ".svg"}
+REVISION_LOG_PATHS = ("logs/generation.log", "logs/convert.log")
 POSIX_HOST_PATH_RE = re.compile(
     r"(?<![:A-Za-z0-9])/(?:Users|private|var|tmp|Volumes|home)(?:/[^\s\"'`<>]+)+"
 )
@@ -244,7 +244,7 @@ def _task_kind(intent: str) -> str:
     if intent == "code_homework":
         return "code"
     if intent in {"essay_latex", "beamer_slides", "cheat_sheet"}:
-        return "latex"
+        return "markup"
     return "prose"
 
 
