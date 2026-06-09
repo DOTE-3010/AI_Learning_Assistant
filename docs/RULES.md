@@ -1,7 +1,7 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-09
-Status: Active
+Last Reviewed: 2026-06-10
+Status: Complete
 -->
 
 # Engineering Rules
@@ -10,17 +10,15 @@ These are repo-specific rules. General programming hygiene and anything a linter
 
 ## Coding Rules
 
-- Implement or test one `docs/TASKS/NNN-*.md` at a time unless the human explicitly broadens scope.
+- When new tasks exist in `docs/TASKS/`, implement or test one at a time unless the human explicitly broadens scope.
 - Keep module boundaries from `docs/ARCH.md` intact.
 - Prefer small repository/service interfaces over direct cross-module imports.
 - Do not add hard-coded API keys, default personal credentials, or real secrets.
 - Model settings defaults may include only documented non-secret provider values. The API key must remain empty by default, and missing-key states must be clear to non-expert users.
-- Preserve `.html` source even when PDF conversion fails.
+- Preserve `.html` source even when Playwright PDF conversion fails.
 - Use structured parsers for PDFs, notebooks, JSON, and manifests when available.
 - Do not keep new product behavior only in chat; update SPEC, ARCH, RULES, or CONTRACTS when durable knowledge changes.
-- During the QA phase, run the active QA checks first, report blockers and risks, then fix blockers and only human-approved risks.
-- Do not add new feature work during QA unless the human converts a QA finding into a follow-up task.
-- Before performance optimization, add or use timing instrumentation that separates local preparation, upload/context work, model-provider calls, HTML-to-PDF conversion, and artifact persistence. If live runs spend more than half of wall time inside the external model provider, report that bottleneck and avoid speculative local rewrites.
+- Before performance optimization, use timing instrumentation (`backend/timing.py`) that separates local preparation, upload/context work, model-provider calls, HTML-to-PDF conversion, and artifact persistence. If live runs spend more than half of wall time inside the external model provider, report that bottleneck and avoid speculative local rewrites.
 - The macOS launcher stubs (`run_web.command`, `run_desktop.command`) are stable by design and must not be edited from Cursor or any other GUI app. To change launcher behavior, edit `scripts/launcher-web.sh` or `scripts/launcher-desktop.sh` instead. If a stub itself genuinely must change (e.g., the path to the real script changes), tell the human and ask them to apply the edit from their own Terminal.app, then run `bash scripts/bless-launchers.sh`. See `docs/DECISIONS/008-launcher-stub-split.md` and `.cursor/rules/launcher-stability.mdc`.
 
 ## Frontend Experience Rules
@@ -57,19 +55,13 @@ These are repo-specific rules. General programming hygiene and anything a linter
 
 ## Testing Rules
 
-- Whole-product QA follows this order: agent module smoke tests, agent module unit/functional tests, agent integration tests, then human E2E functional tests.
-- Agent-executed QA must report blockers and risks to the human after testing and before fixes. Agents then fix blockers and only the risks the human asks to fix.
-- A QA phase cannot advance while open blockers remain unless the human explicitly waives them.
-- Every QA fix must rerun the failed check and the nearest broader check that could catch a regression.
-- Save durable QA findings under `docs/QA_REPORTS/` when a phase finds blockers, risks, fixes, or human decisions.
 - Backend behavior needs focused tests for auth, settings, storage repositories, artifact writing, and pipeline routing.
 - Frontend UI changes need at least build verification and targeted component/interaction checks when a test framework exists.
-- Frontend experience changes that affect layout, typography, localization, or preview rendering need desktop and narrow-width visual QA, preferably through the in-app Browser or Playwright screenshots when available.
-- Workbench visual QA must include English, Simplified Chinese, and Traditional Chinese at 100% browser zoom and confirm that labels, buttons, chips, preview headers, and artifact type controls do not overflow or overlap.
+- Frontend experience changes that affect layout, typography, localization, or preview rendering need desktop and narrow-width visual QA.
+- Workbench visual QA must include English, Simplified Chinese, and Traditional Chinese at 100% browser zoom.
 - Electron runtime tasks need explicit smoke checks for Docker detection, backend health, and window startup.
-- Pipeline tasks may mock model provider calls; real API smoke tests must use untracked credentials and must not be required in CI.
-- If a task removes legacy code, tests should verify the replacement path rather than preserving legacy behavior.
-- For task 018, frontend build and visual QA are required; backend tests are not required unless the frontend rebuild unexpectedly changes backend-facing contracts, which it should avoid.
+- Pipeline tests may mock model provider calls; real API smoke tests must use untracked credentials and must not be required in CI.
+- Save durable QA findings under `docs/QA_REPORTS/` when a phase finds blockers, risks, fixes, or human decisions.
 
 ## Security And Safety Rules
 
@@ -89,8 +81,8 @@ These are repo-specific rules. General programming hygiene and anything a linter
 - New frontend dependencies should serve the polished workbench experience or Electron packaging; avoid dashboard-heavy component kits unless they fit the product aesthetic.
 - Syntax highlighting, PDF preview, and animation dependencies are acceptable when they replace fragile homegrown renderers and stay inside the frontend boundary.
 - Do not add backend dependencies to satisfy frontend appearance work.
-- HTML-to-PDF conversion must work inside the Docker runtime via Playwright/Chromium.
-- Generated HTML must not include remote image URLs unless a local uploaded image is available. Diagrams should use inline SVG or CSS-based layouts that render reliably in headless Chromium.
+- HTML-to-PDF conversion uses Playwright/Chromium inside the Docker runtime.
+- Generated HTML must be self-contained: inline CSS, no external stylesheets, no remote image URLs unless a local uploaded image is available. Diagrams should use inline SVG or CSS-based layouts that render reliably in headless Chromium.
 
 ## Contract Rules
 

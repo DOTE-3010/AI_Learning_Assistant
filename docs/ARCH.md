@@ -1,18 +1,18 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-09
-Status: Active
+Last Reviewed: 2026-06-10
+Status: Complete
 -->
 
 # Architecture
 
 ## Architecture Summary
 
-The rebuild uses a local-first architecture: a web renderer provides the conversational artifact workbench, Docker Desktop runs the backend/runtime container, SQLite stores local metadata, and generated artifacts are written to explicit filesystem folders. Electron remains the desktop shell and packaging wrapper, but current functional QA and repair work targets the Docker plus browser surface first.
+The system uses a local-first architecture: a web renderer provides the conversational artifact workbench, Docker Desktop runs the backend/runtime container, SQLite stores local metadata, and generated artifacts are written to explicit filesystem folders. Electron is the desktop shell and packaging wrapper.
 
 The web renderer is the product center. It presents a production console beside a persistent preview panel, so generation history, run status, and follow-up instructions stay adjacent to the current artifact instead of burying outputs in chat text.
 
-The existing frontend implementation is disposable from an architecture perspective. Future frontend tasks may replace the app shell, components, styles, and visual assets wholesale inside `frontend/`, provided they keep the backend HTTP/SSE contracts and phase-1 product capabilities stable.
+Future frontend work may replace visual assets, styles, and components inside `frontend/`, provided backend HTTP/SSE contracts and product capabilities remain stable.
 
 The system is intentionally portable. The same API, storage interfaces, and artifact contracts should later support a native no-Docker desktop build or a hosted server deployment without rewriting product logic. The shell talks to the backend only over HTTP/SSE so the runtime underneath can change.
 
@@ -41,7 +41,7 @@ Major versions below are the supported baseline; exact patch versions live in lo
 - Frontend: Vite 6 + vanilla/lightweight component layer (no heavy admin-dashboard kit); CSS-driven visual system.
 - Desktop shell: Electron 42 (Chromium renderer + Node main process), packaging via electron-builder (future-phase).
 - Model client: `openai` Python SDK in OpenAI-compatible mode, pointed at a configurable Qwen base URL.
-- Document tooling: Playwright (headless Chromium) inside the container for HTML-to-PDF conversion; KaTeX for math rendering in generated HTML; `nbformat` for `.ipynb` validation; `pypdf` for PDF text extraction (OCR/scanned PDFs are out of scope in phase 1). The `slides_html/shared/deck.css` layout system is the reference for generated slide decks.
+- Document tooling: Playwright (headless Chromium) inside the container for HTML-to-PDF conversion; KaTeX for math rendering in generated HTML; `nbformat` for `.ipynb` validation; `pypdf` for PDF text extraction (OCR/scanned PDFs are out of scope). The `slides_html/shared/deck.css` layout system is the reference for generated slide decks. No LaTeX/TeX Live dependency; the LaTeX toolchain was replaced by HTML-native generation (see `docs/DECISIONS/009-html-native-artifact-generation.md`).
 - Web search: pluggable provider behind an adapter; concrete provider is an open question (see below).
 - Container runtime: Docker Desktop (Compose v2) as the only host prerequisite for the packaged build.
 
@@ -58,13 +58,13 @@ Major versions below are the supported baseline; exact patch versions live in lo
 | Model Provider | OpenAI-compatible client, profile validation, secret loading, redaction | Pipeline/business logic, HTTP routes, SQLite schema | backend provider package | `model-settings.md` |
 | Course Context | User-visible course containers, undeletable context-disabled default course, soft archive, compact `course_context.md` summary policy | Primary navigation shell, raw upload storage, hard deletion by default, forcing context into every run | backend API/core/context package, `frontend/` selector | `course-context.md`, `sqlite-schema.md`, `generation-pipeline.md` |
 | Context Builder | File extraction, context-budget estimation, adaptive revision context budgeting, web-search policy decision | Artifact generation, model-call orchestration, UI rendering | backend context package | `generation-pipeline.md`, `uploads.md` |
-| Artifact Pipelines | Code/essay/slides/cheat-sheet generation, HTML-to-PDF conversion, intent routing | Secret loading, Electron internals, HTTP transport, raw SQL | backend pipeline package | `generation-pipeline.md`, `artifact-filesystem.md` |
+| Artifact Pipelines | Code/essay/slides/cheat-sheet generation via HTML-native rendering, Playwright HTML-to-PDF conversion, intent routing | Secret loading, Electron internals, HTTP transport, raw SQL | backend pipeline package | `generation-pipeline.md`, `artifact-filesystem.md` |
 
 Legacy modules under `backend/` and `frontend/` are not authoritative if they conflict with these boundaries. They may be deleted, moved, or mined for useful patterns during scoped tasks. Frontend UI modules, styling, placeholder assets, and layout code should be treated as replaceable rather than inherited design constraints.
 
 ## Canonical Phase-1 Layout
 
-The first rewrite keeps the existing `backend/` and `frontend/` roots to reduce migration noise. Electron is the only new top-level app root.
+The project uses `backend/` and `frontend/` roots with Electron as the only additional app root.
 
 ```text
 backend/            FastAPI API/runtime and backend modules
@@ -132,7 +132,7 @@ The frontend rebuild boundary is intentionally asymmetric:
 - Web UI may render generated source and PDFs, but it must not treat editable frontend state as the source of truth for artifacts.
 - Web UI must not execute generated JavaScript, notebooks, shell commands, or arbitrary HTML in the main renderer. Any future execution feature needs a sandbox contract and a new task.
 - Frontend appearance tasks may freely replace frontend implementation details, but must not require backend code changes to pass.
-- Backend owns SQLite, filesystem artifacts, model provider calls, web search, and LaTeX compilation.
+- Backend owns SQLite, filesystem artifacts, model provider calls, web search, and HTML-to-PDF conversion.
 - SQLite stores metadata only. Large uploads, generated source, notebooks, PDFs, logs, and manifests stay on disk.
 - Model provider code must depend on an abstract provider profile, not hard-coded Bianxie/OpenAI/Qwen constants.
 - Pipeline code may call context builder, artifact writer, and model provider; it must not know Electron internals.
@@ -166,22 +166,24 @@ Future runtimes must preserve the same contracts:
 
 - Configuration: backend reads runtime config from environment variables; local development values live in untracked `.env`/`.env.local`. Model variables use the `MODEL_*` names in `model-settings.md` (legacy `BIANXIE_*` names are not canonical). Tracked source may contain only the documented non-secret Qwen defaults from `docs/CONTRACTS/model-settings.md`; API keys and other secrets are never defaulted or committed.
 - Observability: structured logs to stdout from the container; run progress is exposed via the status event shape in `generation-pipeline.md`. API keys, Authorization headers, raw prompts, and uploaded document contents are never logged by default.
-- Failure handling: web-search and PDF-compile failures are non-fatal unless the user forced the behavior; failures are recorded in run metadata and `manifest.json` with a sanitized message. `.tex` source is always preserved even when PDF compilation fails.
+- Failure handling: web-search and PDF-conversion failures are non-fatal unless the user forced the behavior; failures are recorded in run metadata and `manifest.json` with a sanitized message. `.html` source is always preserved even when PDF conversion fails.
 - Performance: run-stage timing must be measured before optimization work. If the external model provider accounts for more than half of live run wall time, local optimization should stop at reporting and small obvious fixes unless a separate local bottleneck is demonstrated.
 - Backups/migrations: SQLite uses explicit, forward-only schema migrations with a `schema_version`; the database file and `workspace/` are the two artifacts a user must back up. Both must survive container/app restarts.
 - Security: weak auth is local/teaching only and isolated behind middleware so stronger auth can replace it; tokens are opaque to clients; secret storage follows `docs/DECISIONS/004-local-secret-storage.md`.
 - Launcher hygiene: the macOS launchers at the project root are stub-plus-script: `run_web.command` and `run_desktop.command` are stable stubs and `scripts/launcher-web.sh` and `scripts/launcher-desktop.sh` hold the real logic. The stubs must not be rewritten by Cursor or any other GUI app; if they are, `AppleSystemPolicy` will SIGKILL the script on Finder double-click and `scripts/bless-launchers.sh` must be re-run from the human's Terminal.app. See `docs/DECISIONS/008-launcher-stub-split.md` and `.cursor/rules/launcher-stability.mdc`.
 
-## Migration Strategy
+## Development History
 
-1. Establish contracts and task queue.
-2. Introduce new storage and settings foundations alongside or in place of legacy code.
-3. Build generation pipeline contracts and one pipeline at a time.
-4. Fully rebuild the frontend product surface into the new workbench while preserving backend-facing contracts.
-5. Add revision-run support if needed for follow-up refinement.
-6. Add Electron shell and Docker runtime management.
-7. Remove legacy Postgres/Mongo/course/chat surfaces after their replacements are verified.
-8. Execute whole-product QA in the order defined by `docs/QA_PLAN.md`: agent module smoke, agent module functional, agent integration, then human E2E functional testing.
+The system was built through a structured migration from an archived MVP:
+
+1. Governance files (spec, architecture, rules, contracts) established first.
+2. SQLite storage, weak auth, model provider, and artifact filesystem foundations.
+3. Four artifact pipelines built one at a time against generation contracts.
+4. Frontend rebuilt as a conversational preview workbench.
+5. Revision-run support and profile-aware context budgeting.
+6. Electron shell and Docker runtime management.
+7. Whole-product QA: agent module → human E2E → post-E2E repairs.
+8. HTML-native migration: replaced LaTeX with Playwright HTML-to-PDF (ADR 009).
 
 ## Tradeoffs
 

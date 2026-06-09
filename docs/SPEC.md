@@ -1,30 +1,26 @@
 <!--
 Owner: project-maintainer
-Last Reviewed: 2026-06-09
-Status: Active
+Last Reviewed: 2026-06-10
+Status: Complete
 -->
 
 # Product Specification
 
 ## Product Intent
 
-AI Learning Assistant is being rebuilt as a teaching-oriented artifact studio. It helps a CUHK teaching context generate complete academic deliverables from a short task, optional reference files, and optional web search.
+AI Learning Assistant is a teaching-oriented artifact studio. It helps a CUHK teaching context generate complete academic deliverables from a short task, optional reference files, and optional web search.
 
 The primary product surface is a conversational production workbench: a prompt/control console sits beside a persistent artifact preview panel. Users should not have to hunt through a long chat transcript to find the current result. The latest code, PDF, slides, or cheat sheet should always be visible as a polished preview next to the conversation.
 
-The current frontend appearance is not a compatibility target. The phase-1 frontend may be visually and structurally rebuilt from scratch so long as the product capabilities and backend-facing contracts remain intact.
+The target aesthetic is warm, elegant, and editorial rather than sci-fi or dashboard-like: warm graphite, parchment, clay/terracotta accents, readable serif typography, and product-state previews define the experience. The product should feel like a polished consumer creative tool, not a generic admin dashboard.
 
-The target aesthetic is warm, elegant, and editorial rather than sci-fi or dashboard-like. The workbench may take inspiration from modern warm AI tools and literary product surfaces, but it must remain original: warm graphite, parchment, clay/terracotta accents, readable serif typography, and product-state previews should define the experience. Do not copy proprietary brand assets, proprietary typefaces, or exact visual identity from another product.
-
-The product should feel like a polished consumer creative tool, not a generic admin dashboard. The active QA and repair surface is the web workbench served by the Docker runtime at `/ui/`; the Electron shell remains a later packaging wrapper for the same backend and frontend contracts.
+The web workbench is served by the Docker runtime at `/ui/`; the Electron shell is a packaging wrapper for the same backend and frontend contracts.
 
 ## Current Phase
 
-The phase-1 implementation queue is complete as of 2026-06-03 and has been summarized in `docs/IMPLEMENTATION_SUMMARY.md`. Human review then identified the missing backend upload API as a pre-QA blocker because uploads are part of the phase-1 product acceptance criteria.
+Phase-1 development is complete as of 2026-06-10. The implementation queue, post-human-E2E repairs, and HTML-native pipeline migration have all been completed and recorded in `docs/IMPLEMENTATION_SUMMARY.md`. QA reports are archived in `docs/QA_REPORTS/`.
 
-The upload blocker was resolved on 2026-06-03. Whole-product QA is governed by `docs/QA_PLAN.md`; agent QA phases and the first human-selected E2E usability fix pass were completed and recorded under `docs/QA_REPORTS/`. On 2026-06-05 the human completed manual E2E functional testing: all four generation capabilities passed, but three high-priority product blockers and two medium-priority follow-up areas were identified. On 2026-06-09 task 000 re-established Docker plus browser as the active functional QA baseline at `http://127.0.0.1:14242/ui/`, with Electron packaging deferred until the web product is accepted. Active work now follows the post-human-E2E repair queue in `docs/TASKS/`, with the human findings recorded in `docs/QA_REPORTS/2026-06-05-human-e2e-completion.md`.
-
-Release readiness requires the high-priority blockers to be fixed or explicitly waived by the human: truthful run status motion plus a comfort progress bar, real generated-output previews, and LaTeX diagram-placeholder/complex-diagram avoidance. Medium-priority course context and performance bottleneck work may proceed after the high-priority queue unless the human reorders it.
+All four generation capabilities are functional: code homework, essay PDFs, presentation slides, and dense cheat sheets. The PDF-producing pipelines were migrated from LaTeX to HTML-native generation with Playwright HTML-to-PDF conversion on 2026-06-09 (see `docs/DECISIONS/009-html-native-artifact-generation.md`). The Docker image no longer contains TeX Live.
 
 ## Users
 
@@ -36,9 +32,9 @@ Release readiness requires the high-priority blockers to be fixed or explicitly 
 ## Goals
 
 - Generate complete homework code as `.py` or `.ipynb` from a task, optional reference code, and optional supporting material.
-- Generate essay-style assignments as self-contained HTML source plus compiled PDF.
-- Generate presentation slides as HTML slide decks plus compiled PDF.
-- Generate dense A4 cheat-sheet PDFs from many course slide PDFs and a requested page count.
+- Generate essay-style assignments as self-contained HTML plus Playwright-converted PDF.
+- Generate presentation slides as HTML decks plus Playwright-converted PDF.
+- Generate dense A4 cheat sheets from many course slide PDFs and a requested page count, as HTML plus Playwright-converted PDF.
 - Let users explicitly choose one of the four artifact modes and route to the selected pipeline.
 - Treat uploads as optional and web search as `auto`, `on`, or `off`.
 - Let users configure their own Qwen/OpenAI-compatible API key, base URL, and model, with development defaults only in untracked local files.
@@ -173,15 +169,9 @@ Process outcomes that make the rebuild safe for rotating agents (verified by `sc
 
 ## Changelog
 
-- 2026-05-31: Rebuild specification authored; split product vs. governance acceptance criteria; added uploads as a first-class input.
-- 2026-05-31: Updated phase-1 decisions: students get full generation access; artifact type must be explicitly selected rather than inferred from prompt text.
-- 2026-06-01: Strengthened frontend direction around a conversational production console plus persistent artifact preview panel, preview-only phase-1 behavior, editor-grade code rendering, PDF-like previews, and purposeful motion.
-- 2026-06-01: Clarified that the existing frontend appearance is disposable; upcoming frontend work should fully rebuild the product surface while preserving backend-facing contracts and capabilities.
-- 2026-06-01: Added warm editorial visual direction, required serif typography, and English/Simplified Chinese/Traditional Chinese workbench localization requirements.
-- 2026-06-03: Marked the implementation queue complete, moved active work to whole-product QA, and added implementation-summary and QA-plan governance assets.
-- 2026-06-03: Promoted missing backend upload API from QA risk to pre-QA blocker by human decision.
-- 2026-06-03: Resolved the upload pre-QA blocker and moved the active queue to agent module smoke QA.
-- 2026-06-03: Pinned documented Qwen non-secret defaults for the China-site API and added human E2E usability requirements for legible run stages and non-inert preview tabs.
-- 2026-06-05: Cleared the completed QA task queue by human decision and opened a narrow pre-E2E runtime/contract repair task before manual E2E resumes.
-- 2026-06-05: Recorded completed human E2E results, promoted status/progress, real preview, and LaTeX diagram handling to high-priority repair work, and added medium-priority course context plus performance triage direction.
-- 2026-06-09: Re-established Docker plus browser as the functional QA baseline and deferred Electron packaging until after web product acceptance.
+- 2026-05-31: Rebuild specification authored; split product vs. governance acceptance criteria.
+- 2026-06-01: Defined conversational preview workbench, warm editorial visual direction, and localization requirements.
+- 2026-06-03: Phase-1 implementation queue completed; moved to whole-product QA.
+- 2026-06-05: Human E2E functional testing completed; all generation capabilities passed.
+- 2026-06-09: Migrated all PDF pipelines from LaTeX to HTML-native with Playwright (ADR 009).
+- 2026-06-10: HTML-native migration and Electron packaging completed; task queue cleared.

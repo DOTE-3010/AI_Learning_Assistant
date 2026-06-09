@@ -3,10 +3,10 @@ description: Project governance for AI Learning Assistant
 alwaysApply: true
 ---
 
-`AGENTS.md` is canonical. Read it before implementation or QA, then identify the active task in `docs/TASKS/` and the contracts it cites.
+`AGENTS.md` is canonical. Read it before any implementation work.
 
-The project is migrating from LaTeX to HTML-native artifact generation (Playwright HTML-to-PDF). Read `docs/DECISIONS/009-html-native-artifact-generation.md` for context and `docs/TASKS/README.md` for the four-phase migration queue: (1) cleanup, (2) pipeline migration, (3) testing, (4) Electron packaging.
+Phase-1 development is complete. The product uses HTML-native artifact generation with Playwright HTML-to-PDF (see `docs/DECISIONS/009-html-native-artifact-generation.md`). There is no LaTeX dependency. The task queue (`docs/TASKS/`) is empty.
 
-For frontend work, also read `docs/CONTRACTS/ui-workbench.md` and `docs/CONTRACTS/visual-assets.md`. The phase-1 UI is a preview-only conversational artifact workbench: production console beside a persistent artifact preview panel, with explicit artifact type selection and professional code/PDF previews.
+For frontend work, read `docs/CONTRACTS/ui-workbench.md` and `docs/CONTRACTS/visual-assets.md`. The UI is a preview-only conversational artifact workbench: production console beside a persistent artifact preview panel.
 
-Keep changes bounded to the active task. For QA tasks, run checks first, report blockers and risks to the human, then fix blockers and human-approved risks. If a fix needs to cross task scope or change a contract, update the governance asset first or ask the human.
+Keep changes bounded. If a fix needs to change a contract, update the governance asset first or ask the human.
