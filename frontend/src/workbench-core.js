@@ -117,3 +117,89 @@ export function buildRunRequest({
     if (revisionOfRunId) payload.revision_of_run_id = revisionOfRunId;
     return payload;
 }
+
+export function normalizeArtifactMetadata(rawArtifacts) {
+    if (!Array.isArray(rawArtifacts)) return [];
+    return rawArtifacts
+        .map((artifact) => ({
+            path: normalizeArtifactPath(artifact?.path),
+            kind: String(artifact?.kind || ""),
+            mediaType: String(artifact?.media_type || ""),
+            sizeBytes: Number.isFinite(Number(artifact?.size_bytes)) ? Number(artifact.size_bytes) : null,
+            url: String(artifact?.url || ""),
+        }))
+        .filter((artifact) => artifact.path);
+}
+
+export function findArtifactByRole(artifacts, role, { intent = "code_homework", outputPreference = "py", activeFile = "" } = {}) {
+    const normalized = Array.isArray(artifacts) ? artifacts : [];
+    if (role === "manifest") return findFirstByKindOrName(normalized, "manifest", "manifest.json");
+    if (role === "log") {
+        return findFirstByPath(normalized, preferredLogPaths(intent))
+            || normalized.find((artifact) => artifact.kind === "log" || artifact.path.startsWith("logs/"))
+            || null;
+    }
+    if (role === "source") {
+        return findFirstByPath(normalized, preferredSourcePaths(intent, outputPreference, activeFile))
+            || normalized.find((artifact) => sourceKinds().has(artifact.kind) && isTextArtifact(artifact))
+            || null;
+    }
+    if (role === "primaryCode") {
+        return findFirstByPath(normalized, preferredCodePaths(outputPreference, activeFile))
+            || normalized.find((artifact) => ["script", "notebook", "source"].includes(artifact.kind) && isTextArtifact(artifact))
+            || null;
+    }
+    if (role === "primaryPdf") {
+        return normalized.find((artifact) => artifact.kind === "pdf" || artifact.mediaType === "application/pdf") || null;
+    }
+    return null;
+}
+
+export function isTextArtifact(artifact) {
+    const mediaType = artifact?.mediaType || artifact?.media_type || "";
+    const path = artifact?.path || "";
+    return Boolean(
+        mediaType.startsWith("text/")
+        || mediaType === "application/json"
+        || path.endsWith(".json")
+        || path.endsWith(".py")
+        || path.endsWith(".ipynb")
+        || path.endsWith(".md")
+        || path.endsWith(".tex")
+        || path.endsWith(".log")
+    );
+}
+
+function normalizeArtifactPath(path) {
+    return String(path || "").replace(/^\/+/u, "");
+}
+
+function findFirstByKindOrName(artifacts, kind, filename) {
+    return artifacts.find((artifact) => artifact.kind === kind || artifact.path === filename) || null;
+}
+
+function findFirstByPath(artifacts, paths) {
+    const wanted = new Set(paths.filter(Boolean));
+    return artifacts.find((artifact) => wanted.has(artifact.path)) || null;
+}
+
+function preferredCodePaths(outputPreference, activeFile) {
+    if (outputPreference === "ipynb") return ["output/solution.ipynb"];
+    return [`output/${activeFile || "solution.py"}`, "output/solution.py", "solution.py"];
+}
+
+function preferredSourcePaths(intent, outputPreference, activeFile) {
+    if (intent === "code_homework") return preferredCodePaths(outputPreference, activeFile);
+    if (intent === "beamer_slides") return ["output/slides.tex", "slides.tex"];
+    if (intent === "cheat_sheet") return ["output/cheat-sheet.tex", "cheat-sheet.tex"];
+    return ["output/main.tex", "main.tex"];
+}
+
+function preferredLogPaths(intent) {
+    if (intent === "code_homework") return ["logs/generation.log", "generation.log"];
+    return ["logs/latex.log", "logs/generation.log", "latex.log", "generation.log"];
+}
+
+function sourceKinds() {
+    return new Set(["source", "script", "notebook"]);
+}

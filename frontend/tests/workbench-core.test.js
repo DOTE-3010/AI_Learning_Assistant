@@ -8,8 +8,10 @@ import {
     applyWorkbenchInteraction,
     buildRunRequest,
     canSubmitRun,
+    findArtifactByRole,
     isActiveRunStatus,
     normalizeActiveCodeFile,
+    normalizeArtifactMetadata,
     optionsForIntent,
     outputPreferenceForIntent,
 } from "../src/workbench-core.js";
@@ -158,6 +160,23 @@ test("run motion status is active only for queued and running states", () => {
     for (const status of ["idle", "ready", "succeeded", "failed", "cancelled", "", null]) {
         assert.equal(isActiveRunStatus(status), false, String(status));
     }
+});
+
+test("artifact metadata helpers pick real preview files by role", () => {
+    const artifacts = normalizeArtifactMetadata([
+        { path: "/output/solution.py", kind: "script", media_type: "text/x-python", size_bytes: 24 },
+        { path: "logs/generation.log", kind: "log", media_type: "text/plain" },
+        { path: "manifest.json", kind: "manifest", media_type: "application/json" },
+        { path: "output/main.pdf", kind: "pdf", media_type: "application/pdf" },
+        { path: "", kind: "source" },
+    ]);
+
+    assert.equal(artifacts.length, 4);
+    assert.equal(artifacts[0].path, "output/solution.py");
+    assert.equal(findArtifactByRole(artifacts, "primaryCode", { activeFile: "solution.py" })?.path, "output/solution.py");
+    assert.equal(findArtifactByRole(artifacts, "log")?.path, "logs/generation.log");
+    assert.equal(findArtifactByRole(artifacts, "manifest")?.path, "manifest.json");
+    assert.equal(findArtifactByRole(artifacts, "primaryPdf")?.path, "output/main.pdf");
 });
 
 function messageAt(catalog, path) {

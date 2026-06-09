@@ -1192,6 +1192,21 @@ button.identity-chip {
     background: rgb(255 248 232 / 4%);
 }
 
+.inspection-intro.is-success {
+    border-color: rgb(153 164 119 / 32%);
+    background: rgb(153 164 119 / 10%);
+}
+
+.inspection-intro.is-error {
+    border-color: rgb(237 116 106 / 34%);
+    background: rgb(237 116 106 / 10%);
+}
+
+.inspection-intro.is-loading {
+    border-color: rgb(224 183 85 / 28%);
+    background: rgb(224 183 85 / 9%);
+}
+
 .inspection-intro strong {
     color: var(--studio-paper-2);
     font: 700 16px / 1.2 var(--font-serif);

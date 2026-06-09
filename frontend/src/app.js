@@ -11,8 +11,11 @@ import {
     applyWorkbenchInteraction,
     buildRunRequest,
     canSubmitRun as canSubmitRunCore,
+    findArtifactByRole,
     isActiveRunStatus,
+    isTextArtifact,
     normalizeActiveCodeFile,
+    normalizeArtifactMetadata,
     optionsForIntent as optionsForIntentCore,
     outputPreferenceForIntent as outputPreferenceForIntentCore,
 } from "./workbench-core.js";
@@ -99,6 +102,7 @@ const state = {
     authMessage: "",
     authTone: "neutral",
     run: initialRunState(initialLocale),
+    artifacts: initialArtifactState(),
     history: [initialReadyHistory(initialLocale)],
 };
 
@@ -531,7 +535,7 @@ function renderCodePreview() {
                 <button class="copy-code-button" type="button" data-action="copy-visible-preview">${escapeHtml(t("actions.copyVisible"))}</button>
             </div>
             <div class="code-editor" aria-label="${escapeHtml(t("preview.code"))}">
-                ${renderHighlightedCode(codePreviewText(state.activeFile))}
+                ${renderHighlightedCode(codePreviewText(state.activeFile), languageForFilename(state.activeFile))}
             </div>
             <div class="terminal-strip" data-status="${escapeHtml(state.run.status)}">
                 <span>${escapeHtml(codeStatusTitle())}</span>
@@ -542,6 +546,7 @@ function renderCodePreview() {
 }
 
 function renderNotebookPreview() {
+    const notebook = notebookPreviewModel();
     return `
         <div class="notebook-product">
             <div class="notebook-toolbar">
@@ -550,16 +555,16 @@ function renderNotebookPreview() {
             </div>
             <div class="notebook-cell is-markdown">
                 <span class="cell-label">${escapeHtml(t("preview.markdown"))}</span>
-                <h3>${escapeHtml(t("preview.notebookApproach"))}</h3>
-                <p>${escapeHtml(t("preview.notebookApproachBody"))}</p>
+                <h3>${escapeHtml(notebook.title)}</h3>
+                <p>${escapeHtml(notebook.body)}</p>
             </div>
             <div class="notebook-cell">
                 <span class="cell-label">${escapeHtml(t("preview.code"))}</span>
-                <div class="code-editor is-compact">${renderHighlightedCode(notebookCodeText())}</div>
+                <div class="code-editor is-compact">${renderHighlightedCode(notebook.code)}</div>
             </div>
             <div class="terminal-strip" data-status="${escapeHtml(state.run.status)}">
                 <span>${escapeHtml(t("preview.notebookValidation"))}</span>
-                <strong>${escapeHtml(state.run.status === "failed" ? t("preview.preservedForInspection") : t("preview.noExecution"))}</strong>
+                <strong>${escapeHtml(notebook.detail)}</strong>
             </div>
         </div>
     `;
@@ -671,34 +676,33 @@ function renderPreviewOverlay(title, message) {
 }
 
 function renderSourceInspection() {
-    const filename = sourceFilenameForIntent();
+    const source = sourceInspectionModel();
+    const filename = artifactDisplayName(source.artifact, sourceFilenameForIntent());
     const language = filename.endsWith(".tex") ? "latex" : filename.endsWith(".json") ? "json" : "python";
     return `
         <div class="inspection-product">
-            ${renderInspectionIntro(t("preview.sourceTitle"), t("preview.sourceMessage"))}
+            ${renderInspectionIntro(t("preview.sourceTitle"), source.message, source.tone)}
             <div class="inspection-head">
                 <span>${escapeHtml(filename)}</span>
                 <button class="copy-code-button" type="button" data-action="copy-visible-preview">${escapeHtml(t("actions.copyVisible"))}</button>
             </div>
-            <div class="code-editor">${renderHighlightedCode(sourcePreviewText(), language)}</div>
+            <div class="code-editor">${renderHighlightedCode(source.text, language)}</div>
             <div class="inspection-note">${escapeHtml(artifactAccessNote())}</div>
         </div>
     `;
 }
 
 function renderLogInspection() {
+    const log = logInspectionModel();
     return `
         <div class="inspection-product">
-            ${renderInspectionIntro(t("preview.logsTitle"), t("preview.logsMessage"))}
+            ${renderInspectionIntro(t("preview.logsTitle"), log.message, log.tone)}
             <div class="inspection-head">
-                <span>${escapeHtml(t("source.generationLog"))}</span>
+                <span>${escapeHtml(artifactDisplayName(log.artifact, t("source.generationLog")))}</span>
                 <button class="copy-code-button" type="button" data-action="copy-visible-preview">${escapeHtml(t("actions.copyVisible"))}</button>
             </div>
             <div class="log-view">
-                <p><span>${escapeHtml(timestampLabel())}</span> ${escapeHtml(stageLabel(state.run.stage))}: ${escapeHtml(state.run.message)}</p>
-                <p><span>run</span> ${state.run.id ? escapeHtml(state.run.id) : escapeHtml(t("source.notStarted"))}</p>
-                <p><span>${escapeHtml(t("source.status"))}</span> ${escapeHtml(statusLabel(state.run.status))}</p>
-                ${state.run.error ? `<p class="is-error"><span>${escapeHtml(t("source.error"))}</span> ${escapeHtml(state.run.error)}</p>` : ""}
+                ${renderLogLines(log.text)}
             </div>
             <div class="inspection-note">${escapeHtml(artifactAccessNote())}</div>
         </div>
@@ -706,7 +710,23 @@ function renderLogInspection() {
 }
 
 function renderManifestInspection() {
-    const manifest = {
+    const manifest = manifestInspectionModel();
+    const text = manifest.text || JSON.stringify(expectedManifestSkeleton(), null, 2);
+    return `
+        <div class="inspection-product">
+            ${renderInspectionIntro(t("preview.manifestTitle"), manifest.message, manifest.tone)}
+            <div class="inspection-head">
+                <span>${escapeHtml(artifactDisplayName(manifest.artifact, "manifest.json"))}</span>
+                <button class="copy-code-button" type="button" data-action="copy-visible-preview">${escapeHtml(t("actions.copyVisible"))}</button>
+            </div>
+            <div class="code-editor">${renderHighlightedCode(text, "json")}</div>
+            <div class="inspection-note">${escapeHtml(artifactAccessNote())}</div>
+        </div>
+    `;
+}
+
+function expectedManifestSkeleton() {
+    return {
         schema_version: 1,
         run_id: state.run.id || null,
         revision_of_run_id: state.run.revisionOfRunId || null,
@@ -715,22 +735,11 @@ function renderManifestInspection() {
         status: state.run.status,
         outputs: getExpectedFiles().map((file) => ({ path: file.relativePath, kind: file.kind })),
     };
-    return `
-        <div class="inspection-product">
-            ${renderInspectionIntro(t("preview.manifestTitle"), t("preview.manifestMessage"))}
-            <div class="inspection-head">
-                <span>manifest.json</span>
-                <button class="copy-code-button" type="button" data-action="copy-visible-preview">${escapeHtml(t("actions.copyVisible"))}</button>
-            </div>
-            <div class="code-editor">${renderHighlightedCode(JSON.stringify(manifest, null, 2), "json")}</div>
-            <div class="inspection-note">${escapeHtml(artifactAccessNote())}</div>
-        </div>
-    `;
 }
 
-function renderInspectionIntro(title, message) {
+function renderInspectionIntro(title, message, tone = "neutral") {
     return `
-        <div class="inspection-intro">
+        <div class="inspection-intro is-${escapeHtml(tone)}">
             <strong>${escapeHtml(title)}</strong>
             <span>${escapeHtml(message)}</span>
         </div>
@@ -738,7 +747,7 @@ function renderInspectionIntro(title, message) {
 }
 
 function renderOutputFiles() {
-    const files = getExpectedFiles();
+    const files = outputFilesForDisplay();
     return `
         <section class="output-dock" aria-label="${escapeHtml(t("preview.files"))}">
             <div class="output-head">
@@ -754,7 +763,7 @@ function renderOutputFiles() {
 
 function renderOutputFile(file) {
     const path = artifactAbsolutePath(file.relativePath);
-    const isReady = Boolean(state.run.outputRoot && (state.run.status === "succeeded" || file.kind !== "pdf"));
+    const isReady = Boolean(file.artifact || (state.run.outputRoot && (state.run.status === "succeeded" || file.kind !== "pdf")));
     return `
         <div class="output-file" data-kind="${escapeHtml(file.kind)}">
             <span class="file-kind">${escapeHtml(file.badge)}</span>
@@ -1142,6 +1151,7 @@ async function handleRun({ isRevision, isRegenerate = false }) {
         message: state.files.some((file) => !file.uploadId) ? t("run.preparingUploads") : t("run.submitting"),
         revisionOfRunId,
     };
+    state.artifacts = initialArtifactState();
     addHistory({
         kind: isRevision ? "revision" : "command",
         status: "queued",
@@ -1174,9 +1184,14 @@ async function handleRun({ isRevision, isRegenerate = false }) {
         upsertRunHistory();
         if (isRevision) state.refinementText = "";
         render();
-        if (data.id) {
-            await pollRunEvent(data.id);
-            if (!TERMINAL_RUN_STATUSES.has(state.run.status)) startRunPolling(data.id);
+        const submittedRunId = data.id || data.run_id || state.run.id;
+        if (submittedRunId) {
+            if (TERMINAL_RUN_STATUSES.has(state.run.status)) {
+                await hydrateRunArtifacts(submittedRunId);
+            } else {
+                await pollRunEvent(submittedRunId);
+            }
+            if (!TERMINAL_RUN_STATUSES.has(state.run.status)) startRunPolling(submittedRunId);
         }
     } catch (error) {
         state.run = {
@@ -1238,6 +1253,7 @@ function setUser(user, token) {
     localStorage.setItem(USER_KEY, JSON.stringify(user));
     state.authMessage = "";
     state.run = initialRunState();
+    state.artifacts = initialArtifactState();
     refreshLocalContext();
     render();
     loadModelProfiles();
@@ -1247,6 +1263,7 @@ function clearSession() {
     resetModelState();
     state.user = null;
     state.token = "";
+    state.artifacts = initialArtifactState();
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
 }
@@ -1475,6 +1492,19 @@ function initialRunState(locale) {
     };
 }
 
+function initialArtifactState() {
+    return {
+        runId: "",
+        loading: false,
+        loaded: false,
+        error: "",
+        items: [],
+        manifest: null,
+        textByPath: {},
+        errorsByPath: {},
+    };
+}
+
 function buildRunPayload({ promptText, uploadIds, revisionOfRunId }) {
     return buildRunRequest({
         promptText,
@@ -1528,10 +1558,14 @@ function runFieldErrors(fields) {
 }
 
 function applyRunPayload(payload) {
+    const nextRunId = payload.id || payload.run_id || state.run.id || "";
+    if (nextRunId && state.run.id && nextRunId !== state.run.id) {
+        state.artifacts = initialArtifactState();
+    }
     if (payload.context) state.context = normalizeContextEstimate(payload.context, "backend");
     state.run = {
         ...state.run,
-        id: payload.id || payload.run_id || state.run.id || "",
+        id: nextRunId,
         status: payload.status || state.run.status,
         stage: payload.stage || state.run.stage || "queued",
         message: runMessageFromPayload(payload),
@@ -1539,6 +1573,9 @@ function applyRunPayload(payload) {
         errorCode: errorCodeFromPayload(payload),
         outputRoot: payload.output_root || state.run.outputRoot || "",
     };
+    if (!TERMINAL_RUN_STATUSES.has(state.run.status) && state.artifacts.runId) {
+        state.artifacts = initialArtifactState();
+    }
 }
 
 function runMessageFromPayload(payload) {
@@ -1600,7 +1637,84 @@ async function pollRunEvent(runId) {
     applyRunPayload(data);
     upsertRunHistory();
     render();
-    if (TERMINAL_RUN_STATUSES.has(state.run.status)) stopRunPolling();
+    if (TERMINAL_RUN_STATUSES.has(state.run.status)) {
+        stopRunPolling();
+        hydrateRunArtifacts(runId).catch(() => {});
+    }
+}
+
+async function hydrateRunArtifacts(runId) {
+    if (!runId || !state.token) return;
+    if (state.artifacts.runId === runId && (state.artifacts.loading || state.artifacts.loaded)) return;
+    state.artifacts = {
+        ...initialArtifactState(),
+        runId,
+        loading: true,
+    };
+    render();
+    try {
+        const response = await fetch(`${API_URL}/api/runs/${encodeURIComponent(runId)}/artifacts`, {
+            headers: { Authorization: `Bearer ${state.token}` },
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(errorMessage(data, t("source.artifactLoadFailed")));
+        if (state.run.id !== runId) return;
+        const items = normalizeArtifactMetadata(data.artifacts);
+        state.artifacts = {
+            ...state.artifacts,
+            loading: true,
+            items,
+            manifest: data.manifest && typeof data.manifest === "object" ? data.manifest : null,
+            error: "",
+        };
+        render();
+        await hydrateTextArtifacts(runId, items);
+        if (state.run.id !== runId) return;
+        state.artifacts = {
+            ...state.artifacts,
+            loading: false,
+            loaded: true,
+        };
+        render();
+    } catch (error) {
+        if (state.run.id !== runId) return;
+        state.artifacts = {
+            ...state.artifacts,
+            loading: false,
+            loaded: false,
+            error: safeDisplayMessage(error.message || t("source.artifactLoadFailed")),
+        };
+        render();
+    }
+}
+
+async function hydrateTextArtifacts(runId, artifacts) {
+    const textArtifacts = artifacts.filter((artifact) => isTextArtifact(artifact));
+    const nextText = {};
+    const nextErrors = {};
+    await Promise.all(textArtifacts.map(async (artifact) => {
+        try {
+            const response = await fetch(artifactUrl(runId, artifact), {
+                headers: { Authorization: `Bearer ${state.token}` },
+            });
+            const text = await response.text();
+            if (!response.ok) throw new Error(safeDisplayMessage(text || t("source.artifactReadFailed")));
+            nextText[artifact.path] = sanitizeArtifactText(text);
+        } catch (error) {
+            nextErrors[artifact.path] = safeDisplayMessage(error.message || t("source.artifactReadFailed"));
+        }
+    }));
+    if (state.run.id !== runId) return;
+    state.artifacts = {
+        ...state.artifacts,
+        textByPath: nextText,
+        errorsByPath: nextErrors,
+    };
+}
+
+function artifactUrl(runId, artifact) {
+    const url = artifact.url || `/api/runs/${encodeURIComponent(runId)}/artifacts/files/${artifact.path.split("/").map(encodeURIComponent).join("/")}`;
+    return url.startsWith("http://") || url.startsWith("https://") ? url : `${API_URL}${url}`;
 }
 
 function updateContextDial() {
@@ -1816,6 +1930,44 @@ function getExpectedFiles() {
     ];
 }
 
+function outputFilesForDisplay() {
+    const expected = getExpectedFiles();
+    const byPath = new Map(state.artifacts.items.map((artifact) => [artifact.path, artifact]));
+    const files = expected.map((file) => {
+        const artifact = byPath.get(file.relativePath);
+        return artifact ? { ...file, artifact, kind: artifact.kind || file.kind } : file;
+    });
+    for (const artifact of state.artifacts.items) {
+        if (files.some((file) => file.relativePath === artifact.path)) continue;
+        if (artifact.path.startsWith("input/")) continue;
+        files.push(fileDisplayFromArtifact(artifact));
+    }
+    return files;
+}
+
+function fileDisplayFromArtifact(artifact) {
+    const name = artifactDisplayName(artifact, artifact.path);
+    const extension = name.split(".").pop()?.slice(0, 3).toUpperCase() || "OUT";
+    return {
+        name,
+        relativePath: artifact.path,
+        kind: artifact.kind || "artifact",
+        badge: extension,
+        readyLabel: readyLabelForArtifact(artifact),
+        pendingLabel: t("files.pending"),
+        artifact,
+    };
+}
+
+function readyLabelForArtifact(artifact) {
+    if (artifact.kind === "pdf") return t("files.pdfReady");
+    if (artifact.kind === "log") return t("files.logReady");
+    if (artifact.kind === "manifest") return t("files.metadataReady");
+    if (artifact.kind === "notebook") return t("files.notebookReady");
+    if (artifact.kind === "script") return t("files.scriptReady");
+    return t("files.sourceReady");
+}
+
 function sourceFilenameForIntent() {
     if (state.intent === "code_homework") return state.outputPreference === "ipynb" ? "solution.ipynb" : "solution.py";
     if (state.intent === "beamer_slides") return "slides.tex";
@@ -1824,6 +1976,15 @@ function sourceFilenameForIntent() {
 }
 
 function codePreviewText(filename) {
+    const artifact = findArtifactByRole(state.artifacts.items, "primaryCode", {
+        intent: state.intent,
+        outputPreference: state.outputPreference,
+        activeFile: filename,
+    });
+    const content = artifact ? artifactText(artifact.path) : "";
+    if (content) return content;
+    if (artifact && artifactReadFailed(artifact.path)) return rendererErrorText(artifact);
+    if (state.artifacts.loading && state.run.id) return t("source.artifactLoading");
     if (filename === "tests.py") {
         return `from solution import solve\n\n\ndef test_sample_case():\n    assert solve([2, 4, 6]) == 12\n`;
     }
@@ -1834,10 +1995,97 @@ function codePreviewText(filename) {
 }
 
 function notebookCodeText() {
+    const artifact = findArtifactByRole(state.artifacts.items, "primaryCode", {
+        intent: state.intent,
+        outputPreference: "ipynb",
+        activeFile: "solution.ipynb",
+    });
+    const content = artifact ? artifactText(artifact.path) : "";
+    if (content) return notebookCodeFromText(content);
+    if (artifact && artifactReadFailed(artifact.path)) return rendererErrorText(artifact);
+    if (state.artifacts.loading && state.run.id) return t("source.artifactLoading");
     return `def solve(values):\n    total = 0\n    for value in values:\n        total += value\n    return total\n\nsolve([1, 2, 3])`;
 }
 
 function sourcePreviewText() {
+    const source = sourceInspectionModel();
+    return source.text;
+}
+
+function sourceInspectionModel() {
+    const artifact = findArtifactByRole(state.artifacts.items, "source", {
+        intent: state.intent,
+        outputPreference: state.outputPreference,
+        activeFile: sourceFilenameForIntent(),
+    });
+    const text = artifact ? artifactText(artifact.path) : "";
+    if (text) return { artifact, text, message: t("source.artifactLoaded"), tone: "success" };
+    if (artifact && artifactReadFailed(artifact.path)) return { artifact, text: rendererErrorText(artifact), message: t("source.artifactReadFailed"), tone: "error" };
+    if (state.artifacts.loading && state.run.id) return { artifact, text: t("source.artifactLoading"), message: t("source.artifactLoading"), tone: "loading" };
+    if (state.artifacts.error) return { artifact: null, text: sourceSkeletonText(), message: state.artifacts.error, tone: "error" };
+    return { artifact: null, text: sourceSkeletonText(), message: t("preview.sourceMessage"), tone: "neutral" };
+}
+
+function logInspectionModel() {
+    const artifact = findArtifactByRole(state.artifacts.items, "log", { intent: state.intent });
+    const text = artifact ? artifactText(artifact.path) : "";
+    if (text) return { artifact, text, message: t("source.artifactLoaded"), tone: "success" };
+    if (artifact && artifactReadFailed(artifact.path)) return { artifact, text: rendererErrorText(artifact), message: t("source.artifactReadFailed"), tone: "error" };
+    if (state.artifacts.loading && state.run.id) return { artifact, text: liveLogText(), message: t("source.artifactLoading"), tone: "loading" };
+    if (state.artifacts.error) return { artifact: null, text: liveLogText(), message: state.artifacts.error, tone: "error" };
+    return { artifact: null, text: liveLogText(), message: t("preview.logsMessage"), tone: "neutral" };
+}
+
+function manifestInspectionModel() {
+    const artifact = findArtifactByRole(state.artifacts.items, "manifest");
+    const text = artifact ? artifactText(artifact.path) : "";
+    if (text) return { artifact, text, message: t("source.artifactLoaded"), tone: "success" };
+    if (artifact && artifactReadFailed(artifact.path)) return { artifact, text: rendererErrorText(artifact), message: t("source.artifactReadFailed"), tone: "error" };
+    if (state.artifacts.manifest) {
+        return {
+            artifact,
+            text: JSON.stringify(state.artifacts.manifest, null, 2),
+            message: t("source.artifactMetadataLoaded"),
+            tone: "success",
+        };
+    }
+    if (state.artifacts.loading && state.run.id) return { artifact, text: "", message: t("source.artifactLoading"), tone: "loading" };
+    if (state.artifacts.error) return { artifact: null, text: "", message: state.artifacts.error, tone: "error" };
+    return { artifact: null, text: "", message: t("preview.manifestMessage"), tone: "neutral" };
+}
+
+function notebookPreviewModel() {
+    const artifact = findArtifactByRole(state.artifacts.items, "primaryCode", {
+        intent: state.intent,
+        outputPreference: "ipynb",
+        activeFile: "solution.ipynb",
+    });
+    const text = artifact ? artifactText(artifact.path) : "";
+    if (text) {
+        return {
+            title: artifactDisplayName(artifact, "solution.ipynb"),
+            body: notebookSummaryFromText(text),
+            code: notebookCodeFromText(text),
+            detail: t("source.artifactLoaded"),
+        };
+    }
+    if (artifact && artifactReadFailed(artifact.path)) {
+        return {
+            title: artifactDisplayName(artifact, "solution.ipynb"),
+            body: t("source.artifactReadFailed"),
+            code: rendererErrorText(artifact),
+            detail: t("preview.preservedForInspection"),
+        };
+    }
+    return {
+        title: t("preview.notebookApproach"),
+        body: t("preview.notebookApproachBody"),
+        code: notebookCodeText(),
+        detail: state.run.status === "failed" ? t("preview.preservedForInspection") : t("preview.noExecution"),
+    };
+}
+
+function sourceSkeletonText() {
     if (state.intent === "code_homework") return codePreviewText("solution.py");
     if (state.intent === "beamer_slides") {
         return `\\documentclass{beamer}\n\\title{${briefTitle(t("preview.generatedSlidesSource"))}}\n\\begin{document}\n\\begin{frame}{Overview}\n  \\begin{itemize}\n    \\item Motivation\n    \\item Method\n    \\item Result\n  \\end{itemize}\n\\end{frame}\n\\end{document}\n`;
@@ -1846,6 +2094,74 @@ function sourcePreviewText() {
         return `\\documentclass[a4paper]{article}\n\\usepackage[margin=0.45cm]{geometry}\n\\usepackage{multicol}\n\\begin{document}\n\\begin{multicols}{4}\n\\section*{Dense Review}\nKey definitions, formulas, and proof templates.\n\\end{multicols}\n\\end{document}\n`;
     }
     return `\\documentclass{article}\n\\title{${briefTitle(t("preview.generatedEssay"))}}\n\\begin{document}\n\\maketitle\n\\section{Introduction}\nThe generated source is preserved even if PDF compilation fails.\n\\section{Discussion}\nEvidence and citations are recorded in the run manifest.\n\\end{document}\n`;
+}
+
+function liveLogText() {
+    const lines = [
+        `${timestampLabel()} ${stageLabel(state.run.stage)}: ${state.run.message}`,
+        `run ${state.run.id || t("source.notStarted")}`,
+        `${t("source.status")} ${statusLabel(state.run.status)}`,
+    ];
+    if (state.run.error) lines.push(`${t("source.error")} ${state.run.error}`);
+    return lines.join("\n");
+}
+
+function renderLogLines(text) {
+    return String(text || "").split("\n").filter(Boolean).map((line) => {
+        const firstSpace = line.indexOf(" ");
+        const label = firstSpace > 0 ? line.slice(0, firstSpace) : "log";
+        const body = firstSpace > 0 ? line.slice(firstSpace + 1) : line;
+        const errorClass = /error|failed|traceback|exception|compile_failed/iu.test(line) ? " class=\"is-error\"" : "";
+        return `<p${errorClass}><span>${escapeHtml(label)}</span> ${escapeHtml(body)}</p>`;
+    }).join("") || `<p><span>${escapeHtml(t("source.status"))}</span> ${escapeHtml(t("source.noArtifactText"))}</p>`;
+}
+
+function artifactText(path) {
+    return state.artifacts.textByPath[path] || "";
+}
+
+function artifactReadFailed(path) {
+    return Boolean(state.artifacts.errorsByPath[path]);
+}
+
+function rendererErrorText(artifact) {
+    const detail = state.artifacts.errorsByPath[artifact.path] || t("source.artifactReadFailed");
+    return `${t("source.artifactReadFailed")}\n${artifact.path}\n${detail}`;
+}
+
+function artifactDisplayName(artifact, fallback) {
+    const path = artifact?.path || "";
+    return path.split("/").filter(Boolean).pop() || fallback;
+}
+
+function languageForFilename(filename) {
+    if (filename.endsWith(".json") || filename.endsWith(".ipynb")) return "json";
+    if (filename.endsWith(".tex")) return "latex";
+    return "python";
+}
+
+function notebookSummaryFromText(text) {
+    try {
+        const notebook = JSON.parse(text);
+        const cells = Array.isArray(notebook.cells) ? notebook.cells : [];
+        const markdown = cells.find((cell) => cell.cell_type === "markdown");
+        const source = Array.isArray(markdown?.source) ? markdown.source.join("") : String(markdown?.source || "");
+        return source.trim().replace(/\s+/gu, " ").slice(0, 220) || t("preview.notebookApproachBody");
+    } catch {
+        return t("preview.notebookApproachBody");
+    }
+}
+
+function notebookCodeFromText(text) {
+    try {
+        const notebook = JSON.parse(text);
+        const cells = Array.isArray(notebook.cells) ? notebook.cells : [];
+        const code = cells.find((cell) => cell.cell_type === "code");
+        const source = Array.isArray(code?.source) ? code.source.join("") : String(code?.source || "");
+        return source.trim() || text;
+    } catch {
+        return text;
+    }
 }
 
 function renderHighlightedCode(text, language = "python") {
@@ -1915,14 +2231,9 @@ function nextNonSpaceToken(tokens, index) {
 
 async function copyVisiblePreview() {
     const text = state.previewTab === "logs"
-        ? `${stageLabel(state.run.stage)}: ${state.run.message}`
+        ? logInspectionModel().text
         : state.previewTab === "manifest"
-            ? JSON.stringify({
-                run_id: state.run.id || null,
-                intent: state.intent,
-                status: state.run.status,
-                outputs: getExpectedFiles().map((file) => file.relativePath),
-            }, null, 2)
+            ? (manifestInspectionModel().text || JSON.stringify(expectedManifestSkeleton(), null, 2))
             : state.previewTab === "source"
                 ? sourcePreviewText()
                 : state.intent === "code_homework"
@@ -1959,6 +2270,9 @@ function artifactAbsolutePath(relativePath) {
 }
 
 function artifactAccessNote() {
+    if (state.artifacts.error) return state.artifacts.error;
+    if (state.artifacts.loading) return t("source.artifactLoading");
+    if (state.artifacts.loaded) return t("source.artifactLoaded");
     if (state.run.outputRoot) return t("source.artifactNoteReady");
     return t("source.artifactNotePending");
 }
@@ -2149,6 +2463,14 @@ function safeDisplayMessage(message) {
         .slice(0, 3)
         .join(" ")
         .trim();
+}
+
+function sanitizeArtifactText(text) {
+    return String(text || "")
+        .replace(/sk-[A-Za-z0-9_-]+/g, "[redacted-key]")
+        .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted-token]")
+        .replace(/(api[_-]?key["'\s:=]+)[A-Za-z0-9._~+/=-]+/gi, "$1[redacted]")
+        .replace(/(authorization["'\s:=]+)[A-Za-z0-9._~+/=-]+/gi, "$1[redacted]");
 }
 
 function formatInt(value) {
