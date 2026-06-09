@@ -3,10 +3,14 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.api.auth import get_auth_repository
+from backend.core.artifact_access import (
+    get_run_artifact_file_for_user,
+    list_run_artifacts_for_user,
+)
 from backend.core.runs import (
     RunError,
     RunExecutor,
@@ -110,3 +114,31 @@ def get_run_events(
         user_id=current_user["id"],
         event_store=event_store,
     )
+
+
+@router.get("/{run_id}/artifacts")
+def get_run_artifacts(
+    run_id: str,
+    current_user: dict[str, Any] = Depends(run_current_user),
+    repo: SQLiteRepository = Depends(get_run_repository),
+) -> dict[str, Any]:
+    return list_run_artifacts_for_user(repo, run_id=run_id, user_id=current_user["id"])
+
+
+@router.get("/{run_id}/artifacts/files/{relative_path:path}")
+def get_run_artifact_file(
+    run_id: str,
+    relative_path: str,
+    current_user: dict[str, Any] = Depends(run_current_user),
+    repo: SQLiteRepository = Depends(get_run_repository),
+) -> FileResponse:
+    path, media_type = get_run_artifact_file_for_user(
+        repo,
+        run_id=run_id,
+        user_id=current_user["id"],
+        relative_path=relative_path,
+    )
+    headers = {}
+    if media_type == "application/pdf":
+        headers["Content-Disposition"] = f'inline; filename="{path.name}"'
+    return FileResponse(path, media_type=media_type, headers=headers)
