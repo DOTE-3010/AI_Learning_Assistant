@@ -45,7 +45,9 @@ Start with these files before implementing or testing:
 - Desktop dependency audit: `npm --prefix apps/desktop audit --json`
 - Docker config check: `docker compose -p ai-learning-assistant config`
 - Docker runtime smoke: `docker compose -p ai-learning-assistant up --build -d && curl -fsS http://localhost:14242/health`
+- Web browser launch (macOS dev/QA): `./run_web.command`
 - End-to-end smoke: `./scripts/smoke_e2e.sh`
+- Electron launch (macOS packaging phase): `./run_desktop.command`
 - Governance check: `/Users/myron/Desktop/constitution/coding_agent_constitution/constitution-skill/scripts/check-governance.sh .`
 
 Commands may change during QA. Update this file and the matching QA task when a command becomes stale.

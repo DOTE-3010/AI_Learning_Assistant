@@ -32,22 +32,23 @@ npm --prefix frontend run build
 ./scripts/smoke_e2e.sh
 ```
 
-Docker runtime:
+Docker/browser runtime:
 
 ```bash
 docker compose -p ai-learning-assistant config
 docker compose -p ai-learning-assistant up --build -d
 curl -fsS http://127.0.0.1:14242/health
+./run_web.command
 ```
 
-Desktop launchers:
+Desktop launcher:
 
 ```bash
 ./run_desktop.command
 npm --prefix apps/desktop run smoke
 ```
 
-On Windows, use `run_desktop.bat`.
+Use `run_web.command` for web-first development and QA. It starts the Docker runtime and opens the browser workbench without Electron. Use `run_desktop.command` only when testing the Electron packaging layer. On Windows, use `run_desktop.bat`.
 
 ## Model Settings And Secrets
 
@@ -57,7 +58,9 @@ The end-to-end smoke script sets `AILA_MOCK_MODEL_PROVIDER=1` and uses temporary
 
 ## QA Entry
 
-- `docs/TASKS/000-resolve-upload-api-pre-qa-blocker.md` implements `/api/uploads` and adds upload coverage to the mocked smoke path. Run that task's verification commands before starting `docs/TASKS/001-qa-agent-module-smoke-tests.md`.
+- Current QA starts with `docs/TASKS/000-web-browser-qa-baseline.md`.
+- Functional QA uses the Docker plus browser workflow at `http://127.0.0.1:14242/ui/`.
+- Electron packaging QA is deferred until the web product passes human review.
 
 ## Known Gaps
 

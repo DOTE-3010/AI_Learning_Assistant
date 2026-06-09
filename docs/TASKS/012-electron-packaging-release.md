@@ -26,7 +26,7 @@ Phase 2 (human E2E on web) must be declared complete by the human before this ta
 ### Touch
 
 - `apps/desktop/`: Electron main process, preload, window behavior.
-- Launcher scripts: `run_desktop.command` (macOS), `run_desktop.bat` (Windows).
+- Electron launcher scripts: `run_desktop.command` (macOS), `run_desktop.bat` (Windows).
 - Docker detection and startup from Electron.
 - Electron-specific test and smoke commands.
 
@@ -36,7 +36,7 @@ Phase 2 (human E2E on web) must be declared complete by the human before this ta
 - Frontend rendering logic. The web workbench must remain identical in Electron.
 - Auth, storage, or model provider behavior.
 
-## Verification Steps
+## Verification
 
 1. Electron smoke and build checks:
 
@@ -55,7 +55,8 @@ npm --prefix apps/desktop run launch-smoke
    - Workbench renders identically to the browser version.
    - Docker detection handles Docker-not-running gracefully.
    - Window menu and close behavior work correctly.
-   - Launcher log file is created under `data/logs/`.
+   - Desktop launcher log file is created under `data/logs/`.
+   - Browser-only QA remains available through `run_web.command` and does not depend on Electron.
 
 4. Desktop dependency audit:
 

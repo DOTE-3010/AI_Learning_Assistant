@@ -70,9 +70,13 @@ Shell errors are presented to the user and also written to the launching termina
 
 ## Launcher Scripts
 
-`.command` and `.bat` launchers may remain as quasi-double-click entry points. Their preferred path is to launch the Electron shell so Electron owns Docker detection, Compose startup, backend health polling, and window loading. Development launchers may start the rebuilt Docker runtime directly when local Electron dependencies are not installed, but they must not write real model credentials.
+`.command` and `.bat` launchers may remain as quasi-double-click entry points. The macOS development workflow separates the browser-only product surface from the Electron wrapper:
 
-When a development launcher falls back to direct Docker startup, it still waits for `/health` before opening `/ui/` so first builds and slower container starts do not show a dead browser page.
+- `run_web.command` starts the Docker Compose runtime, waits for `/health`, and opens `/ui/` in the browser. It is the preferred entry for web-first functional QA and must not require Electron dependencies.
+- `run_desktop.command` starts the Electron shell. Electron owns Docker detection, Compose startup, backend health polling, and window loading. It is the preferred entry for packaging/runtime QA after the browser product passes human review.
+- `run_desktop.bat` may continue to serve the Windows desktop launcher path until Windows-specific QA is prioritized.
+
+Development launchers must not write real model credentials.
 
 ## Acceptance Checks
 

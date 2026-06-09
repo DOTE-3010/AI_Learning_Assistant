@@ -23,6 +23,7 @@ Verify that the full phase-1 product works correctly when accessed through Docke
 ### Touch
 
 - Docker Compose configuration and backend startup.
+- macOS web launcher (`run_web.command`) as a development convenience for this browser-only workflow.
 - Frontend static serving through the backend at `/ui/`.
 - Verify all core web workflows work in browser (auth, settings, upload, run, preview).
 - Document the standard browser-based dev/QA workflow.
@@ -30,10 +31,10 @@ Verify that the full phase-1 product works correctly when accessed through Docke
 ### Do Not Touch
 
 - Electron shell code (`apps/desktop/`). Do not modify or test Electron in this task.
-- Launcher scripts (`run_desktop.command`, `run_desktop.bat`). These are Phase 3 concerns.
+- Electron launcher scripts (`run_desktop.command`, `run_desktop.bat`). These are Phase 3 concerns.
 - Backend logic, pipelines, or storage. Only verify they work; do not change them unless a blocker is found.
 
-## Verification Steps
+## Verification
 
 1. Start the Docker runtime:
 
@@ -51,6 +52,12 @@ curl -fsS http://127.0.0.1:14242/health
 
 ```bash
 open http://127.0.0.1:14242/ui/
+```
+
+For macOS development, the equivalent convenience entry point is:
+
+```bash
+./run_web.command
 ```
 
 4. Verify these browser-level behaviors:
