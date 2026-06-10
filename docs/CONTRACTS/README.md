@@ -4,6 +4,8 @@ Last Reviewed: 2026-06-10
 Status: Active
 -->
 
+![AI Learning Assistant — Production Console](../../Preview.png)
+
 # Contracts Index
 
 Stable interfaces that implementation agents must preserve during the rebuild. Update each file in the same task as the implementation it covers. Legacy code is useful evidence but is not authoritative when it conflicts with these files.

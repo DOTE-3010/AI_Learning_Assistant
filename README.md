@@ -1,3 +1,5 @@
+![AI Learning Assistant — Production Console](Preview.png)
+
 # AI Learning Assistant
 
 A local-first academic artifact studio.

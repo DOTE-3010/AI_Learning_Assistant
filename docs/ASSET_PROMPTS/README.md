@@ -1,3 +1,5 @@
+![AI Learning Assistant — Production Console](../../Preview.png)
+
 Status: Active
 Last Reviewed: 2026-06-01
 

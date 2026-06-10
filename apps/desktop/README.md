@@ -1,3 +1,5 @@
+![AI Learning Assistant — Production Console](../../Preview.png)
+
 # Desktop Shell
 
 Electron shell for the phase-1 Docker Desktop runtime.

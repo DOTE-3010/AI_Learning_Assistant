@@ -1,3 +1,5 @@
+![AI Learning Assistant — Production Console](../../../Preview.png)
+
 # Frontend Assets
 
 This directory holds product visual assets for the rebuilt artifact studio. Asset names use lowercase kebab-case and should describe product meaning rather than generation technique.
